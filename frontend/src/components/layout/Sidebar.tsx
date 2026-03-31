@@ -1,5 +1,8 @@
+// src/components/layout/Sidebar.tsx  — VERSIONE AGGIORNATA
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth.store';
+import ThemeToggle from '../ui/ThemeToggle';
+import '../ui/ThemeToggle.css';
 import './Sidebar.css';
 
 const navItems = [
@@ -62,6 +65,11 @@ export default function Sidebar() {
             <span>Completati</span>
             <span className="status-value">0/0</span>
           </div>
+        </div>
+
+        {/* Theme Toggle */}
+        <div style={{ padding: '8px 0' }}>
+          <ThemeToggle />
         </div>
 
         <div className="sidebar-user">

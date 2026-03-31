@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Mezzo, MezziStats } from '../../lib/api';
+import NuovoMezzoModal from './NuovoMezzoModal';
+
 
 // ─── MOCK DATA (sostituire con API reali) ──────────
 const MOCK_STATS: MezziStats = {
@@ -29,6 +31,7 @@ export default function FlottaMezzi() {
   const [search, setSearch] = useState('');
   const [statoFilter, setStatoFilter] = useState<StatoFilter>('TUTTI');
   const [categoriaFilter, setCategoriaFilter] = useState<CategoriaFilter>('TUTTI');
+  const [showNuovo, setShowNuovo] = useState(false);
   const stats = MOCK_STATS;
 
   const filteredMezzi = useMemo(() => {
@@ -127,7 +130,8 @@ export default function FlottaMezzi() {
         </div>
 
         <div className="filter-actions">
-          <button className="btn-primary">+ Distribuzione</button>
+          <button className="btn-primary" onClick={() => setShowNuovo(true)}>+ Distribuzione</button>
+          <NuovoMezzoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={(d) => console.log(d)} />
           <button className="btn-outline">+ Auto Aziendale</button>
           <button className="btn-ghost">📥 Importa Excel</button>
         </div>

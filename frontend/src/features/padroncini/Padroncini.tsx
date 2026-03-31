@@ -1,10 +1,31 @@
+// src/features/padroncini/Padroncini.tsx  ← VERSIONE AGGIORNATA
+// Aggiunge: tab PALMARI + tab CODICI con assegnazione inline
+
 import { useState, useMemo } from 'react';
+import AssegnaModal from './AssegnaModal';
+import NuovoPadroncinoModal, { NuovoPadroncino } from './NuovoPadroncinoModal';
 import './Padroncini.css';
 
-interface Padroncino {
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+const MOCK_PALMARI_LIBERI = [
+  { id: 'pal7', codice: 'PAL-007', modello: 'Zebra TC52', tariffa: 35 },
+  { id: 'pal8', codice: 'PAL-008', modello: 'Zebra TC52', tariffa: 35 },
+];
+
+const MOCK_CODICI_LIBERI = [
+  { id: 'ca7', codice: 'AUT007', nome: 'Salvatore', cognome: 'Ferrara' },
+  { id: 'ca8', codice: 'AUT008', nome: 'Giovanni', cognome: 'Ricci' },
+];
+
+const MOCK_MEZZI_LIBERI = [
+  { id: 'm_lib1', targa: 'GR999AA', marca: 'Ford', modello: 'TRANSIT', stato: 'DISPONIBILE' },
+  { id: 'm_lib2', targa: 'GR888BB', marca: 'Ford', modello: 'E-TRANSIT', stato: 'DISPONIBILE' },
+];
+
+type Padroncino = {
   id: string;
   ragioneSociale: string;
-  partitaIva: string | null;
+  partitaIva: string;
   codiceFiscale: string | null;
   indirizzo: string | null;
   telefono: string | null;
@@ -15,32 +36,28 @@ interface Padroncino {
   scadenzaDvr: string | null;
   attivo: boolean;
   note: string | null;
-  mezziAssegnati: { targa: string; marca: string; modello: string }[];
-  palmariAssegnati: { codice: string }[];
-  codiciAutista: { codice: string; nome: string; cognome: string }[];
+  mezziAssegnati: { id: string; targa: string; marca: string; modello: string; dataInizio: string }[];
+  palmariAssegnati: { id: string; codice: string; tariffa: number; dataInizio: string }[];
+  codiciAutista: { id: string; codice: string; nome: string; cognome: string; dataInizio: string }[];
   conteggiCount: number;
-}
+};
 
 const MOCK: Padroncino[] = [
   {
-    id: 'p1', ragioneSociale: 'MEN LOGISTIC', partitaIva: '03456789012', codiceFiscale: '03456789012',
-    indirizzo: 'Via Roma 45, Cosenza', telefono: '0984123456', email: 'info@menlogistic.it',
-    pec: 'menlogistic@pec.it', iban: 'IT60X0542811101000000123456',
-    scadenzaDurc: '2026-06-15', scadenzaDvr: '2026-12-01', attivo: true, note: 'Partner principale distribuzione',
+    id: 'p1', ragioneSociale: 'MEN LOGISTIC', partitaIva: '03456789012', codiceFiscale: null,
+    indirizzo: 'Via Cosenza 45, Rende', telefono: '0984345678', email: 'info@menlogistic.it',
+    pec: null, iban: 'IT60X0542811101000000123456',
+    scadenzaDurc: '2026-06-30', scadenzaDvr: '2027-01-15', attivo: true, note: null,
     mezziAssegnati: [
-      { targa: 'GH627TF', marca: 'Ford', modello: 'TRANSIT' },
-      { targa: 'GH628TF', marca: 'Ford', modello: 'TRANSIT' },
-      { targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT' },
-      { targa: 'GM100FB', marca: 'Ford', modello: 'E-TRANSIT' },
-      { targa: 'GM709PN', marca: 'Ford', modello: 'E-TRANSIT' },
-      { targa: 'GR498EZ', marca: 'Ford', modello: 'TRANSIT' },
-      { targa: 'GR500EZ', marca: 'Ford', modello: 'TRANSIT' },
-      { targa: 'GR507EZ', marca: 'Ford', modello: 'TRANSIT' },
-      { targa: 'GR628XD', marca: 'Ford', modello: 'E-TRANSIT' },
-      { targa: 'GS691VF', marca: 'Man', modello: 'ETGE' },
+      { id: 'm1', targa: 'GM097FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-01-01' },
+      { id: 'm2', targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-03-01' },
     ],
-    palmariAssegnati: [{ codice: 'PAL-001' }],
-    codiciAutista: [{ codice: 'AUT001', nome: 'Marco', cognome: 'Rossi' }],
+    palmariAssegnati: [
+      { id: 'pal1', codice: 'PAL-001', tariffa: 35, dataInizio: '2025-01-01' },
+    ],
+    codiciAutista: [
+      { id: 'ca1', codice: 'AUT001', nome: 'Marco', cognome: 'Rossi', dataInizio: '2025-01-01' },
+    ],
     conteggiCount: 12,
   },
   {
@@ -48,9 +65,9 @@ const MOCK: Padroncino[] = [
     indirizzo: 'Via Napoli 12, Rende', telefono: '0984567890', email: 'info@dinardo.it',
     pec: null, iban: null,
     scadenzaDurc: '2026-04-01', scadenzaDvr: '2026-10-15', attivo: true, note: null,
-    mezziAssegnati: [{ targa: 'GM099FB', marca: 'Ford', modello: 'E-TRANSIT' }],
-    palmariAssegnati: [{ codice: 'PAL-002' }],
-    codiciAutista: [{ codice: 'AUT002', nome: 'Giuseppe', cognome: 'Bianchi' }],
+    mezziAssegnati: [{ id: 'm5', targa: 'GM099FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-03-01' }],
+    palmariAssegnati: [{ id: 'pal2', codice: 'PAL-002', tariffa: 35, dataInizio: '2025-01-01' }],
+    codiciAutista: [{ id: 'ca2', codice: 'AUT002', nome: 'Giuseppe', cognome: 'Bianchi', dataInizio: '2025-01-01' }],
     conteggiCount: 8,
   },
   {
@@ -58,9 +75,9 @@ const MOCK: Padroncino[] = [
     indirizzo: 'Contrada Piano, Montalto Uffugo', telefono: '0984111222', email: 'info@elspedizioni.it',
     pec: null, iban: null,
     scadenzaDurc: '2026-03-20', scadenzaDvr: null, attivo: true, note: null,
-    mezziAssegnati: [{ targa: 'GR496EZ', marca: 'Ford', modello: 'TRANSIT' }],
-    palmariAssegnati: [{ codice: 'PAL-003' }],
-    codiciAutista: [{ codice: 'AUT003', nome: 'Antonio', cognome: 'Esposito' }],
+    mezziAssegnati: [{ id: 'm7', targa: 'GR496EZ', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-06-01' }],
+    palmariAssegnati: [{ id: 'pal3', codice: 'PAL-003', tariffa: 35, dataInizio: '2025-01-01' }],
+    codiciAutista: [{ id: 'ca3', codice: 'AUT003', nome: 'Antonio', cognome: 'Esposito', dataInizio: '2025-01-01' }],
     conteggiCount: 6,
   },
   {
@@ -68,243 +85,274 @@ const MOCK: Padroncino[] = [
     indirizzo: null, telefono: null, email: 'info@ibexpress.it',
     pec: null, iban: null,
     scadenzaDurc: '2026-08-10', scadenzaDvr: null, attivo: true, note: null,
-    mezziAssegnati: [{ targa: 'GR184MD', marca: 'Ford', modello: 'TRANSIT' }],
+    mezziAssegnati: [{ id: 'm9', targa: 'GR184MD', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-01-01' }],
     palmariAssegnati: [],
-    codiciAutista: [{ codice: 'AUT004', nome: 'Luigi', cognome: 'Russo' }],
+    codiciAutista: [{ id: 'ca4', codice: 'AUT004', nome: 'Luigi', cognome: 'Russo', dataInizio: '2025-01-01' }],
     conteggiCount: 4,
-  },
-  {
-    id: 'p5', ragioneSociale: 'QUICK EXPRESS SRLS', partitaIva: '07890123456', codiceFiscale: null,
-    indirizzo: null, telefono: null, email: 'info@quickexpress.it',
-    pec: null, iban: null,
-    scadenzaDurc: '2026-07-20', scadenzaDvr: null, attivo: true, note: null,
-    mezziAssegnati: [{ targa: 'GR637XD', marca: 'Ford', modello: 'E-TRANSIT' }],
-    palmariAssegnati: [{ codice: 'PAL-005' }],
-    codiciAutista: [{ codice: 'AUT005', nome: 'Francesco', cognome: 'Romano' }],
-    conteggiCount: 3,
   },
 ];
 
-function formatScadenza(d: string | null) {
-  if (!d) return null;
-  const now = new Date();
-  const date = new Date(d);
-  const diff = Math.ceil((date.getTime() - now.getTime()) / 86400000);
-  const label = date.toLocaleDateString('it-IT');
-  if (diff < 0) return { label, giorni: `${Math.abs(diff)}gg fa`, cls: 'scad-danger' };
-  if (diff <= 30) return { label, giorni: `${diff}gg`, cls: 'scad-warning' };
-  if (diff <= 90) return { label, giorni: `${diff}gg`, cls: 'scad-info' };
-  return { label, giorni: `${diff}gg`, cls: 'scad-ok' };
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function scadenzaInfo(dateStr: string | null) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const oggi = new Date();
+  const giorni = Math.ceil((d.getTime() - oggi.getTime()) / 86400000);
+  const label = d.toLocaleDateString('it-IT');
+  if (giorni < 0) return { label, giorni: `Scaduto ${Math.abs(giorni)}gg fa`, cls: 'pd-scad-expired' };
+  if (giorni <= 30) return { label, giorni: `${giorni}gg`, cls: 'pd-scad-warning' };
+  return { label, giorni: `${giorni}gg`, cls: 'pd-scad-ok' };
 }
 
+type Tab = 'info' | 'mezzi' | 'palmari' | 'codici' | 'documenti' | 'conteggi';
+
+// ─── COMPONENTE PRINCIPALE ────────────────────────────────────────────────────
 export default function PadronciniPage() {
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>('p1');
-  const [showForm, setShowForm] = useState(false);
+  const [selected, setSelected] = useState<string | null>(MOCK[0].id);
+  const [padroncini, setPadroncini] = useState<Padroncino[]>(MOCK);
+  const [showNuovo, setShowNuovo] = useState(false);
+  const [assignModal, setAssignModal] = useState<{ type: 'mezzo' | 'palmare' | 'codice' } | null>(null);
 
-  const filtered = useMemo(() => {
-    if (!search) return MOCK;
-    const s = search.toLowerCase();
-    return MOCK.filter(
-      (p) =>
-        p.ragioneSociale.toLowerCase().includes(s) ||
-        p.partitaIva?.includes(s) ||
-        p.email?.toLowerCase().includes(s),
+  const filtered = useMemo(() =>
+    padroncini.filter((p) => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return p.ragioneSociale.toLowerCase().includes(s) || p.partitaIva.includes(s);
+    }), [search, padroncini]);
+
+  const selectedP = padroncini.find((p) => p.id === selected) ?? null;
+
+  const handleNuovoPadroncino = (data: NuovoPadroncino) => {
+    const np: Padroncino = {
+      id: `p${Date.now()}`,
+      ragioneSociale: data.ragioneSociale,
+      partitaIva: data.partitaIva,
+      codiceFiscale: data.codiceFiscale || null,
+      indirizzo: data.indirizzo || null,
+      telefono: data.telefono || null,
+      email: data.email || null,
+      pec: data.pec || null,
+      iban: data.iban || null,
+      scadenzaDurc: data.scadenzaDurc || null,
+      scadenzaDvr: data.scadenzaDvr || null,
+      attivo: true,
+      note: data.note || null,
+      mezziAssegnati: [],
+      palmariAssegnati: [],
+      codiciAutista: [],
+      conteggiCount: 0,
+    };
+    setPadroncini((prev) => [...prev, np]);
+    setSelected(np.id);
+  };
+
+  const handleAssegna = (itemId: string, dataInizio: string) => {
+    if (!selected || !assignModal) return;
+    setPadroncini((prev) =>
+      prev.map((p) => {
+        if (p.id !== selected) return p;
+        if (assignModal.type === 'mezzo') {
+          const item = MOCK_MEZZI_LIBERI.find((m) => m.id === itemId);
+          if (!item) return p;
+          return { ...p, mezziAssegnati: [...p.mezziAssegnati, { id: item.id, targa: item.targa, marca: item.marca, modello: item.modello, dataInizio }] };
+        }
+        if (assignModal.type === 'palmare') {
+          const item = MOCK_PALMARI_LIBERI.find((m) => m.id === itemId);
+          if (!item) return p;
+          return { ...p, palmariAssegnati: [...p.palmariAssegnati, { id: item.id, codice: item.codice, tariffa: item.tariffa, dataInizio }] };
+        }
+        if (assignModal.type === 'codice') {
+          const item = MOCK_CODICI_LIBERI.find((m) => m.id === itemId);
+          if (!item) return p;
+          return { ...p, codiciAutista: [...p.codiciAutista, { id: item.id, codice: item.codice, nome: item.nome, cognome: item.cognome, dataInizio }] };
+        }
+        return p;
+      })
     );
-  }, [search]);
-
-  const selected = MOCK.find((p) => p.id === selectedId) || null;
+  };
 
   return (
-    <div className="pad-page">
-      <div className="pad-header">
-        <h1>Padroncini</h1>
-        <div className="pad-header-actions">
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            + Nuovo padroncino
-          </button>
+    <div className="pd-page">
+      {/* SIDEBAR LISTA */}
+      <div className="pd-sidebar">
+        <div className="pd-sidebar-header">
+          <h1>Padroncini</h1>
+          <button className="btn-primary btn-sm" onClick={() => setShowNuovo(true)}>+ Nuovo</button>
         </div>
-      </div>
-
-      <div className="pad-stats">
-        <div className="pad-stat">
-          <span className="pad-stat-label">TOTALI</span>
-          <span className="pad-stat-value">{MOCK.length}</span>
+        <div className="pd-search-wrap">
+          <input className="pd-search" placeholder="🔍 Cerca padroncino…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <div className="pad-stat">
-          <span className="pad-stat-label">ATTIVI</span>
-          <span className="pad-stat-value">{MOCK.filter((p) => p.attivo).length}</span>
-        </div>
-        <div className="pad-stat pad-stat-danger">
-          <span className="pad-stat-label">DURC SCADUTI</span>
-          <span className="pad-stat-value">
-            {MOCK.filter((p) => {
-              if (!p.scadenzaDurc) return false;
-              return new Date(p.scadenzaDurc) < new Date();
-            }).length}
-          </span>
-        </div>
-        <div className="pad-stat">
-          <span className="pad-stat-label">MEZZI TOTALI</span>
-          <span className="pad-stat-value">
-            {MOCK.reduce((s, p) => s + p.mezziAssegnati.length, 0)}
-          </span>
-        </div>
-      </div>
-
-      <div className="pad-layout">
-        {/* Lista */}
-        <div className="pad-list">
-          <div className="pad-search">
-            <span className="pad-search-icon">🔍</span>
-            <input
-              type="text"
-              placeholder="Cerca padroncino..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="pad-list-items">
-            {filtered.map((p) => {
-              const durc = formatScadenza(p.scadenzaDurc);
-              return (
-                <div
-                  key={p.id}
-                  className={`pad-list-item ${selectedId === p.id ? 'pad-list-active' : ''}`}
-                  onClick={() => setSelectedId(p.id)}
-                >
-                  <div className="pad-list-avatar">
-                    {p.ragioneSociale.substring(0, 2)}
+        <div className="pd-list">
+          {filtered.map((p) => {
+            const durc = scadenzaInfo(p.scadenzaDurc);
+            const isExpired = durc && durc.cls === 'pd-scad-expired';
+            const isWarning = durc && durc.cls === 'pd-scad-warning';
+            return (
+              <div
+                key={p.id}
+                className={`pd-list-item ${selected === p.id ? 'pd-list-active' : ''}`}
+                onClick={() => setSelected(p.id)}
+              >
+                <div className="pd-list-avatar">{p.ragioneSociale[0]}</div>
+                <div className="pd-list-info">
+                  <div className="pd-list-name">{p.ragioneSociale}</div>
+                  <div className="pd-list-meta">
+                    <span>{p.mezziAssegnati.length} mezzi</span>
+                    <span>·</span>
+                    <span>{p.codiciAutista.length} autisti</span>
                   </div>
-                  <div className="pad-list-info">
-                    <span className="pad-list-name">{p.ragioneSociale}</span>
-                    <span className="pad-list-meta">
-                      {p.mezziAssegnati.length} mezzi · {p.conteggiCount} conteggi
-                    </span>
-                  </div>
-                  {durc && (
-                    <span className={`pad-list-durc ${durc.cls}`} title={`DURC: ${durc.label}`}>
-                      {durc.giorni}
-                    </span>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Detail */}
-        <div className="pad-detail">
-          {selected ? (
-            <PadroncinoDetail padroncino={selected} />
-          ) : (
-            <div className="pad-empty">
-              <span>👤</span>
-              <p>Seleziona un padroncino</p>
-            </div>
-          )}
+                {(isExpired || isWarning) && (
+                  <span className={`pd-list-alert ${isExpired ? 'alert-red' : 'alert-orange'}`}>!</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* DETTAGLIO */}
+      {selectedP ? (
+        <PadroncinoDetail
+          p={selectedP}
+          onAssegna={(type) => setAssignModal({ type })}
+          onRimuoviMezzo={(id) => setPadroncini(prev => prev.map(p => p.id === selectedP.id ? { ...p, mezziAssegnati: p.mezziAssegnati.filter(m => m.id !== id) } : p))}
+          onRimuoviPalmare={(id) => setPadroncini(prev => prev.map(p => p.id === selectedP.id ? { ...p, palmariAssegnati: p.palmariAssegnati.filter(m => m.id !== id) } : p))}
+          onRimuoviCodice={(id) => setPadroncini(prev => prev.map(p => p.id === selectedP.id ? { ...p, codiciAutista: p.codiciAutista.filter(m => m.id !== id) } : p))}
+        />
+      ) : (
+        <div className="pd-empty-detail">
+          <span>👤</span>
+          <p>Seleziona un padroncino</p>
+        </div>
+      )}
+
+      {/* MODALS */}
+      <NuovoPadroncinoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleNuovoPadroncino} />
+
+      {assignModal && selectedP && (
+        <AssegnaModal
+          open={true}
+          type={assignModal.type}
+          padroncinoNome={selectedP.ragioneSociale}
+          items={
+            assignModal.type === 'mezzo' ? MOCK_MEZZI_LIBERI.map(m => ({
+              id: m.id, label: m.targa, sublabel: `${m.marca} ${m.modello}`,
+              alreadyAssigned: selectedP.mezziAssegnati.some(x => x.id === m.id),
+            })) :
+            assignModal.type === 'palmare' ? MOCK_PALMARI_LIBERI.map(m => ({
+              id: m.id, label: m.codice, sublabel: `${m.modello} — ${m.tariffa}€/mese`,
+              alreadyAssigned: selectedP.palmariAssegnati.some(x => x.id === m.id),
+            })) :
+            MOCK_CODICI_LIBERI.map(m => ({
+              id: m.id, label: m.codice, sublabel: `${m.nome} ${m.cognome}`,
+              alreadyAssigned: selectedP.codiciAutista.some(x => x.id === m.id),
+            }))
+          }
+          onClose={() => setAssignModal(null)}
+          onAssegna={handleAssegna}
+        />
+      )}
     </div>
   );
 }
 
-function PadroncinoDetail({ padroncino: p }: { padroncino: Padroncino }) {
-  const [tab, setTab] = useState<'info' | 'mezzi' | 'documenti' | 'conteggi'>('info');
-  const durc = formatScadenza(p.scadenzaDurc);
-  const dvr = formatScadenza(p.scadenzaDvr);
+// ─── DETTAGLIO PADRONCINO ─────────────────────────────────────────────────────
+function PadroncinoDetail({
+  p,
+  onAssegna,
+  onRimuoviMezzo,
+  onRimuoviPalmare,
+  onRimuoviCodice,
+}: {
+  p: Padroncino;
+  onAssegna: (type: 'mezzo' | 'palmare' | 'codice') => void;
+  onRimuoviMezzo: (id: string) => void;
+  onRimuoviPalmare: (id: string) => void;
+  onRimuoviCodice: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<Tab>('info');
+  const durc = scadenzaInfo(p.scadenzaDurc);
+  const dvr = scadenzaInfo(p.scadenzaDvr);
+
+  const TABS: { key: Tab; label: string; count?: number }[] = [
+    { key: 'info', label: 'Info' },
+    { key: 'mezzi', label: 'Mezzi', count: p.mezziAssegnati.length },
+    { key: 'palmari', label: 'Palmari', count: p.palmariAssegnati.length },
+    { key: 'codici', label: 'Cod. Autisti', count: p.codiciAutista.length },
+    { key: 'documenti', label: 'Documenti' },
+    { key: 'conteggi', label: 'Conteggi', count: p.conteggiCount },
+  ];
 
   return (
-    <div className="pd">
-      <div className="pd-header">
-        <div className="pd-avatar">{p.ragioneSociale.substring(0, 2)}</div>
-        <div className="pd-title">
+    <div className="pd-detail">
+      {/* Header */}
+      <div className="pd-detail-header">
+        <div className="pd-detail-avatar">{p.ragioneSociale[0]}</div>
+        <div className="pd-detail-title">
           <h2>{p.ragioneSociale}</h2>
-          <span className="pd-piva">P.IVA: {p.partitaIva || '—'}</span>
+          <div className="pd-detail-sub">
+            <span className="pd-mono">{p.partitaIva}</span>
+            <span className={`pd-badge ${p.attivo ? 'pd-badge-green' : 'pd-badge-gray'}`}>
+              {p.attivo ? 'ATTIVO' : 'INATTIVO'}
+            </span>
+          </div>
         </div>
-        <div className="pd-actions">
-          <span className={`pd-status ${p.attivo ? 'pd-active' : 'pd-inactive'}`}>
-            {p.attivo ? 'Attivo' : 'Inattivo'}
-          </span>
+        <div className="pd-detail-actions">
           <button className="btn-outline btn-sm">✏️ Modifica</button>
+          <button className="btn-outline btn-sm">📊 Conteggio</button>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="pd-tabs">
-        {(['info', 'mezzi', 'documenti', 'conteggi'] as const).map((t) => (
+        {TABS.map((t) => (
           <button
-            key={t}
-            className={`pd-tab ${tab === t ? 'pd-tab-active' : ''}`}
-            onClick={() => setTab(t)}
+            key={t.key}
+            className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`}
+            onClick={() => setTab(t.key)}
           >
-            {t === 'info' ? 'Anagrafica' : t === 'mezzi' ? `Mezzi (${p.mezziAssegnati.length})` : t === 'documenti' ? 'Documenti' : 'Conteggi'}
+            {t.label}
+            {t.count !== undefined && (
+              <span className="pd-tab-count">{t.count}</span>
+            )}
           </button>
         ))}
       </div>
 
-      <div className="pd-body">
+      {/* Tab Content */}
+      <div className="pd-tab-content">
+        {/* ── INFO ── */}
         {tab === 'info' && (
           <div className="pd-info-grid">
             <div className="pd-section">
-              <h4>Dati anagrafici</h4>
-              <div className="pd-fields">
-                <Field label="Ragione Sociale" value={p.ragioneSociale} />
-                <Field label="P. IVA" value={p.partitaIva} />
-                <Field label="Codice Fiscale" value={p.codiceFiscale} />
-                <Field label="Indirizzo" value={p.indirizzo} />
-                <Field label="Telefono" value={p.telefono} />
-                <Field label="Email" value={p.email} />
-                <Field label="PEC" value={p.pec} />
-                <Field label="IBAN" value={p.iban} mono />
-              </div>
+              <h4>Contatti</h4>
+              <Field label="Indirizzo" value={p.indirizzo} />
+              <Field label="Telefono" value={p.telefono} />
+              <Field label="Email" value={p.email} />
+              <Field label="PEC" value={p.pec} />
             </div>
-
+            <div className="pd-section">
+              <h4>Dati bancari</h4>
+              <Field label="IBAN" value={p.iban} mono />
+              <Field label="Codice Fiscale" value={p.codiceFiscale} mono />
+            </div>
             <div className="pd-section">
               <h4>Scadenze</h4>
               <div className="pd-scadenze">
-                <div className={`pd-scad-card ${durc?.cls || ''}`}>
+                <div className={`pd-scad-row ${durc?.cls || ''}`}>
                   <span className="pd-scad-type">DURC</span>
                   <span className="pd-scad-date">{durc?.label || '—'}</span>
                   {durc && <span className="pd-scad-days">{durc.giorni}</span>}
                 </div>
-                <div className={`pd-scad-card ${dvr?.cls || ''}`}>
+                <div className={`pd-scad-row ${dvr?.cls || ''}`}>
                   <span className="pd-scad-type">DVR</span>
                   <span className="pd-scad-date">{dvr?.label || '—'}</span>
                   {dvr && <span className="pd-scad-days">{dvr.giorni}</span>}
                 </div>
               </div>
             </div>
-
-            <div className="pd-section">
-              <h4>Codici autista collegati</h4>
-              <div className="pd-codici">
-                {p.codiciAutista.map((c) => (
-                  <div key={c.codice} className="pd-codice-item">
-                    <span className="pd-codice-badge">{c.codice}</span>
-                    <span>{c.nome} {c.cognome}</span>
-                  </div>
-                ))}
-                {p.codiciAutista.length === 0 && (
-                  <span className="pd-empty-text">Nessun codice autista</span>
-                )}
-              </div>
-            </div>
-
-            <div className="pd-section">
-              <h4>Palmari assegnati</h4>
-              <div className="pd-codici">
-                {p.palmariAssegnati.map((pl) => (
-                  <div key={pl.codice} className="pd-codice-item">
-                    <span className="pd-codice-badge pd-codice-palmare">{pl.codice}</span>
-                  </div>
-                ))}
-                {p.palmariAssegnati.length === 0 && (
-                  <span className="pd-empty-text">Nessun palmare</span>
-                )}
-              </div>
-            </div>
-
             {p.note && (
               <div className="pd-section pd-section-full">
                 <h4>Note</h4>
@@ -314,18 +362,102 @@ function PadroncinoDetail({ padroncino: p }: { padroncino: Padroncino }) {
           </div>
         )}
 
+        {/* ── MEZZI ── */}
         {tab === 'mezzi' && (
-          <div className="pd-mezzi-list">
-            {p.mezziAssegnati.map((m) => (
-              <div key={m.targa} className="pd-mezzo-item">
-                <span className="pd-mezzo-targa">{m.targa}</span>
-                <span className="pd-mezzo-model">{m.marca} {m.modello}</span>
-                <button className="btn-ghost-sm">Dettaglio</button>
-              </div>
-            ))}
+          <div>
+            <div className="pd-tab-toolbar">
+              <span className="pd-tab-toolbar-title">{p.mezziAssegnati.length} mezzi assegnati</span>
+              <button className="btn-primary btn-sm" onClick={() => onAssegna('mezzo')}>+ Assegna Mezzo</button>
+            </div>
+            <div className="pd-assign-list">
+              {p.mezziAssegnati.length === 0 && (
+                <div className="pd-empty-assign">
+                  <span>🚛</span><p>Nessun mezzo assegnato</p>
+                  <button className="btn-outline btn-sm" onClick={() => onAssegna('mezzo')}>+ Assegna</button>
+                </div>
+              )}
+              {p.mezziAssegnati.map((m) => (
+                <div key={m.id} className="pd-assign-item">
+                  <div className="pd-assign-icon">🚛</div>
+                  <div className="pd-assign-info">
+                    <span className="pd-assign-code">{m.targa}</span>
+                    <span className="pd-assign-name">{m.marca} {m.modello}</span>
+                    <span className="pd-assign-since">Dal {new Date(m.dataInizio).toLocaleDateString('it-IT')}</span>
+                  </div>
+                  <div className="pd-assign-actions">
+                    <button className="btn-ghost-sm">Dettaglio →</button>
+                    <button className="btn-danger-sm" onClick={() => onRimuoviMezzo(m.id)}>Rimuovi</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
+        {/* ── PALMARI ── */}
+        {tab === 'palmari' && (
+          <div>
+            <div className="pd-tab-toolbar">
+              <span className="pd-tab-toolbar-title">{p.palmariAssegnati.length} palmari assegnati</span>
+              <button className="btn-primary btn-sm" onClick={() => onAssegna('palmare')}>+ Assegna Palmare</button>
+            </div>
+            <div className="pd-assign-list">
+              {p.palmariAssegnati.length === 0 && (
+                <div className="pd-empty-assign">
+                  <span>📱</span><p>Nessun palmare assegnato</p>
+                  <button className="btn-outline btn-sm" onClick={() => onAssegna('palmare')}>+ Assegna</button>
+                </div>
+              )}
+              {p.palmariAssegnati.map((m) => (
+                <div key={m.id} className="pd-assign-item">
+                  <div className="pd-assign-icon">📱</div>
+                  <div className="pd-assign-info">
+                    <span className="pd-assign-code">{m.codice}</span>
+                    <span className="pd-assign-name">{m.tariffa}€/mese</span>
+                    <span className="pd-assign-since">Dal {new Date(m.dataInizio).toLocaleDateString('it-IT')}</span>
+                  </div>
+                  <div className="pd-assign-actions">
+                    <button className="btn-danger-sm" onClick={() => onRimuoviPalmare(m.id)}>Rimuovi</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CODICI AUTISTA ── */}
+        {tab === 'codici' && (
+          <div>
+            <div className="pd-tab-toolbar">
+              <span className="pd-tab-toolbar-title">{p.codiciAutista.length} codici autista</span>
+              <button className="btn-primary btn-sm" onClick={() => onAssegna('codice')}>+ Assegna Codice</button>
+            </div>
+            <div className="pd-assign-list">
+              {p.codiciAutista.length === 0 && (
+                <div className="pd-empty-assign">
+                  <span>🏷️</span><p>Nessun codice autista associato</p>
+                  <button className="btn-outline btn-sm" onClick={() => onAssegna('codice')}>+ Assegna</button>
+                </div>
+              )}
+              {p.codiciAutista.map((c) => (
+                <div key={c.id} className="pd-assign-item">
+                  <div className="pd-assign-icon">🏷️</div>
+                  <div className="pd-assign-info">
+                    <span className="pd-assign-code">{c.codice}</span>
+                    <span className="pd-assign-name">{c.nome} {c.cognome}</span>
+                    <span className="pd-assign-since">Dal {new Date(c.dataInizio).toLocaleDateString('it-IT')}</span>
+                  </div>
+                  <div className="pd-assign-actions">
+                    <button className="btn-ghost-sm">Acconti →</button>
+                    <button className="btn-danger-sm" onClick={() => onRimuoviCodice(c.id)}>Rimuovi</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── DOCUMENTI ── */}
         {tab === 'documenti' && (
           <div className="pd-docs-empty">
             <span>📂</span>
@@ -334,6 +466,7 @@ function PadroncinoDetail({ padroncino: p }: { padroncino: Padroncino }) {
           </div>
         )}
 
+        {/* ── CONTEGGI ── */}
         {tab === 'conteggi' && (
           <div className="pd-docs-empty">
             <span>📊</span>

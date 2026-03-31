@@ -1,27 +1,25 @@
 /* ============================================
    GESTIONALE CORRIERE - DESIGN SYSTEM
-   Dark theme ispirato allo screenshot
+   Supporta tema dark (default) e light
    ============================================ */
 
-:root {
-  /* ─── Colori Base ────────────────────── */
+/* ─── DARK THEME (default) ───────────────── */
+:root,
+[data-theme="dark"] {
   --bg-primary: #0f1117;
   --bg-secondary: #1a1d27;
   --bg-tertiary: #242837;
   --bg-elevated: #2a2e3d;
   --bg-hover: #323750;
 
-  /* ─── Testo ──────────────────────────── */
   --text-primary: #e8eaf0;
   --text-secondary: #9ca3b4;
   --text-muted: #6b7280;
 
-  /* ─── Accent ─────────────────────────── */
   --primary: #6366f1;
   --primary-hover: #818cf8;
   --primary-muted: rgba(99, 102, 241, 0.15);
 
-  /* ─── Semantici ──────────────────────── */
   --success: #22c55e;
   --success-bg: rgba(34, 197, 94, 0.12);
   --warning: #f59e0b;
@@ -31,7 +29,6 @@
   --info: #3b82f6;
   --info-bg: rgba(59, 130, 246, 0.12);
 
-  /* ─── Badge colori ───────────────────── */
   --badge-green: #22c55e;
   --badge-green-bg: rgba(34, 197, 94, 0.15);
   --badge-orange: #f97316;
@@ -45,15 +42,12 @@
   --badge-gray: #6b7280;
   --badge-gray-bg: rgba(107, 114, 128, 0.15);
 
-  /* ─── Bordi ──────────────────────────── */
   --border: #2a2e3d;
   --border-hover: #3d4259;
 
-  /* ─── Tipografia ─────────────────────── */
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
-  /* ─── Spaziatura ─────────────────────── */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -61,12 +55,59 @@
   --space-xl: 32px;
   --space-2xl: 48px;
 
-  /* ─── Raggi ──────────────────────────── */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
 
-  /* ─── Sidebar ────────────────────────── */
   --sidebar-width: 220px;
   --sidebar-bg: #141722;
+}
+
+/* ─── LIGHT THEME ────────────────────────── */
+[data-theme="light"] {
+  --bg-primary: #f4f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f1f4;
+  --bg-elevated: #e8eaef;
+  --bg-hover: #eceef3;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-muted: rgba(79, 70, 229, 0.1);
+
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.1);
+
+  --badge-green: #15803d;
+  --badge-green-bg: rgba(21, 128, 61, 0.12);
+  --badge-orange: #c2410c;
+  --badge-orange-bg: rgba(194, 65, 12, 0.12);
+  --badge-red: #dc2626;
+  --badge-red-bg: rgba(220, 38, 38, 0.12);
+  --badge-blue: #1d4ed8;
+  --badge-blue-bg: rgba(29, 78, 216, 0.12);
+  --badge-purple: #7c3aed;
+  --badge-purple-bg: rgba(124, 58, 237, 0.12);
+  --badge-gray: #6b7280;
+  --badge-gray-bg: rgba(107, 114, 128, 0.12);
+
+  --border: #e5e7eb;
+  --border-hover: #d1d5db;
+
+  --sidebar-bg: #f4f5f7;
+}
+
+/* ─── Transizione tema fluida ────────────── */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.05s ease;
 }

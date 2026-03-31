@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import './CodiciAutisti.css';
+import NuovoCodiceAutistaModal from './NuovoCodiceAutistaModal';
+
 
 interface CodiceAutista {
   id: string;
@@ -32,6 +34,7 @@ function eur(n: number) {
 export default function CodiciAutistiPage() {
   const [search, setSearch] = useState('');
   const [showInattivi, setShowInattivi] = useState(false);
+  const [showNuovo, setShowNuovo] = useState(false);
 
   const filtered = useMemo(() => {
     return MOCK.filter((c) => {
@@ -51,7 +54,8 @@ export default function CodiciAutistiPage() {
       <div className="ca-header">
         <h1>Codici Autisti</h1>
         <div className="ca-header-actions">
-          <button className="btn-primary">+ Nuovo codice</button>
+          <button className="btn-primary" onClick={() => setShowNuovo(true)}>+ Nuovo Codice</button>
+          <NuovoCodiceAutistaModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={(d) => console.log(d)} />
           <button className="btn-outline">+ Inserisci acconto</button>
         </div>
       </div>

@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import './Palmari.css';
+import NuovoPalmareModal, { NuovoPalmare } from './NuovoPalmareModal';  
+
 
 interface Palmare {
   id: string;
@@ -35,6 +37,7 @@ type Filter = 'TUTTI' | 'ASSEGNATO' | 'DISPONIBILE' | 'GUASTO';
 export default function PalmariPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('TUTTI');
+  const [showNuovo, setShowNuovo] = useState(false);
 
   const filtered = useMemo(() => {
     return MOCK.filter((p) => {
@@ -53,7 +56,8 @@ export default function PalmariPage() {
     <div className="palm-page">
       <div className="palm-header">
         <h1>Palmari</h1>
-        <button className="btn-primary">+ Nuovo palmare</button>
+        <button className="btn-primary" onClick={() => setShowNuovo(true)}>+ Nuovo Palmare</button>
+        <NuovoPalmareModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={(d) => console.log(d)} />
       </div>
 
       <div className="palm-stats">

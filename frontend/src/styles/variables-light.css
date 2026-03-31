@@ -1,0 +1,71 @@
+/* ============================================
+   GESTIONALE CORRIERE - LIGHT THEME
+   ============================================ */
+
+[data-theme="light"] {
+  /* ─── Colori Base ────────────────────── */
+  --bg-primary: #f4f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f1f4;
+  --bg-elevated: #e8eaef;
+  --bg-hover: #eceef3;
+
+  /* ─── Testo ──────────────────────────── */
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+
+  /* ─── Accent ─────────────────────────── */
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-muted: rgba(79, 70, 229, 0.1);
+
+  /* ─── Semantici ──────────────────────── */
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.1);
+
+  /* ─── Badge colori ───────────────────── */
+  --badge-green: #15803d;
+  --badge-green-bg: rgba(21, 128, 61, 0.12);
+  --badge-orange: #c2410c;
+  --badge-orange-bg: rgba(194, 65, 12, 0.12);
+  --badge-red: #dc2626;
+  --badge-red-bg: rgba(220, 38, 38, 0.12);
+  --badge-blue: #1d4ed8;
+  --badge-blue-bg: rgba(29, 78, 216, 0.12);
+  --badge-purple: #7c3aed;
+  --badge-purple-bg: rgba(124, 58, 237, 0.12);
+  --badge-gray: #6b7280;
+  --badge-gray-bg: rgba(107, 114, 128, 0.12);
+
+  /* ─── Bordi ──────────────────────────── */
+  --border: #e5e7eb;
+  --border-hover: #d1d5db;
+
+  /* ─── Tipografia ─────────────────────── */
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ─── Spaziatura ─────────────────────── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* ─── Raggi ──────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ─── Sidebar ────────────────────────── */
+  --sidebar-width: 220px;
+  --sidebar-bg: #1e1b4b;
+}
