@@ -1,4 +1,4 @@
-// src/components/layout/Sidebar.tsx  — VERSIONE AGGIORNATA
+// src/components/layout/Sidebar.tsx
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth.store';
 import ThemeToggle from '../ui/ThemeToggle';
@@ -14,6 +14,7 @@ const navItems = [
   { path: '/codici-autista', label: 'Cod. Autisti', icon: '🏷️' },
   { divider: true },
   { path: '/ricariche', label: 'Ricariche Elettriche', icon: '⚡' },
+  { path: '/acconti', label: 'Acconti', icon: '💰' },
   { path: '/ricerca', label: 'Ricerca Globale', icon: '🔍' },
   { path: '/esportazione', label: 'Esportazione', icon: '📥' },
   { divider: true },
@@ -67,7 +68,6 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Theme Toggle */}
         <div style={{ padding: '8px 0' }}>
           <ThemeToggle />
         </div>

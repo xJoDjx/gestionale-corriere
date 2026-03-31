@@ -6,6 +6,7 @@ import ConteggiMensili from './features/conteggi/ConteggiMensili';
 import PadronciniPage from './features/padroncini/Padroncini';
 import PalmariPage from './features/palmari/Palmari';
 import CodiciAutistiPage from './features/codici-autista/CodiciAutisti';
+import AccontiPage from './features/acconti/Acconti';
 import './styles/global.css';
 import './features/mezzi/FlottaMezzi.css';
 import './features/conteggi/ConteggiMensili.css';
@@ -13,6 +14,7 @@ import './features/dashboard/Dashboard.css';
 import './features/padroncini/Padroncini.css';
 import './features/palmari/Palmari.css';
 import './features/codici-autista/CodiciAutisti.css';
+import './features/acconti/Acconti.css';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -36,6 +38,7 @@ export default function App() {
           <Route path="/padroncini" element={<PadronciniPage />} />
           <Route path="/palmari" element={<PalmariPage />} />
           <Route path="/codici-autista" element={<CodiciAutistiPage />} />
+          <Route path="/acconti" element={<AccontiPage />} />
           <Route path="/ricariche" element={<Placeholder title="Ricariche Elettriche" />} />
           <Route path="/ricerca" element={<Placeholder title="Ricerca Globale" />} />
           <Route path="/esportazione" element={<Placeholder title="Esportazione" />} />

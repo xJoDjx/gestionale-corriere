@@ -1,27 +1,55 @@
-// src/features/padroncini/Padroncini.tsx  ← VERSIONE AGGIORNATA
-// Aggiunge: tab PALMARI + tab CODICI con assegnazione inline
+// src/features/padroncini/Padroncini.tsx — AssegnaModal usa dati reali da Mezzi/Palmari/CodiciAutisti
 
 import { useState, useMemo } from 'react';
 import AssegnaModal from './AssegnaModal';
 import NuovoPadroncinoModal, { NuovoPadroncino } from './NuovoPadroncinoModal';
 import './Padroncini.css';
 
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-const MOCK_PALMARI_LIBERI = [
-  { id: 'pal7', codice: 'PAL-007', modello: 'Zebra TC52', tariffa: 35 },
-  { id: 'pal8', codice: 'PAL-008', modello: 'Zebra TC52', tariffa: 35 },
+// ─── DATI REALI CONDIVISI ─────────────────────────────────────────────────────
+// Questi andrebbero letti via API. Per ora sono i MOCK che rispecchiano
+// esattamente quelli presenti nelle sezioni Flotta, Palmari, CodiciAutisti.
+
+export const ALL_MEZZI = [
+  { id: 'm1', targa: 'GH627TF', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm2', targa: 'GH628TF', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm3', targa: 'GJ198RL', marca: 'Volkswagen', modello: 'CRAFTER', alimentazione: 'GASOLIO', stato: 'DISMESSO', padroncinoId: null },
+  { id: 'm4', targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm5', targa: 'GM099FB', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p2' },
+  { id: 'm6', targa: 'GM100FB', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm7', targa: 'GR496EZ', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO_MHEV', stato: 'ASSEGNATO', padroncinoId: 'p3' },
+  { id: 'm8', targa: 'GS610JM', marca: 'Cupra', modello: 'BORN', alimentazione: 'ELETTRICO', stato: 'DISPONIBILE', padroncinoId: null },
+  { id: 'm9', targa: 'GS690EP', marca: 'Cupra', modello: 'BORN', alimentazione: 'ELETTRICO', stato: 'DISPONIBILE', padroncinoId: null },
+  { id: 'm10', targa: 'GR184MD', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO_MHEV', stato: 'ASSEGNATO', padroncinoId: 'p4' },
+  { id: 'm11', targa: 'GR498EZ', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO_MHEV', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm12', targa: 'GR500EZ', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO_MHEV', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm13', targa: 'GR507EZ', marca: 'Ford', modello: 'TRANSIT', alimentazione: 'GASOLIO_MHEV', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm14', targa: 'GR628XD', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm15', targa: 'GR637XD', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p5' },
+  { id: 'm16', targa: 'GS691VF', marca: 'Man', modello: 'ETGE', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'm17', targa: 'GM709PN', marca: 'Ford', modello: 'E-TRANSIT', alimentazione: 'ELETTRICO', stato: 'ASSEGNATO', padroncinoId: 'p1' },
 ];
 
-const MOCK_CODICI_LIBERI = [
-  { id: 'ca7', codice: 'AUT007', nome: 'Salvatore', cognome: 'Ferrara' },
-  { id: 'ca8', codice: 'AUT008', nome: 'Giovanni', cognome: 'Ricci' },
+export const ALL_PALMARI = [
+  { id: 'pal1', codice: 'PAL-001', modello: 'Zebra TC21', tariffa: 35, stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'pal2', codice: 'PAL-002', modello: 'Zebra TC21', tariffa: 35, stato: 'ASSEGNATO', padroncinoId: 'p1' },
+  { id: 'pal3', codice: 'PAL-003', modello: 'Zebra TC21', tariffa: 35, stato: 'ASSEGNATO', padroncinoId: 'p2' },
+  { id: 'pal4', codice: 'PAL-004', modello: 'Zebra TC26', tariffa: 45, stato: 'ASSEGNATO', padroncinoId: 'p3' },
+  { id: 'pal5', codice: 'PAL-005', modello: 'Zebra TC21', tariffa: 35, stato: 'DISPONIBILE', padroncinoId: null },
+  { id: 'pal6', codice: 'PAL-006', modello: 'Honeywell CT47', tariffa: 50, stato: 'GUASTO', padroncinoId: null },
+  { id: 'pal7', codice: 'PAL-007', modello: 'Zebra TC21', tariffa: 35, stato: 'DISPONIBILE', padroncinoId: null },
+  { id: 'pal8', codice: 'PAL-008', modello: 'Zebra TC21', tariffa: 35, stato: 'DISPONIBILE', padroncinoId: null },
 ];
 
-const MOCK_MEZZI_LIBERI = [
-  { id: 'm_lib1', targa: 'GR999AA', marca: 'Ford', modello: 'TRANSIT', stato: 'DISPONIBILE' },
-  { id: 'm_lib2', targa: 'GR888BB', marca: 'Ford', modello: 'E-TRANSIT', stato: 'DISPONIBILE' },
+export const ALL_CODICI_AUTISTI = [
+  { id: 'ca1', codice: 'AUT001', nome: 'Mario', cognome: 'Rossi', attivo: true, padroncinoId: 'p1' },
+  { id: 'ca2', codice: 'AUT002', nome: 'Luca', cognome: 'Ferrari', attivo: true, padroncinoId: 'p1' },
+  { id: 'ca3', codice: 'AUT003', nome: 'Ahmed', cognome: 'Benali', attivo: true, padroncinoId: 'p2' },
+  { id: 'ca4', codice: 'AUT004', nome: 'Piotr', cognome: 'Kowalski', attivo: true, padroncinoId: 'p4' },
+  { id: 'ca5', codice: 'AUT005', nome: 'Giuseppe', cognome: 'Marino', attivo: false, padroncinoId: null },
+  { id: 'ca6', codice: 'AUT006', nome: 'Ivan', cognome: 'Petrovic', attivo: true, padroncinoId: null },
 ];
 
+// ─── TIPI ────────────────────────────────────────────────────────────────────
 type Padroncino = {
   id: string;
   ragioneSociale: string;
@@ -49,14 +77,16 @@ const MOCK: Padroncino[] = [
     pec: null, iban: 'IT60X0542811101000000123456',
     scadenzaDurc: '2026-06-30', scadenzaDvr: '2027-01-15', attivo: true, note: null,
     mezziAssegnati: [
-      { id: 'm1', targa: 'GM097FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-01-01' },
-      { id: 'm2', targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-03-01' },
+      { id: 'm1', targa: 'GH627TF', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-01-01' },
+      { id: 'm4', targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-03-01' },
     ],
     palmariAssegnati: [
       { id: 'pal1', codice: 'PAL-001', tariffa: 35, dataInizio: '2025-01-01' },
+      { id: 'pal2', codice: 'PAL-002', tariffa: 35, dataInizio: '2025-01-01' },
     ],
     codiciAutista: [
-      { id: 'ca1', codice: 'AUT001', nome: 'Marco', cognome: 'Rossi', dataInizio: '2025-01-01' },
+      { id: 'ca1', codice: 'AUT001', nome: 'Mario', cognome: 'Rossi', dataInizio: '2025-01-01' },
+      { id: 'ca2', codice: 'AUT002', nome: 'Luca', cognome: 'Ferrari', dataInizio: '2025-01-01' },
     ],
     conteggiCount: 12,
   },
@@ -66,8 +96,8 @@ const MOCK: Padroncino[] = [
     pec: null, iban: null,
     scadenzaDurc: '2026-04-01', scadenzaDvr: '2026-10-15', attivo: true, note: null,
     mezziAssegnati: [{ id: 'm5', targa: 'GM099FB', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-03-01' }],
-    palmariAssegnati: [{ id: 'pal2', codice: 'PAL-002', tariffa: 35, dataInizio: '2025-01-01' }],
-    codiciAutista: [{ id: 'ca2', codice: 'AUT002', nome: 'Giuseppe', cognome: 'Bianchi', dataInizio: '2025-01-01' }],
+    palmariAssegnati: [{ id: 'pal3', codice: 'PAL-003', tariffa: 35, dataInizio: '2025-01-01' }],
+    codiciAutista: [{ id: 'ca3', codice: 'AUT003', nome: 'Ahmed', cognome: 'Benali', dataInizio: '2025-01-01' }],
     conteggiCount: 8,
   },
   {
@@ -76,8 +106,8 @@ const MOCK: Padroncino[] = [
     pec: null, iban: null,
     scadenzaDurc: '2026-03-20', scadenzaDvr: null, attivo: true, note: null,
     mezziAssegnati: [{ id: 'm7', targa: 'GR496EZ', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-06-01' }],
-    palmariAssegnati: [{ id: 'pal3', codice: 'PAL-003', tariffa: 35, dataInizio: '2025-01-01' }],
-    codiciAutista: [{ id: 'ca3', codice: 'AUT003', nome: 'Antonio', cognome: 'Esposito', dataInizio: '2025-01-01' }],
+    palmariAssegnati: [{ id: 'pal4', codice: 'PAL-004', tariffa: 45, dataInizio: '2025-01-01' }],
+    codiciAutista: [],
     conteggiCount: 6,
   },
   {
@@ -85,10 +115,20 @@ const MOCK: Padroncino[] = [
     indirizzo: null, telefono: null, email: 'info@ibexpress.it',
     pec: null, iban: null,
     scadenzaDurc: '2026-08-10', scadenzaDvr: null, attivo: true, note: null,
-    mezziAssegnati: [{ id: 'm9', targa: 'GR184MD', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-01-01' }],
+    mezziAssegnati: [{ id: 'm10', targa: 'GR184MD', marca: 'Ford', modello: 'TRANSIT', dataInizio: '2025-01-01' }],
     palmariAssegnati: [],
-    codiciAutista: [{ id: 'ca4', codice: 'AUT004', nome: 'Luigi', cognome: 'Russo', dataInizio: '2025-01-01' }],
+    codiciAutista: [{ id: 'ca4', codice: 'AUT004', nome: 'Piotr', cognome: 'Kowalski', dataInizio: '2025-01-01' }],
     conteggiCount: 4,
+  },
+  {
+    id: 'p5', ragioneSociale: 'QUICK EXPRESS SRLS', partitaIva: '07890123456', codiceFiscale: null,
+    indirizzo: null, telefono: null, email: 'info@quickexpress.it',
+    pec: null, iban: null,
+    scadenzaDurc: '2026-07-20', scadenzaDvr: null, attivo: true, note: null,
+    mezziAssegnati: [{ id: 'm15', targa: 'GR637XD', marca: 'Ford', modello: 'E-TRANSIT', dataInizio: '2025-01-01' }],
+    palmariAssegnati: [],
+    codiciAutista: [],
+    conteggiCount: 3,
   },
 ];
 
@@ -123,6 +163,55 @@ export default function PadronciniPage() {
 
   const selectedP = padroncini.find((p) => p.id === selected) ?? null;
 
+  // ── Calcola gli item disponibili per ogni tipo di assegnazione ──
+  const availableItems = useMemo(() => {
+    if (!selectedP) return { mezzi: [], palmari: [], codici: [] };
+
+    // ID già assegnati al padroncino selezionato
+    const mezziGiaAssegnati = new Set(selectedP.mezziAssegnati.map(m => m.id));
+    const palmariGiaAssegnati = new Set(selectedP.palmariAssegnati.map(p => p.id));
+    const codiciGiaAssegnati = new Set(selectedP.codiciAutista.map(c => c.id));
+
+    // Mezzi: mostra tutti (disponibili liberi + quelli già assegnati a questo padroncino)
+    // Esclude solo quelli assegnati ad altri padroncini
+    const mezzi = ALL_MEZZI
+      .filter(m => m.stato !== 'DISMESSO' && m.stato !== 'FUORI_SERVIZIO')
+      .filter(m => m.padroncinoId === null || m.padroncinoId === selectedP.id)
+      .map(m => ({
+        id: m.id,
+        label: m.targa,
+        sublabel: `${m.marca} ${m.modello} — ${m.alimentazione.replace('_', '+')}`,
+        alreadyAssigned: mezziGiaAssegnati.has(m.id),
+        assignedTo: mezziGiaAssegnati.has(m.id) ? selectedP.ragioneSociale : undefined,
+      }));
+
+    // Palmari: disponibili + già assegnati a questo padroncino
+    const palmari = ALL_PALMARI
+      .filter(p => p.stato !== 'DISMESSO' && p.stato !== 'GUASTO')
+      .filter(p => p.padroncinoId === null || p.padroncinoId === selectedP.id)
+      .map(p => ({
+        id: p.id,
+        label: p.codice,
+        sublabel: `${p.modello} — ${p.tariffa}€/mese`,
+        alreadyAssigned: palmariGiaAssegnati.has(p.id),
+        assignedTo: palmariGiaAssegnati.has(p.id) ? selectedP.ragioneSociale : undefined,
+      }));
+
+    // Codici autisti: attivi non assegnati ad altri + già assegnati a questo
+    const codici = ALL_CODICI_AUTISTI
+      .filter(c => c.attivo)
+      .filter(c => c.padroncinoId === null || c.padroncinoId === selectedP.id)
+      .map(c => ({
+        id: c.id,
+        label: c.codice,
+        sublabel: `${c.nome} ${c.cognome}`,
+        alreadyAssigned: codiciGiaAssegnati.has(c.id),
+        assignedTo: codiciGiaAssegnati.has(c.id) ? selectedP.ragioneSociale : undefined,
+      }));
+
+    return { mezzi, palmari, codici };
+  }, [selectedP]);
+
   const handleNuovoPadroncino = (data: NuovoPadroncino) => {
     const np: Padroncino = {
       id: `p${Date.now()}`,
@@ -153,17 +242,17 @@ export default function PadronciniPage() {
       prev.map((p) => {
         if (p.id !== selected) return p;
         if (assignModal.type === 'mezzo') {
-          const item = MOCK_MEZZI_LIBERI.find((m) => m.id === itemId);
+          const item = ALL_MEZZI.find((m) => m.id === itemId);
           if (!item) return p;
           return { ...p, mezziAssegnati: [...p.mezziAssegnati, { id: item.id, targa: item.targa, marca: item.marca, modello: item.modello, dataInizio }] };
         }
         if (assignModal.type === 'palmare') {
-          const item = MOCK_PALMARI_LIBERI.find((m) => m.id === itemId);
+          const item = ALL_PALMARI.find((m) => m.id === itemId);
           if (!item) return p;
           return { ...p, palmariAssegnati: [...p.palmariAssegnati, { id: item.id, codice: item.codice, tariffa: item.tariffa, dataInizio }] };
         }
         if (assignModal.type === 'codice') {
-          const item = MOCK_CODICI_LIBERI.find((m) => m.id === itemId);
+          const item = ALL_CODICI_AUTISTI.find((m) => m.id === itemId);
           if (!item) return p;
           return { ...p, codiciAutista: [...p.codiciAutista, { id: item.id, codice: item.codice, nome: item.nome, cognome: item.cognome, dataInizio }] };
         }
@@ -237,18 +326,9 @@ export default function PadronciniPage() {
           type={assignModal.type}
           padroncinoNome={selectedP.ragioneSociale}
           items={
-            assignModal.type === 'mezzo' ? MOCK_MEZZI_LIBERI.map(m => ({
-              id: m.id, label: m.targa, sublabel: `${m.marca} ${m.modello}`,
-              alreadyAssigned: selectedP.mezziAssegnati.some(x => x.id === m.id),
-            })) :
-            assignModal.type === 'palmare' ? MOCK_PALMARI_LIBERI.map(m => ({
-              id: m.id, label: m.codice, sublabel: `${m.modello} — ${m.tariffa}€/mese`,
-              alreadyAssigned: selectedP.palmariAssegnati.some(x => x.id === m.id),
-            })) :
-            MOCK_CODICI_LIBERI.map(m => ({
-              id: m.id, label: m.codice, sublabel: `${m.nome} ${m.cognome}`,
-              alreadyAssigned: selectedP.codiciAutista.some(x => x.id === m.id),
-            }))
+            assignModal.type === 'mezzo' ? availableItems.mezzi :
+            assignModal.type === 'palmare' ? availableItems.palmari :
+            availableItems.codici
           }
           onClose={() => setAssignModal(null)}
           onAssegna={handleAssegna}
@@ -277,17 +357,16 @@ function PadroncinoDetail({
   const dvr = scadenzaInfo(p.scadenzaDvr);
 
   const TABS: { key: Tab; label: string; count?: number }[] = [
-    { key: 'info', label: 'Info' },
+    { key: 'info', label: 'Anagrafica' },
     { key: 'mezzi', label: 'Mezzi', count: p.mezziAssegnati.length },
     { key: 'palmari', label: 'Palmari', count: p.palmariAssegnati.length },
-    { key: 'codici', label: 'Cod. Autisti', count: p.codiciAutista.length },
+    { key: 'codici', label: 'Autisti', count: p.codiciAutista.length },
     { key: 'documenti', label: 'Documenti' },
-    { key: 'conteggi', label: 'Conteggi', count: p.conteggiCount },
+    { key: 'conteggi', label: 'Storico', count: p.conteggiCount },
   ];
 
   return (
     <div className="pd-detail">
-      {/* Header */}
       <div className="pd-detail-header">
         <div className="pd-detail-avatar">{p.ragioneSociale[0]}</div>
         <div className="pd-detail-title">
@@ -305,7 +384,6 @@ function PadroncinoDetail({
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="pd-tabs">
         {TABS.map((t) => (
           <button
@@ -321,9 +399,7 @@ function PadroncinoDetail({
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="pd-tab-content">
-        {/* ── INFO ── */}
         {tab === 'info' && (
           <div className="pd-info-grid">
             <div className="pd-section">
@@ -362,7 +438,6 @@ function PadroncinoDetail({
           </div>
         )}
 
-        {/* ── MEZZI ── */}
         {tab === 'mezzi' && (
           <div>
             <div className="pd-tab-toolbar">
@@ -394,7 +469,6 @@ function PadroncinoDetail({
           </div>
         )}
 
-        {/* ── PALMARI ── */}
         {tab === 'palmari' && (
           <div>
             <div className="pd-tab-toolbar">
@@ -425,7 +499,6 @@ function PadroncinoDetail({
           </div>
         )}
 
-        {/* ── CODICI AUTISTA ── */}
         {tab === 'codici' && (
           <div>
             <div className="pd-tab-toolbar">
@@ -457,7 +530,6 @@ function PadroncinoDetail({
           </div>
         )}
 
-        {/* ── DOCUMENTI ── */}
         {tab === 'documenti' && (
           <div className="pd-docs-empty">
             <span>📂</span>
@@ -466,7 +538,6 @@ function PadroncinoDetail({
           </div>
         )}
 
-        {/* ── CONTEGGI ── */}
         {tab === 'conteggi' && (
           <div className="pd-docs-empty">
             <span>📊</span>

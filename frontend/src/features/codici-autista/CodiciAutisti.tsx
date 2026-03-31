@@ -1,15 +1,7 @@
-// src/features/codici-autista/CodiciAutisti.tsx  — VISTA DETTAGLIO
+// src/features/codici-autista/CodiciAutisti.tsx — senza tab Acconti
 import { useState, useMemo } from 'react';
 import './CodiciAutisti.css';
 import NuovoCodiceAutistaModal, { NuovoCodiceAutista } from './NuovoCodiceAutistaModal';
-
-interface Acconto {
-  id: string;
-  importo: number;
-  data: string;
-  descrizione?: string | null;
-  mese?: string | null;
-}
 
 interface AssegnazionePadroncino {
   id: string;
@@ -28,7 +20,6 @@ interface CodiceAutista {
   attivo: boolean;
   createdAt: string;
   assegnazioni: AssegnazionePadroncino[];
-  acconti: Acconto[];
 }
 
 const MOCK: CodiceAutista[] = [
@@ -38,20 +29,12 @@ const MOCK: CodiceAutista[] = [
     assegnazioni: [
       { id: 'a1', padroncinoId: 'p1', ragioneSociale: 'MEN LOGISTIC SRLS', dataInizio: '2024-09-01' },
     ],
-    acconti: [
-      { id: 'ac1', importo: 200, data: '2026-01-10', descrizione: 'Acconto gennaio', mese: '2026-01' },
-      { id: 'ac2', importo: 150, data: '2026-02-08', descrizione: 'Acconto febbraio', mese: '2026-02' },
-      { id: 'ac3', importo: 200, data: '2026-03-12', descrizione: 'Acconto marzo', mese: '2026-03' },
-    ],
   },
   {
     id: '2', codice: 'AUT002', nome: 'Luca', cognome: 'Ferrari',
     note: null, attivo: true, createdAt: '2024-10-01',
     assegnazioni: [
       { id: 'a2', padroncinoId: 'p2', ragioneSociale: 'DI NARDO TRASPORTI', dataInizio: '2024-10-01' },
-    ],
-    acconti: [
-      { id: 'ac4', importo: 300, data: '2026-03-05', descrizione: 'Acconto marzo', mese: '2026-03' },
     ],
   },
   {
@@ -60,16 +43,12 @@ const MOCK: CodiceAutista[] = [
     assegnazioni: [
       { id: 'a3', padroncinoId: 'p3', ragioneSociale: 'EL SPEDIZIONI', dataInizio: '2024-11-15' },
     ],
-    acconti: [],
   },
   {
     id: '4', codice: 'AUT004', nome: 'Piotr', cognome: 'Kowalski',
     note: 'Autista senior', attivo: true, createdAt: '2025-01-01',
     assegnazioni: [
       { id: 'a4', padroncinoId: 'p4', ragioneSociale: 'IB EXPRESS SRLS', dataInizio: '2025-01-01' },
-    ],
-    acconti: [
-      { id: 'ac5', importo: 400, data: '2026-03-01', descrizione: 'Acconto inizio mese', mese: '2026-03' },
     ],
   },
   {
@@ -78,13 +57,11 @@ const MOCK: CodiceAutista[] = [
     assegnazioni: [
       { id: 'a5', padroncinoId: 'p5', ragioneSociale: 'QUICK EXPRESS SRLS', dataInizio: '2024-06-01', dataFine: '2025-01-31' },
     ],
-    acconti: [],
   },
   {
     id: '6', codice: 'AUT006', nome: 'Ivan', cognome: 'Petrovic',
     note: null, attivo: true, createdAt: '2025-03-01',
     assegnazioni: [],
-    acconti: [],
   },
 ];
 
@@ -99,9 +76,8 @@ function initials(nome?: string | null, cognome?: string | null) {
 
 // ─── PANNELLO DETTAGLIO ──────────────────────────────────
 function CodiceDetail({ c, onClose }: { c: CodiceAutista; onClose: () => void }) {
-  const [tab, setTab] = useState<'info' | 'acconti' | 'storico'>('info');
+  const [tab, setTab] = useState<'info' | 'storico'>('info');
   const assegnazioneAttiva = c.assegnazioni.find((a) => !a.dataFine);
-  const totaleAcconti = c.acconti.reduce((s, a) => s + a.importo, 0);
 
   return (
     <div className="ca-detail">
@@ -142,10 +118,9 @@ function CodiceDetail({ c, onClose }: { c: CodiceAutista; onClose: () => void })
 
       {/* Tabs */}
       <div className="ca-detail-tabs">
-        {(['info', 'acconti', 'storico'] as const).map((t) => (
+        {(['info', 'storico'] as const).map((t) => (
           <button key={t} className={`ca-detail-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t === 'info'    && '📋 Informazioni'}
-            {t === 'acconti' && `💰 Acconti (${c.acconti.length})`}
             {t === 'storico' && `📜 Storico (${c.assegnazioni.length})`}
           </button>
         ))}
@@ -169,10 +144,10 @@ function CodiceDetail({ c, onClose }: { c: CodiceAutista; onClose: () => void })
             </div>
 
             <div className="ca-detail-section">
-              <span className="ca-detail-section-title">RIEPILOGO ACCONTI</span>
-              <div className="ca-detail-grid">
-                <Field label="N° acconti registrati" value={String(c.acconti.length)} />
-                <Field label="Totale acconti" value={totaleAcconti > 0 ? `${totaleAcconti.toLocaleString('it-IT')} €` : null} />
+              <span className="ca-detail-section-title">ACCONTI</span>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
+                Gli acconti di questo autista sono gestibili dalla sezione{' '}
+                <strong style={{ color: 'var(--primary)' }}>💰 Acconti</strong> nel menu laterale.
               </div>
             </div>
 
@@ -180,42 +155,6 @@ function CodiceDetail({ c, onClose }: { c: CodiceAutista; onClose: () => void })
               <div className="ca-detail-section">
                 <span className="ca-detail-section-title">NOTE</span>
                 <div className="ca-detail-note">{c.note}</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── ACCONTI ── */}
-        {tab === 'acconti' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>Totale: </span>
-                <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--success)' }}>
-                  {totaleAcconti.toLocaleString('it-IT')} €
-                </span>
-              </div>
-              <button className="btn-primary btn-sm">+ Nuovo Acconto</button>
-            </div>
-            {c.acconti.length === 0 ? (
-              <div className="ca-detail-empty">
-                <span>💰</span>
-                <p>Nessun acconto registrato</p>
-                <button className="btn-outline btn-sm">+ Aggiungi acconto</button>
-              </div>
-            ) : (
-              <div className="ca-acconti-list">
-                {c.acconti.map((a) => (
-                  <div key={a.id} className="ca-acconto-item">
-                    <div className="ca-acconto-left">
-                      <span className="ca-acconto-desc">{a.descrizione || 'Acconto'}</span>
-                      <span className="ca-acconto-date">{fmt(a.data)}{a.mese && ` — ${a.mese}`}</span>
-                    </div>
-                    <span className="ca-acconto-importo">+{a.importo.toLocaleString('it-IT')} €</span>
-                    <button className="btn-ghost-sm">✏️</button>
-                    <button className="btn-danger-sm">✕</button>
-                  </div>
-                ))}
               </div>
             )}
           </div>
@@ -315,7 +254,6 @@ export default function CodiciAutisti() {
       attivo: true,
       createdAt: new Date().toISOString(),
       assegnazioni: [],
-      acconti: [],
     };
     setData((d) => [...d, nuovo]);
   };
@@ -329,7 +267,6 @@ export default function CodiciAutisti() {
           <button className="btn-primary btn-sm" onClick={() => setNuovoOpen(true)}>+ Nuovo</button>
         </div>
 
-        {/* Stats */}
         <div className="ca-sidebar-stats">
           <div className="ca-ss-item">
             <span className="ca-ss-val">{stats.totale}</span>
@@ -349,7 +286,6 @@ export default function CodiciAutisti() {
           </div>
         </div>
 
-        {/* Ricerca */}
         <div className="ca-sidebar-search">
           <span>🔍</span>
           <input
@@ -359,7 +295,6 @@ export default function CodiciAutisti() {
           />
         </div>
 
-        {/* Toggle inattivi */}
         <div className="ca-sidebar-toggle">
           <label className="ca-toggle">
             <input type="checkbox" checked={mostraInattivi} onChange={(e) => setMostraInattivi(e.target.checked)} />
@@ -367,7 +302,6 @@ export default function CodiciAutisti() {
           </label>
         </div>
 
-        {/* Lista */}
         <div className="ca-sidebar-list">
           {filtered.length === 0 && (
             <div className="ca-sidebar-empty">Nessun codice trovato</div>
@@ -393,9 +327,6 @@ export default function CodiciAutisti() {
                   <span className={`ca-badge ${c.attivo ? 'ca-badge-attivo' : 'ca-badge-inattivo'}`}>
                     {c.attivo ? '●' : '○'}
                   </span>
-                  {c.acconti.length > 0 && (
-                    <span className="ca-list-acconti">{c.acconti.length} acc.</span>
-                  )}
                 </div>
               </div>
             );
@@ -411,7 +342,7 @@ export default function CodiciAutisti() {
           <div className="ca-empty-state">
             <div className="ca-empty-icon">🏷️</div>
             <h2>Seleziona un codice autista</h2>
-            <p>Scegli un codice dalla lista per visualizzare i dettagli, gli acconti e lo storico</p>
+            <p>Scegli un codice dalla lista per visualizzare i dettagli e lo storico assegnazioni</p>
             <button className="btn-primary" onClick={() => setNuovoOpen(true)}>+ Nuovo Codice Autista</button>
           </div>
         )}
