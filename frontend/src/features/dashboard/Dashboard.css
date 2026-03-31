@@ -1,0 +1,352 @@
+/* ============================================
+   DASHBOARD - STYLES
+   ============================================ */
+
+.dash-page {
+  padding: var(--space-lg);
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-lg);
+}
+
+.dash-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.dash-date {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.dash-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─── KPI Grid ─────────────────────────────── */
+.dash-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: var(--space-lg);
+}
+
+.dash-kpi {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-kpi-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.dash-kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dash-kpi-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.dash-kpi-primary { border-color: rgba(99, 102, 241, 0.3); }
+.dash-kpi-primary .dash-kpi-value { color: var(--primary); }
+
+.dash-kpi-warning { border-color: rgba(245, 158, 11, 0.3); }
+.dash-kpi-warning .dash-kpi-value { color: var(--warning); }
+
+.dash-kpi-danger { border-color: rgba(239, 68, 68, 0.3); }
+.dash-kpi-danger .dash-kpi-value { color: var(--danger); }
+
+/* ─── Grid 2 col ───────────────────────────── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.dash-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ─── Card ─────────────────────────────────── */
+.dash-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-card-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dash-card-count {
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* ─── Alerts ───────────────────────────────── */
+.dash-alerts {
+  padding: 4px;
+}
+
+.dash-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 2px;
+  transition: background 0.12s;
+}
+
+.dash-alert:hover {
+  background: var(--bg-hover);
+}
+
+.dash-alert-danger { border-left: 3px solid var(--danger); }
+.dash-alert-warning { border-left: 3px solid var(--warning); }
+.dash-alert-info { border-left: 3px solid var(--info); }
+
+.dash-alert-icon {
+  font-size: 16px;
+  margin-top: 1px;
+}
+
+.dash-alert-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-alert-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dash-alert-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.dash-alert-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+
+.dash-alert-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ─── Scadenze Table ───────────────────────── */
+.dash-scad-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dash-scad-table th {
+  padding: 8px 14px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-scad-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.dash-scad-table tr:last-child td {
+  border-bottom: none;
+}
+
+.dash-scad-table tr:hover td {
+  background: var(--bg-hover);
+}
+
+.dash-scad-targa {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dash-scad-giorni {
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.dash-scad-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.dash-scad-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.dash-scad-info {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--info);
+}
+
+/* ─── Activity ─────────────────────────────── */
+.dash-activity {
+  padding: 4px;
+}
+
+.dash-act-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-act-item:last-child {
+  border-bottom: none;
+}
+
+.dash-act-time {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-width: 45px;
+  padding-top: 1px;
+}
+
+.dash-act-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-act-action {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dash-act-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.dash-act-user {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+/* ─── Conteggi Progress Bar ────────────────── */
+.dash-conteggi-bar {
+  display: flex;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 14px 18px 8px;
+}
+
+.dash-cb-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  transition: width 0.3s;
+}
+
+.dash-cb-conf { background: var(--success); }
+.dash-cb-chiuso { background: var(--info); }
+.dash-cb-bozza { background: var(--warning); }
+
+.dash-cb-legend {
+  display: flex;
+  gap: 16px;
+  padding: 8px 18px 14px;
+}
+
+.dash-cb-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dash-cb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.dash-cb-dot-conf { background: var(--success); }
+.dash-cb-dot-chiuso { background: var(--info); }
+.dash-cb-dot-bozza { background: var(--warning); }
+
+/* ─── Responsive ───────────────────────────── */
+@media (max-width: 1200px) {
+  .dash-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}

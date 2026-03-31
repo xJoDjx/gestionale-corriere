@@ -1,0 +1,481 @@
+// ============================================
+// GESTIONALE CORRIERE - SCHEMA PRISMA
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// AUTH & PERMESSI
+// ============================================
+
+model User {
+  id         String    @id @default(cuid())
+  email      String    @unique
+  password   String
+  nome       String
+  cognome    String
+  ruolo      Ruolo     @default(OPERATORE)
+  attivo     Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  permessi   Permesso[]
+  auditLogs  AuditLog[]
+
+  @@map("users")
+}
+
+enum Ruolo {
+  ADMIN
+  OPERATORE
+  VIEWER
+}
+
+model Permesso {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  risorsa  String // "mezzi", "padroncini", "conteggi", etc.
+  azione   String // "read", "write", "delete"
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, risorsa, azione])
+  @@map("permessi")
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  azione     String   // "CREATE", "UPDATE", "DELETE"
+  dataPrima  Json?    @map("data_prima")
+  dataDopo   Json?    @map("data_dopo")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// MEZZI (FLOTTA)
+// ============================================
+
+model Mezzo {
+  id              String        @id @default(cuid())
+  targa           String        @unique
+  marca           String
+  modello         String
+  tipo            TipoMezzo     @default(FURGONE)
+  alimentazione   Alimentazione @default(GASOLIO)
+  categoria       CategoriaMezzo @default(DISTRIBUZIONE)
+  stato           StatoMezzo    @default(DISPONIBILE)
+  annoImmatricolazione Int?     @map("anno_immatricolazione")
+
+  // Noleggio
+  societaNoleggio  String?  @map("societa_noleggio")
+  rataNoleggio     Decimal? @map("rata_noleggio") @db.Decimal(10, 2)
+  canoneNoleggio   Decimal? @map("canone_noleggio") @db.Decimal(10, 2)
+  inizioNoleggio   DateTime? @map("inizio_noleggio")
+  fineNoleggio     DateTime? @map("fine_noleggio")
+
+  // Km
+  kmAttuali        Int?     @map("km_attuali")
+  kmLimite         Int?     @map("km_limite")
+
+  // Scadenze
+  scadenzaAssicurazione DateTime? @map("scadenza_assicurazione")
+  scadenzaRevisione     DateTime? @map("scadenza_revisione")
+  scadenzaBollo         DateTime? @map("scadenza_bollo")
+  scadenzaTagliando     DateTime? @map("scadenza_tagliando")
+
+  note      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  assegnazioni    AssegnazioneMezzo[]
+  documenti       Documento[]         @relation("DocumentiMezzo")
+  tags            Tag[]               @relation("TagMezzo")
+  noteEntita      Nota[]              @relation("NoteMezzo")
+  conteggiRighe   ConteggiRiga[]      @relation("RigheMezzo")
+
+  @@index([stato])
+  @@index([categoria])
+  @@index([deletedAt])
+  @@map("mezzi")
+}
+
+enum TipoMezzo {
+  FURGONE
+  AUTOCARRO
+  AUTO
+  MOTOCICLO
+}
+
+enum Alimentazione {
+  GASOLIO
+  ELETTRICO
+  GASOLIO_MHEV
+  BENZINA
+  IBRIDO
+}
+
+enum CategoriaMezzo {
+  DISTRIBUZIONE
+  AUTO_AZIENDALE
+}
+
+enum StatoMezzo {
+  DISPONIBILE
+  ASSEGNATO
+  IN_REVISIONE
+  FUORI_SERVIZIO
+  VENDUTO
+  DISMESSO
+}
+
+// ============================================
+// ASSEGNAZIONI MEZZI (TEMPORALI)
+// ============================================
+
+model AssegnazioneMezzo {
+  id            String    @id @default(cuid())
+  mezzoId       String    @map("mezzo_id")
+  padroncinoId  String    @map("padroncino_id")
+  dataInizio    DateTime  @map("data_inizio")
+  dataFine      DateTime? @map("data_fine")
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  mezzo       Mezzo      @relation(fields: [mezzoId], references: [id])
+  padroncino  Padroncino @relation(fields: [padroncinoId], references: [id])
+
+  @@index([mezzoId, dataInizio, dataFine])
+  @@index([padroncinoId])
+  @@index([deletedAt])
+  @@map("assegnazioni_mezzi")
+}
+
+// ============================================
+// PADRONCINI
+// ============================================
+
+model Padroncino {
+  id              String    @id @default(cuid())
+  ragioneSociale  String    @map("ragione_sociale")
+  partitaIva      String?   @map("partita_iva")
+  codiceFiscale   String?   @map("codice_fiscale")
+  indirizzo       String?
+  telefono        String?
+  email           String?
+  pec             String?
+  iban            String?
+
+  // Scadenze documenti
+  scadenzaDurc    DateTime? @map("scadenza_durc")
+  scadenzaDvr     DateTime? @map("scadenza_dvr")
+
+  attivo    Boolean   @default(true)
+  note      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  assegnazioniMezzi    AssegnazioneMezzo[]
+  assegnazioniPalmari  AssegnazionePalmare[]
+  codiciAutista        AssegnazioneCodiceAutista[]
+  conteggiMensili      ConteggioMensile[]
+  documenti            Documento[]  @relation("DocumentiPadroncino")
+  tags                 Tag[]        @relation("TagPadroncino")
+  noteEntita           Nota[]       @relation("NotePadroncino")
+
+  @@index([deletedAt])
+  @@map("padroncini")
+}
+
+// ============================================
+// PALMARI
+// ============================================
+
+model Palmare {
+  id            String    @id @default(cuid())
+  codice        String    @unique
+  marca         String?
+  modello       String?
+  imei          String?
+  simNumero     String?   @map("sim_numero")
+  tariffaMensile Decimal? @map("tariffa_mensile") @db.Decimal(10, 2)
+  stato         StatoPalmare @default(DISPONIBILE)
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  assegnazioni  AssegnazionePalmare[]
+  documenti     Documento[]  @relation("DocumentiPalmare")
+  tags          Tag[]        @relation("TagPalmare")
+  conteggiRighe ConteggiRiga[] @relation("RighePalmare")
+
+  @@index([deletedAt])
+  @@map("palmari")
+}
+
+enum StatoPalmare {
+  DISPONIBILE
+  ASSEGNATO
+  GUASTO
+  DISMESSO
+}
+
+model AssegnazionePalmare {
+  id            String    @id @default(cuid())
+  palmareId     String    @map("palmare_id")
+  padroncinoId  String    @map("padroncino_id")
+  dataInizio    DateTime  @map("data_inizio")
+  dataFine      DateTime? @map("data_fine")
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  palmare     Palmare    @relation(fields: [palmareId], references: [id])
+  padroncino  Padroncino @relation(fields: [padroncinoId], references: [id])
+
+  @@index([palmareId, dataInizio, dataFine])
+  @@index([padroncinoId])
+  @@map("assegnazioni_palmari")
+}
+
+// ============================================
+// CODICI AUTISTI
+// ============================================
+
+model CodiceAutista {
+  id        String    @id @default(cuid())
+  codice    String    @unique
+  nome      String?
+  cognome   String?
+  note      String?
+  attivo    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  assegnazioni AssegnazioneCodiceAutista[]
+  acconti      Acconto[]
+
+  @@index([deletedAt])
+  @@map("codici_autisti")
+}
+
+model AssegnazioneCodiceAutista {
+  id              String    @id @default(cuid())
+  codiceAutistaId String    @map("codice_autista_id")
+  padroncinoId    String    @map("padroncino_id")
+  dataInizio      DateTime  @map("data_inizio")
+  dataFine        DateTime? @map("data_fine")
+  note            String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  codiceAutista CodiceAutista @relation(fields: [codiceAutistaId], references: [id])
+  padroncino    Padroncino    @relation(fields: [padroncinoId], references: [id])
+
+  @@index([codiceAutistaId, dataInizio, dataFine])
+  @@index([padroncinoId])
+  @@map("assegnazioni_codici_autisti")
+}
+
+// ============================================
+// ACCONTI
+// ============================================
+
+model Acconto {
+  id              String    @id @default(cuid())
+  codiceAutistaId String    @map("codice_autista_id")
+  importo         Decimal   @db.Decimal(10, 2)
+  data            DateTime
+  descrizione     String?
+  mese            String?   // "2026-03" per collegamento conteggio
+  note            String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  codiceAutista CodiceAutista @relation(fields: [codiceAutistaId], references: [id])
+  conteggiRighe ConteggiRiga[] @relation("RigheAcconto")
+
+  @@index([codiceAutistaId])
+  @@index([mese])
+  @@index([deletedAt])
+  @@map("acconti")
+}
+
+// ============================================
+// CONTEGGI MENSILI (CORE BUSINESS)
+// ============================================
+
+model ConteggioMensile {
+  id            String          @id @default(cuid())
+  padroncinoId  String          @map("padroncino_id")
+  mese          String          // "2026-03"
+  stato         StatoConteggio  @default(BOZZA)
+  note          String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  deletedAt     DateTime?       @map("deleted_at")
+
+  padroncino Padroncino     @relation(fields: [padroncinoId], references: [id])
+  righe      ConteggiRiga[]
+
+  @@unique([padroncinoId, mese])
+  @@index([mese])
+  @@index([stato])
+  @@index([deletedAt])
+  @@map("conteggi_mensili")
+}
+
+enum StatoConteggio {
+  BOZZA
+  CHIUSO
+  CONFERMATO
+}
+
+model ConteggiRiga {
+  id                String   @id @default(cuid())
+  conteggioMensileId String  @map("conteggio_mensile_id")
+  tipo              String   // "FATTURATO", "NOLEGGIO", "RICARICA", "ACCONTO", "BONUS", etc.
+  descrizione       String
+  importo           Decimal  @db.Decimal(10, 2)
+  segno             Segno    @default(POSITIVO)
+  categoria         String?
+  riferimentoTipo   String?  @map("riferimento_tipo") // "mezzo", "palmare", "acconto"
+  riferimentoId     String?  @map("riferimento_id")
+  ordine            Int      @default(0)
+  modificaManuale   Boolean  @default(false) @map("modifica_manuale")
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  conteggioMensile ConteggioMensile @relation(fields: [conteggioMensileId], references: [id], onDelete: Cascade)
+
+  // Relazioni opzionali per riferimenti
+  mezzo    Mezzo?    @relation("RigheMezzo", fields: [riferimentoId], references: [id], map: "fk_righe_mezzo")
+  palmare  Palmare?  @relation("RighePalmare", fields: [riferimentoId], references: [id], map: "fk_righe_palmare")
+  acconto  Acconto?  @relation("RigheAcconto", fields: [riferimentoId], references: [id], map: "fk_righe_acconto")
+
+  @@index([conteggioMensileId])
+  @@index([tipo])
+  @@map("conteggi_righe")
+}
+
+enum Segno {
+  POSITIVO
+  NEGATIVO
+}
+
+// ============================================
+// DOCUMENTI (SISTEMA UNICO)
+// ============================================
+
+model Documento {
+  id          String    @id @default(cuid())
+  entityType  String    @map("entity_type") // "mezzo", "padroncino", "palmare"
+  entityId    String    @map("entity_id")
+  nome        String
+  tipo        String?   // "DURC", "DVR", "ASSICURAZIONE", etc.
+  filePath    String    @map("file_path")
+  mimeType    String?   @map("mime_type")
+  dimensione  Int?      // bytes
+  scadenza    DateTime?
+  note        String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relazioni polimorfiche
+  mezzo       Mezzo?      @relation("DocumentiMezzo", fields: [entityId], references: [id], map: "fk_doc_mezzo")
+  padroncino  Padroncino? @relation("DocumentiPadroncino", fields: [entityId], references: [id], map: "fk_doc_padroncino")
+  palmare     Palmare?    @relation("DocumentiPalmare", fields: [entityId], references: [id], map: "fk_doc_palmare")
+
+  @@index([entityType, entityId])
+  @@index([scadenza])
+  @@index([deletedAt])
+  @@map("documenti")
+}
+
+// ============================================
+// TAG & NOTE (SISTEMA UNICO)
+// ============================================
+
+model Tag {
+  id          String @id @default(cuid())
+  entityType  String @map("entity_type")
+  entityId    String @map("entity_id")
+  nome        String
+  colore      String? @default("#6366f1")
+
+  mezzo       Mezzo?      @relation("TagMezzo", fields: [entityId], references: [id], map: "fk_tag_mezzo")
+  padroncino  Padroncino? @relation("TagPadroncino", fields: [entityId], references: [id], map: "fk_tag_padroncino")
+  palmare     Palmare?    @relation("TagPalmare", fields: [entityId], references: [id], map: "fk_tag_palmare")
+
+  @@index([entityType, entityId])
+  @@map("tags")
+}
+
+model Nota {
+  id          String   @id @default(cuid())
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  contenuto   String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  mezzo       Mezzo?      @relation("NoteMezzo", fields: [entityId], references: [id], map: "fk_nota_mezzo")
+  padroncino  Padroncino? @relation("NotePadroncino", fields: [entityId], references: [id], map: "fk_nota_padroncino")
+
+  @@index([entityType, entityId])
+  @@map("note")
+}
+
+// ============================================
+// RICARICHE ELETTRICHE (PLACEHOLDER)
+// ============================================
+
+model RicaricaElettrica {
+  id            String   @id @default(cuid())
+  mezzoId       String?  @map("mezzo_id")
+  padroncinoId  String?  @map("padroncino_id")
+  data          DateTime
+  importo       Decimal  @db.Decimal(10, 2)
+  kwh           Decimal? @db.Decimal(10, 3)
+  fornitore     String?
+  note          String?
+  mese          String?  // "2026-03"
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@index([mezzoId])
+  @@index([padroncinoId])
+  @@index([mese])
+  @@map("ricariche_elettriche")
+}
