@@ -87,10 +87,19 @@ model Mezzo {
   stato           StatoMezzo    @default(DISPONIBILE)
   annoImmatricolazione Int?     @map("anno_immatricolazione")
 
-  // Noleggio
-  societaNoleggio  String?  @map("societa_noleggio")
-  rataNoleggio     Decimal? @map("rata_noleggio") @db.Decimal(10, 2)
-  canoneNoleggio   Decimal? @map("canone_noleggio") @db.Decimal(10, 2)
+  // Possesso
+  tipoPossesso     String    @default("NOLEGGIO") @map("tipo_possesso") // "PROPRIETA" | "NOLEGGIO"
+ 
+  // Noleggio — dati azienda locatrice
+  societaNoleggio  String?   @map("societa_noleggio")
+  pIvaLocatore     String?   @map("p_iva_locatore")
+  telefonoLocatore String?   @map("telefono_locatore")
+  emailLocatore    String?   @map("email_locatore")
+  riferimentoContratto String? @map("riferimento_contratto")
+ 
+  // Noleggio — finanziario (DUE RATE DISTINTE)
+  rataNoleggio     Decimal?  @map("rata_noleggio")   @db.Decimal(10, 2)  // Rata che paghiamo noi al locatore
+  canoneNoleggio   Decimal?  @map("canone_noleggio") @db.Decimal(10, 2)  // Canone addebitato al PDA
   inizioNoleggio   DateTime? @map("inizio_noleggio")
   fineNoleggio     DateTime? @map("fine_noleggio")
 

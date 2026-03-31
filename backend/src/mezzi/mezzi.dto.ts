@@ -1,55 +1,50 @@
-import {
-  IsString, IsOptional, IsEnum, IsInt, IsNumber, IsDateString,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { TipoMezzo, Alimentazione, CategoriaMezzo, StatoMezzo } from '@prisma/client';
-
+import { IsString, IsOptional, IsNumber, IsDateString, IsIn } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+ 
 export class CreateMezzoDto {
-  @IsString() targa: string;
-  @IsString() marca: string;
-  @IsString() modello: string;
-  @IsEnum(TipoMezzo) @IsOptional() tipo?: TipoMezzo;
-  @IsEnum(Alimentazione) @IsOptional() alimentazione?: Alimentazione;
-  @IsEnum(CategoriaMezzo) @IsOptional() categoria?: CategoriaMezzo;
-  @IsEnum(StatoMezzo) @IsOptional() stato?: StatoMezzo;
-  @IsInt() @IsOptional() annoImmatricolazione?: number;
-
-  @IsString() @IsOptional() societaNoleggio?: string;
-  @IsNumber() @IsOptional() @Type(() => Number) rataNoleggio?: number;
-  @IsNumber() @IsOptional() @Type(() => Number) canoneNoleggio?: number;
-  @IsDateString() @IsOptional() inizioNoleggio?: string;
-  @IsDateString() @IsOptional() fineNoleggio?: string;
-
-  @IsInt() @IsOptional() kmAttuali?: number;
-  @IsInt() @IsOptional() kmLimite?: number;
-
-  @IsDateString() @IsOptional() scadenzaAssicurazione?: string;
-  @IsDateString() @IsOptional() scadenzaRevisione?: string;
-  @IsDateString() @IsOptional() scadenzaBollo?: string;
-  @IsDateString() @IsOptional() scadenzaTagliando?: string;
-
-  @IsString() @IsOptional() note?: string;
+  @ApiProperty() @IsString() targa: string;
+  @ApiProperty() @IsString() marca: string;
+  @ApiProperty() @IsString() modello: string;
+ 
+  @ApiPropertyOptional() @IsOptional() @IsString() tipo?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() alimentazione?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() categoria?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() annoImmatricolazione?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() telaio?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() colore?: string;
+ 
+  // Possesso
+  @ApiPropertyOptional({ enum: ['PROPRIETA', 'NOLEGGIO'] })
+  @IsOptional() @IsIn(['PROPRIETA', 'NOLEGGIO'])
+  tipoPossesso?: string;
+ 
+  // Noleggio — locatore
+  @ApiPropertyOptional() @IsOptional() @IsString() societaNoleggio?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() pIvaLocatore?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() telefonoLocatore?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() emailLocatore?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() riferimentoContratto?: string;
+ 
+  // Noleggio — rate
+  @ApiPropertyOptional({ description: 'Rata che paghiamo al locatore (€/mese)' })
+  @IsOptional() @IsNumber() rataNoleggio?: number;
+ 
+  @ApiPropertyOptional({ description: 'Canone addebitato al PDA (€/mese)' })
+  @IsOptional() @IsNumber() canoneNoleggio?: number;
+ 
+  @ApiPropertyOptional() @IsOptional() @IsDateString() inizioNoleggio?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() fineNoleggio?: string;
+ 
+  // KM
+  @ApiPropertyOptional() @IsOptional() @IsNumber() kmAttuali?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() kmLimite?: number;
+ 
+  // Scadenze
+  @ApiPropertyOptional() @IsOptional() @IsDateString() scadenzaAssicurazione?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() scadenzaRevisione?: string;
+  @ApiPropertyOptional() @IsOptional() @IsDateString() scadenzaBollo?: string;
+ 
+  @ApiPropertyOptional() @IsOptional() @IsString() note?: string;
 }
-
-export class UpdateMezzoDto extends CreateMezzoDto {
-  // Tutti opzionali tramite ereditarietà parziale
-}
-
-export class QueryMezziDto {
-  @IsOptional() @IsString() search?: string;
-  @IsOptional() @IsEnum(StatoMezzo) stato?: StatoMezzo;
-  @IsOptional() @IsEnum(CategoriaMezzo) categoria?: CategoriaMezzo;
-  @IsOptional() @IsEnum(TipoMezzo) tipo?: TipoMezzo;
-  @IsOptional() @IsEnum(Alimentazione) alimentazione?: Alimentazione;
-  @IsOptional() @IsInt() @Type(() => Number) page?: number;
-  @IsOptional() @IsInt() @Type(() => Number) limit?: number;
-  @IsOptional() @IsString() sortBy?: string;
-  @IsOptional() @IsString() sortOrder?: 'asc' | 'desc';
-}
-
-export class CreateAssegnazioneMezzoDto {
-  @IsString() padroncinoId: string;
-  @IsDateString() dataInizio: string;
-  @IsDateString() @IsOptional() dataFine?: string;
-  @IsString() @IsOptional() note?: string;
-}
+ 
+export class UpdateMezzoDto extends CreateMezzoDto {}
