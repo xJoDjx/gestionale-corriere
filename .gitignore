@@ -1,0 +1,9 @@
+# Ignora la cartella node_modules
+node_modules/
+
+# Ignora la cartella dist (build)
+dist/
+
+# Ignora eventuali file log o configurazioni locali
+.DS_Store
+.env
