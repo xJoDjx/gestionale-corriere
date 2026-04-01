@@ -6,8 +6,11 @@ import DettaglioMezzo from './features/mezzi/DettaglioMezzo';
 import ConteggiMensili from './features/conteggi/ConteggiMensili';
 import PadronciniPage from './features/padroncini/Padroncini';
 import PalmariPage from './features/palmari/Palmari';
+import DettaglioPalmare from './features/palmari/DettaglioPalmare';
 import CodiciAutistiPage from './features/codici-autista/CodiciAutisti';
+import DettaglioCodiceAutista from './features/codici-autista/DettaglioCodiceAutista';
 import AccontiPage from './features/acconti/Acconti';
+import GestioneUtenti from './features/utenti/GestioneUtenti';
 import './styles/global.css';
 import './features/mezzi/FlottaMezzi.css';
 import './features/conteggi/ConteggiMensili.css';
@@ -39,13 +42,15 @@ export default function App() {
           <Route path="/conteggi" element={<ConteggiMensili />} />
           <Route path="/padroncini" element={<PadronciniPage />} />
           <Route path="/palmari" element={<PalmariPage />} />
+          <Route path="/palmari/:id" element={<DettaglioPalmare />} />
           <Route path="/codici-autista" element={<CodiciAutistiPage />} />
+          <Route path="/codici-autista/:id" element={<DettaglioCodiceAutista />} />
           <Route path="/acconti" element={<AccontiPage />} />
+          <Route path="/utenti" element={<GestioneUtenti />} />
           <Route path="/ricariche" element={<Placeholder title="Ricariche Elettriche" />} />
           <Route path="/ricerca" element={<Placeholder title="Ricerca Globale" />} />
           <Route path="/esportazione" element={<Placeholder title="Esportazione" />} />
           <Route path="/impostazioni" element={<Placeholder title="Impostazioni" />} />
-          <Route path="/utenti" element={<Placeholder title="Gestione Utenti" />} />
           <Route path="/log" element={<Placeholder title="Log Storico" />} />
         </Route>
       </Routes>

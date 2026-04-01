@@ -8,6 +8,7 @@ import { CodiciAutistaModule } from './codici-autista/codici-autista.module';
 import { AccontiModule } from './acconti/acconti.module';
 import { ConteggiModule } from './conteggi/conteggi.module';
 import { AuditModule } from './audit/audit.module';
+import { UsersModule } from './user/users.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AuditModule } from './audit/audit.module';
     CodiciAutistaModule,
     AccontiModule,
     ConteggiModule,
+    UsersModule,
   ],
 })
 export class AppModule {}

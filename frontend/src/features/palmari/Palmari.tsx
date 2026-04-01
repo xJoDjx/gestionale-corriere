@@ -1,5 +1,6 @@
-// src/features/palmari/Palmari.tsx — API reali, senza mock
+// src/features/palmari/Palmari.tsx — API reali, con navigazione dettaglio
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { palmariApi } from '../../lib/api';
 import type { Palmare, PalmariStats } from '../../lib/api';
 import NuovoPalmareModal, { NuovoPalmare } from './NuovoPalmareModal';
@@ -13,14 +14,16 @@ const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
 
 const STATO_META: Record<string, { label: string; cls: string }> = {
-  ASSEGNATO: { label: 'Assegnato', cls: 'badge-blue' },
+  ASSEGNATO:   { label: 'Assegnato',   cls: 'badge-blue' },
   DISPONIBILE: { label: 'Disponibile', cls: 'badge-green' },
-  GUASTO: { label: 'Guasto', cls: 'badge-red' },
-  DISMESSO: { label: 'Dismesso', cls: 'badge-gray' },
+  GUASTO:      { label: 'Guasto',      cls: 'badge-red' },
+  DISMESSO:    { label: 'Dismesso',    cls: 'badge-gray' },
 };
 
 // ─── PAGINA ────────────────────────────────────────────
 export default function Palmari() {
+  const navigate = useNavigate();
+
   const [palmari, setPalmari] = useState<Palmare[]>([]);
   const [stats, setStats] = useState<PalmariStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -221,7 +224,12 @@ export default function Palmari() {
                   </td>
                   <td>
                     <div className="palm-row-actions">
-                      <button className="btn-primary btn-sm">Dettaglio</button>
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={() => navigate(`/palmari/${p.id}`)}
+                      >
+                        Dettaglio
+                      </button>
                       <button className="palm-doc-btn">📄</button>
                     </div>
                   </td>
@@ -230,6 +238,9 @@ export default function Palmari() {
             })}
           </tbody>
         </table>
+        <div className="palm-table-footer">
+          {filtered.length} di {palmari.length} palmari
+        </div>
       </div>
 
       <NuovoPalmareModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />

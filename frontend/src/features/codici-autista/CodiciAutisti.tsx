@@ -1,5 +1,6 @@
-// src/features/codici-autista/CodiciAutisti.tsx — API reali, senza mock
+// src/features/codici-autista/CodiciAutisti.tsx — API reali, con navigazione dettaglio
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { codiciAutistaApi } from '../../lib/api';
 import type { CodiceAutista, CodiciAutistaStats } from '../../lib/api';
 import NuovoCodiceAutistaModal, { NuovoCodiceAutista } from './NuovoCodiceAutistaModal';
@@ -12,6 +13,8 @@ const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
 
 export default function CodiciAutisti() {
+  const navigate = useNavigate();
+
   const [autisti, setAutisti] = useState<CodiceAutista[]>([]);
   const [stats, setStats] = useState<CodiciAutistaStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,8 +53,8 @@ export default function CodiciAutisti() {
         (attiva?.ragioneSociale ?? '').toLowerCase().includes(s);
 
       if (filtro === 'DISPONIBILE') return matchSearch && !attiva && c.attivo;
-      if (filtro === 'ASSEGNATO') return matchSearch && !!attiva && c.attivo;
-      if (filtro === 'DISMESSO') return matchSearch && !c.attivo;
+      if (filtro === 'ASSEGNATO')   return matchSearch && !!attiva && c.attivo;
+      if (filtro === 'DISMESSO')    return matchSearch && !c.attivo;
       return matchSearch;
     });
   }, [autisti, search, filtro]);
@@ -63,9 +66,9 @@ export default function CodiciAutisti() {
         nome: form.nome || undefined,
         cognome: form.cognome || undefined,
         note: form.note || undefined,
-        tariffaFissa: form.tariffaFissa ? parseFloat(form.tariffaFissa) : undefined,
-        tariffaRitiro: form.tariffaRitiro ? parseFloat(form.tariffaRitiro) : undefined,
-        target: form.target ? parseInt(form.target) : undefined,
+        tariffaFissa:   form.tariffaFissa   ? parseFloat(form.tariffaFissa)   : undefined,
+        tariffaRitiro:  form.tariffaRitiro  ? parseFloat(form.tariffaRitiro)  : undefined,
+        target:         form.target         ? parseInt(form.target)            : undefined,
       });
       await load();
     } catch (e: any) {
@@ -188,7 +191,7 @@ export default function CodiciAutisti() {
               const attiva = c.assegnazioni?.find((a) => !a.dataFine);
               const stato = !c.attivo ? 'DISMESSO' : attiva ? 'ASSEGNATO' : 'DISPONIBILE';
               const statoCls =
-                stato === 'ASSEGNATO' ? 'ca-badge-assigned' :
+                stato === 'ASSEGNATO'   ? 'ca-badge-assigned'  :
                 stato === 'DISPONIBILE' ? 'ca-badge-available' : 'ca-badge-dismesso';
               return (
                 <tr key={c.id} className="ca-row">
@@ -242,7 +245,12 @@ export default function CodiciAutisti() {
                   </td>
                   <td>
                     <div className="ca-row-actions">
-                      <button className="btn-primary btn-sm">Dettagli</button>
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={() => navigate(`/codici-autista/${c.id}`)}
+                      >
+                        Dettagli
+                      </button>
                       <button className="ca-doc-btn">📄</button>
                       <button
                         className="ca-del-btn"
@@ -256,6 +264,9 @@ export default function CodiciAutisti() {
             })}
           </tbody>
         </table>
+        <div className="ca-table-footer">
+          {filtered.length} di {autisti.length} codici autisti
+        </div>
       </div>
 
       <NuovoCodiceAutistaModal
