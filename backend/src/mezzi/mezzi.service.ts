@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMezzoDto, UpdateMezzoDto, QueryMezziDto, CreateAssegnazioneMezzoDto } from './mezzi.dto';
-import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class MezziService {
@@ -11,35 +10,56 @@ export class MezziService {
     private audit: AuditService,
   ) {}
 
-  // ─── LIST CON FILTRI ────────────────────────────────
+  // ─── Normalizza DTO: mappa alias frontend → campi schema ───
+  private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
+    const { proprietario, nContratto, ...rest } = dto as any;
+    const data: Record<string, any> = { ...rest };
+
+    // alias "proprietario" → "societaNoleggio" (se societaNoleggio non è già fornito)
+    if (proprietario && !data.societaNoleggio) {
+      data.societaNoleggio = proprietario;
+    }
+    // alias "nContratto" → "riferimentoContratto"
+    if (nContratto && !data.riferimentoContratto) {
+      data.riferimentoContratto = nContratto;
+    }
+
+    // rimuovi campi alias non mappabili direttamente a prisma
+    delete data.proprietario;
+    delete data.nContratto;
+
+    return data;
+  }
+
+  // ─── LIST ────────────────────────────────────────────
   async findAll(query: QueryMezziDto) {
     const {
       search, stato, categoria, tipo, alimentazione,
-      page = 1, limit = 50, sortBy = 'targa', sortOrder = 'asc',
+      page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'desc',
     } = query;
 
-    const where: Prisma.MezzoWhereInput = {
-      deletedAt: null,
-      ...(stato && { stato }),
-      ...(categoria && { categoria }),
-      ...(tipo && { tipo }),
-      ...(alimentazione && { alimentazione }),
-      ...(search && {
-        OR: [
-          { targa: { contains: search, mode: 'insensitive' } },
-          { marca: { contains: search, mode: 'insensitive' } },
-          { modello: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
-    };
+    const where: any = { deletedAt: null };
+    if (stato) where.stato = stato;
+    if (categoria) where.categoria = categoria;
+    if (tipo) where.tipo = tipo;
+    if (alimentazione) where.alimentazione = alimentazione;
+    if (search) {
+      where.OR = [
+        { targa: { contains: search, mode: 'insensitive' } },
+        { marca: { contains: search, mode: 'insensitive' } },
+        { modello: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.mezzo.findMany({
         where,
         include: {
           assegnazioni: {
-            where: this.prisma.activeAssignmentFilter(),
+            where: { deletedAt: null, dataFine: null },
             include: { padroncino: { select: { id: true, ragioneSociale: true } } },
+            orderBy: { dataInizio: 'desc' },
+            take: 1,
           },
           tags: true,
         },
@@ -50,44 +70,42 @@ export class MezziService {
       this.prisma.mezzo.count({ where }),
     ]);
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
-  // ─── STATS FLOTTA ───────────────────────────────────
+  // ─── STATS ──────────────────────────────────────────
   async getStats() {
-    const base = { deletedAt: null };
-
-    const [totali, disponibili, assegnati, mezzi] = await Promise.all([
-      this.prisma.mezzo.count({ where: base }),
-      this.prisma.mezzo.count({ where: { ...base, stato: 'DISPONIBILE' } }),
-      this.prisma.mezzo.count({ where: { ...base, stato: 'ASSEGNATO' } }),
+    const [totali, disponibili, assegnati, canoniRaw, scadenzeImminenti] = await Promise.all([
+      this.prisma.mezzo.count({ where: { deletedAt: null } }),
+      this.prisma.mezzo.count({ where: { deletedAt: null, stato: 'DISPONIBILE' } }),
+      this.prisma.mezzo.count({ where: { deletedAt: null, stato: 'ASSEGNATO' } }),
       this.prisma.mezzo.findMany({
-        where: { ...base, rataNoleggio: { not: null } },
-        select: { rataNoleggio: true, canoneNoleggio: true },
+        where: { deletedAt: null, canoneNoleggio: { not: null } },
+        select: { canoneNoleggio: true, rataNoleggio: true },
+      }),
+      this.prisma.mezzo.count({
+        where: {
+          deletedAt: null,
+          OR: [
+            { scadenzaAssicurazione: { lte: new Date(Date.now() + 30 * 86400000) } },
+            { scadenzaRevisione: { lte: new Date(Date.now() + 30 * 86400000) } },
+          ],
+        },
       }),
     ]);
 
-    const entrateNoleggio = mezzi.reduce(
-      (sum, m) => sum + Number(m.rataNoleggio || 0), 0,
+    const entrateNoleggio = canoniRaw.reduce(
+      (s, m) => s + Number(m.canoneNoleggio ?? 0), 0,
     );
-    const canoniNoleggio = mezzi.reduce(
-      (sum, m) => sum + Number(m.canoneNoleggio || 0), 0,
+    const canoniNoleggio = canoniRaw.reduce(
+      (s, m) => s + Number(m.rataNoleggio ?? 0), 0,
     );
-
-    // Scadenze entro 30 giorni
-    const fra30gg = new Date();
-    fra30gg.setDate(fra30gg.getDate() + 30);
-
-    const scadenzeImminenti = await this.prisma.mezzo.count({
-      where: {
-        ...base,
-        OR: [
-          { scadenzaAssicurazione: { lte: fra30gg, gte: new Date() } },
-          { scadenzaRevisione: { lte: fra30gg, gte: new Date() } },
-          { scadenzaBollo: { lte: fra30gg, gte: new Date() } },
-        ],
-      },
-    });
 
     return {
       totali,
@@ -97,6 +115,30 @@ export class MezziService {
       margine: entrateNoleggio - canoniNoleggio,
       scadenzeImminenti,
     };
+  }
+
+  // ─── SCADENZE ───────────────────────────────────────
+  async getScadenze(giorni: number = 30) {
+    const entro = new Date(Date.now() + giorni * 86400000);
+    return this.prisma.mezzo.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { scadenzaAssicurazione: { lte: entro } },
+          { scadenzaRevisione: { lte: entro } },
+          { scadenzaBollo: { lte: entro } },
+          { fineNoleggio: { lte: entro } },
+        ],
+      },
+      include: {
+        assegnazioni: {
+          where: { deletedAt: null, dataFine: null },
+          include: { padroncino: { select: { id: true, ragioneSociale: true } } },
+          take: 1,
+        },
+      },
+      orderBy: { scadenzaAssicurazione: 'asc' },
+    });
   }
 
   // ─── DETAIL ─────────────────────────────────────────
@@ -123,7 +165,8 @@ export class MezziService {
     const exists = await this.prisma.mezzo.findUnique({ where: { targa: dto.targa } });
     if (exists) throw new ConflictException('Targa già esistente');
 
-    const mezzo = await this.prisma.mezzo.create({ data: dto as any });
+    const data = this.normalizeDto(dto);
+    const mezzo = await this.prisma.mezzo.create({ data: data as any });
 
     await this.audit.log({
       userId,
@@ -139,10 +182,11 @@ export class MezziService {
   // ─── UPDATE ─────────────────────────────────────────
   async update(id: string, dto: UpdateMezzoDto, userId: string) {
     const existing = await this.findOne(id);
+    const data = this.normalizeDto(dto);
 
     const mezzo = await this.prisma.mezzo.update({
       where: { id },
-      data: dto as any,
+      data: data as any,
     });
 
     await this.audit.log({
@@ -183,10 +227,7 @@ export class MezziService {
 
     // Chiudi assegnazione attiva precedente
     const attiva = await this.prisma.assegnazioneMezzo.findFirst({
-      where: {
-        mezzoId,
-        ...this.prisma.activeAssignmentFilter(),
-      },
+      where: { mezzoId, deletedAt: null, dataFine: null },
     });
 
     if (attiva) {
@@ -202,6 +243,7 @@ export class MezziService {
         padroncinoId: dto.padroncinoId,
         dataInizio: new Date(dto.dataInizio),
         dataFine: dto.dataFine ? new Date(dto.dataFine) : null,
+        note: dto.note,
       },
     });
 
@@ -213,9 +255,9 @@ export class MezziService {
 
     await this.audit.log({
       userId,
-      entityType: 'assegnazione_mezzo',
-      entityId: assegnazione.id,
-      azione: 'CREATE',
+      entityType: 'mezzo',
+      entityId: mezzoId,
+      azione: 'ASSEGNA',
       dataDopo: assegnazione as any,
     });
 
@@ -223,59 +265,30 @@ export class MezziService {
   }
 
   async chiudiAssegnazione(assegnazioneId: string, userId: string) {
-    const assegnazione = await this.prisma.assegnazioneMezzo.update({
+    const assegnazione = await this.prisma.assegnazioneMezzo.findFirst({
+      where: { id: assegnazioneId, deletedAt: null },
+    });
+    if (!assegnazione) throw new NotFoundException('Assegnazione non trovata');
+
+    const updated = await this.prisma.assegnazioneMezzo.update({
       where: { id: assegnazioneId },
       data: { dataFine: new Date() },
     });
 
-    // Verifica se il mezzo ha altre assegnazioni attive
-    const altreAttive = await this.prisma.assegnazioneMezzo.count({
-      where: {
-        mezzoId: assegnazione.mezzoId,
-        id: { not: assegnazioneId },
-        ...this.prisma.activeAssignmentFilter(),
-      },
+    // Aggiorna stato mezzo
+    await this.prisma.mezzo.update({
+      where: { id: assegnazione.mezzoId },
+      data: { stato: 'DISPONIBILE' },
     });
-
-    if (altreAttive === 0) {
-      await this.prisma.mezzo.update({
-        where: { id: assegnazione.mezzoId },
-        data: { stato: 'DISPONIBILE' },
-      });
-    }
 
     await this.audit.log({
       userId,
-      entityType: 'assegnazione_mezzo',
-      entityId: assegnazioneId,
-      azione: 'UPDATE',
-      dataDopo: { dataFine: new Date() },
+      entityType: 'mezzo',
+      entityId: assegnazione.mezzoId,
+      azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: updated as any,
     });
 
-    return assegnazione;
-  }
-
-  // ─── SCADENZE ───────────────────────────────────────
-  async getScadenze(giorniAvanti: number = 30) {
-    const limite = new Date();
-    limite.setDate(limite.getDate() + giorniAvanti);
-
-    return this.prisma.mezzo.findMany({
-      where: {
-        deletedAt: null,
-        OR: [
-          { scadenzaAssicurazione: { lte: limite } },
-          { scadenzaRevisione: { lte: limite } },
-          { scadenzaBollo: { lte: limite } },
-          { scadenzaTagliando: { lte: limite } },
-        ],
-      },
-      select: {
-        id: true, targa: true, marca: true, modello: true,
-        scadenzaAssicurazione: true, scadenzaRevisione: true,
-        scadenzaBollo: true, scadenzaTagliando: true,
-      },
-      orderBy: { targa: 'asc' },
-    });
+    return updated;
   }
 }

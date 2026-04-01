@@ -1,56 +1,208 @@
-// src/features/padroncini/Padroncini.tsx — API reali, senza mock
+// src/features/padroncini/Padroncini.tsx — AGGIORNATO
+// Aggiunte: pulsanti assegna nelle tab Mezzi/Palmari/Autisti + tab Log funzionante
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { padronciniApi } from '../../lib/api';
-import type { Padroncino, PadronciniStats } from '../../lib/api';
-import NuovoPadroncinoModal, { NuovoPadroncino } from './NuovoPadroncinoModal';
+import {
+  padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
+  type Padroncino, type PadronciniStats,
+} from '../../lib/api';
+import Modal from '../../components/ui/Modal';
+import LogEntita from '../log/LogEntita';
 import './Padroncini.css';
 
 // ─── HELPERS ──────────────────────────────────────────
-const fmt = (d: string | null | undefined) =>
-  d ? new Date(d).toLocaleDateString('it-IT') : '—';
+const fmtEur = (n: number) =>
+  n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 
-const fmtEur = (n: number | null | undefined) =>
-  n == null ? '0,00 €' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
+function scadenzaInfo(date?: string | null) {
+  if (!date) return null;
+  const d = new Date(date);
+  const now = new Date();
+  const diff = Math.ceil((d.getTime() - now.getTime()) / 86400000);
+  const label = d.toLocaleDateString('it-IT');
+  if (diff < 0) return { label, giorni: `${Math.abs(diff)}gg fa`, cls: 'pd-scad-expired' };
+  if (diff <= 30) return { label, giorni: `${diff}gg`, cls: 'pd-scad-warning' };
+  if (diff <= 90) return { label, giorni: `${diff}gg`, cls: 'pd-scad-near' };
+  return { label, giorni: `${diff}gg`, cls: 'pd-scad-ok' };
+}
 
-const daysDiff = (d: string | null | undefined): number | null => {
-  if (!d) return null;
-  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+interface NuovoPadroncino {
+  ragioneSociale: string;
+  partitaIva: string;
+  codiceFiscale: string;
+  indirizzo: string;
+  telefono: string;
+  email: string;
+  pec: string;
+  iban: string;
+  scadenzaDurc: string;
+  scadenzaDvr: string;
+  note: string;
+}
+
+const EMPTY_P: NuovoPadroncino = {
+  ragioneSociale: '', partitaIva: '', codiceFiscale: '', indirizzo: '',
+  telefono: '', email: '', pec: '', iban: '', scadenzaDurc: '', scadenzaDvr: '', note: '',
 };
 
-const scadenzaInfo = (d: string | null | undefined) => {
-  const diff = daysDiff(d);
-  if (diff === null) return null;
-  if (diff < 0) return { label: fmt(d), cls: 'pd-scad-expired', giorni: `${Math.abs(diff)}gg fa` };
-  if (diff <= 30) return { label: fmt(d), cls: 'pd-scad-warning', giorni: `${diff}gg` };
-  if (diff <= 90) return { label: fmt(d), cls: 'pd-scad-near', giorni: `${diff}gg` };
-  return { label: fmt(d), cls: 'pd-scad-ok', giorni: `${diff}gg` };
-};
+// ─── MODALE ASSEGNA ───────────────────────────────────
+interface AssegnaModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSave: (id: string, dataInizio: string) => Promise<void>;
+  title: string;
+  items: Array<{ id: string; label: string; sub?: string }>;
+}
 
-// ─── PAGINA ────────────────────────────────────────────
-export default function Padroncini() {
+function AssegnaModal({ open, onClose, onSave, title, items }: AssegnaModalProps) {
+  const [selectedId, setSelectedId] = useState('');
+  const [dataInizio, setDataInizio] = useState(new Date().toISOString().split('T')[0]);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filtered = items.filter((i) =>
+    i.label.toLowerCase().includes(search.toLowerCase()) ||
+    (i.sub ?? '').toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const handleSave = async () => {
+    if (!selectedId || !dataInizio) return;
+    setSaving(true);
+    try {
+      await onSave(selectedId, dataInizio);
+      setSelectedId('');
+      setSearch('');
+      onClose();
+    } catch (e: any) {
+      alert('Errore: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={title} width={520}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="form-field">
+          <label className="form-label">Cerca</label>
+          <input
+            className="form-input"
+            placeholder="Filtra..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              Nessun elemento disponibile
+            </div>
+          ) : (
+            filtered.map((item) => (
+              <div
+                key={item.id}
+                onClick={() => setSelectedId(item.id)}
+                style={{
+                  padding: '10px 14px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--border)',
+                  background: selectedId === item.id ? 'rgba(99,102,241,.1)' : 'transparent',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, color: selectedId === item.id ? 'var(--primary)' : 'var(--text-primary)' }}>
+                  {item.label}
+                </span>
+                {item.sub && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.sub}</span>}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="form-field">
+          <label className="form-label">Data Inizio <span className="req">*</span></label>
+          <input
+            className="form-input"
+            type="date"
+            value={dataInizio}
+            onChange={(e) => setDataInizio(e.target.value)}
+          />
+        </div>
+        <div className="form-actions">
+          <button className="btn-outline" onClick={onClose}>Annulla</button>
+          <button
+            className="btn-primary"
+            onClick={handleSave}
+            disabled={!selectedId || !dataInizio || saving}
+          >
+            {saving ? 'Salvataggio...' : '🔗 Assegna'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── MODALE NUOVO PADRONCINO ──────────────────────────
+function NuovoPadroncinoModal({
+  open, onClose, onSave,
+}: {
+  open: boolean; onClose: () => void; onSave: (d: NuovoPadroncino) => void;
+}) {
+  const [form, setForm] = useState<NuovoPadroncino>(EMPTY_P);
+  const set = (k: keyof NuovoPadroncino, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const handleClose = () => { setForm(EMPTY_P); onClose(); };
+  const handleSave = () => { if (!form.ragioneSociale.trim()) return; onSave(form); setForm(EMPTY_P); onClose(); };
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Nuovo Padroncino" width={640}>
+      <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="form-field span-2">
+          <label className="form-label">Ragione Sociale <span className="req">*</span></label>
+          <input className="form-input" value={form.ragioneSociale} onChange={(e) => set('ragioneSociale', e.target.value)} placeholder="Es: Mario Rossi Trasporti SRL" />
+        </div>
+        <div className="form-field"><label className="form-label">Partita IVA</label><input className="form-input" value={form.partitaIva} onChange={(e) => set('partitaIva', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">Cod. Fiscale</label><input className="form-input" value={form.codiceFiscale} onChange={(e) => set('codiceFiscale', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">Telefono</label><input className="form-input" value={form.telefono} onChange={(e) => set('telefono', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">Email</label><input className="form-input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">PEC</label><input className="form-input" value={form.pec} onChange={(e) => set('pec', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">IBAN</label><input className="form-input" value={form.iban} onChange={(e) => set('iban', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">Scad. DURC</label><input className="form-input" type="date" value={form.scadenzaDurc} onChange={(e) => set('scadenzaDurc', e.target.value)} /></div>
+        <div className="form-field"><label className="form-label">Scad. DVR</label><input className="form-input" type="date" value={form.scadenzaDvr} onChange={(e) => set('scadenzaDvr', e.target.value)} /></div>
+        <div className="form-field span-2"><label className="form-label">Indirizzo</label><input className="form-input" value={form.indirizzo} onChange={(e) => set('indirizzo', e.target.value)} /></div>
+        <div className="form-field span-2"><label className="form-label">Note</label><textarea className="form-textarea" rows={2} value={form.note} onChange={(e) => set('note', e.target.value)} /></div>
+      </div>
+      <div className="form-actions">
+        <button className="btn-outline" onClick={handleClose}>Annulla</button>
+        <button className="btn-primary" onClick={handleSave}>💾 Salva</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── MAIN PAGE ────────────────────────────────────────
+export default function PadronciniPage() {
   const [padroncini, setPadroncini] = useState<Padroncino[]>([]);
   const [stats, setStats] = useState<PadronciniStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
-  const [tab, setTab] = useState<'info' | 'mezzi' | 'palmari' | 'autisti' | 'storico' | 'log'>('info');
+  const [tab, setTab] = useState<string>('info');
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<'TUTTI' | 'ATTIVO' | 'DISMESSO'>('TUTTI');
   const [showNuovo, setShowNuovo] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const [listResp, statsResp] = await Promise.all([
-        padronciniApi.list({ limit: '200', include: 'mezzi,palmari,codici' }),
+      setLoading(true);
+      const [listRes, statsRes] = await Promise.all([
+        padronciniApi.list({ limit: '200' }),
         padronciniApi.stats(),
       ]);
-      setPadroncini(listResp.data);
-      setStats(statsResp);
-      if (!selected && listResp.data.length > 0) setSelected(listResp.data[0].id);
+      setPadroncini(listRes.data);
+      setStats(statsRes);
     } catch (e: any) {
-      setError(e.message || 'Errore caricamento');
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -59,11 +211,10 @@ export default function Padroncini() {
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
+    const s = search.toLowerCase();
     return padroncini.filter((p) => {
-      const s = search.toLowerCase();
-      const matchSearch =
+      const matchSearch = !s ||
         p.ragioneSociale.toLowerCase().includes(s) ||
-        (p.partitaIva ?? '').includes(s) ||
         (p.codice ?? '').toLowerCase().includes(s);
       const matchFiltro =
         filtro === 'TUTTI' ||
@@ -110,7 +261,6 @@ export default function Padroncini() {
 
   return (
     <div className="pd-page">
-      {/* ── HEADER con stats ── */}
       <div className="pd-page-header">
         <h1>Padroncini</h1>
         <div className="pd-page-stats">
@@ -137,30 +287,19 @@ export default function Padroncini() {
         </div>
       </div>
 
-      {/* ── TOOLBAR ── */}
       <div className="pd-toolbar">
         <div className="pd-search-wrap">
           <span>🔍</span>
-          <input
-            className="pd-search"
-            placeholder="Cerca padroncino per nome o codice..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <input className="pd-search" placeholder="Cerca padroncino per nome o codice..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="pd-filters">
           {(['TUTTI', 'ATTIVO', 'DISMESSO'] as const).map((f) => (
-            <button
-              key={f}
-              className={`pd-filter-btn ${filtro === f ? 'pd-filter-active' : ''}`}
-              onClick={() => setFiltro(f)}
-            >{f}</button>
+            <button key={f} className={`pd-filter-btn ${filtro === f ? 'pd-filter-active' : ''}`} onClick={() => setFiltro(f)}>{f}</button>
           ))}
         </div>
         <button className="btn-primary pd-nuovo-btn" onClick={() => setShowNuovo(true)}>+ Nuovo</button>
       </div>
 
-      {/* ── TABELLA ── */}
       <div className="pd-table-wrap">
         <table className="pd-table">
           <thead>
@@ -182,7 +321,7 @@ export default function Padroncini() {
             )}
             {filtered.map((p) => {
               const durc = scadenzaInfo(p.scadenzaDurc);
-              const dvr = scadenzaInfo(p.scadenzaDvr);
+              const dvr  = scadenzaInfo(p.scadenzaDvr);
               const durcLabel = !p.scadenzaDurc ? 'ASSENTE' :
                 durc?.cls === 'pd-scad-expired' ? 'SCADUTO' :
                 durc?.cls === 'pd-scad-warning' ? 'IN SCADENZA' : 'REGOLARE';
@@ -193,12 +332,10 @@ export default function Padroncini() {
                 durcLabel === 'ASSENTE' ? 'pd-doc-absent' : 'pd-doc-ok';
               const dvrCls = dvrLabel === 'ASSENTE' ? 'pd-doc-absent' : 'pd-doc-ok';
               return (
-                <tr key={p.id} className={`pd-row ${selected === p.id ? 'pd-row-selected' : ''}`}>
+                <tr key={p.id} className={`pd-row ${selected === p.id ? 'pd-row-selected' : ''}`} onClick={() => { setSelected(p.id); setTab('info'); }}>
                   <td>
-                    <span
-                      className="pd-ragsoc"
-                      onClick={() => { setSelected(p.id); setTab('info'); }}
-                    >{p.ragioneSociale}</span>
+                    <div className="pd-name">{p.ragioneSociale}</div>
+                    {p.codice && <div className="pd-codice">#{p.codice}</div>}
                   </td>
                   <td>
                     <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
@@ -207,42 +344,23 @@ export default function Padroncini() {
                   </td>
                   <td><span className={`pd-doc-badge ${durcCls}`}>{durcLabel}</span></td>
                   <td><span className={`pd-doc-badge ${dvrCls}`}>{dvrLabel}</span></td>
+                  <td><span className="pd-count pd-count-blue">{p.palmariAssegnati?.length ?? 0}</span></td>
+                  <td><span className="pd-count pd-count-blue">{p.mezziAssegnati?.length ?? 0}</span></td>
+                  <td><span className="pd-count pd-count-blue">{p.codiciAutista?.length ?? 0}</span></td>
+                  <td><span className="pd-fatturato">{fmtEur(p.fatturatoMese ?? 0)}</span></td>
                   <td>
-                    <span className="pd-count pd-count-blue">{p.palmariAssegnati?.length ?? 0}</span>
-                  </td>
-                  <td>
-                    <span className="pd-count pd-count-blue">{p.mezziAssegnati?.length ?? 0}</span>
-                  </td>
-                  <td>
-                    <span className="pd-count pd-count-blue">{p.codiciAutista?.length ?? 0}</span>
-                  </td>
-                  <td>
-                    <span className="pd-fatturato">{fmtEur(p.fatturatoMese ?? 0)}</span>
-                  </td>
-                  <td>
-                    <button
-                      className="btn-primary btn-sm"
-                      onClick={() => { setSelected(p.id); setTab('info'); }}
-                    >Dettagli</button>
+                    <button className="btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); setSelected(p.id); setTab('info'); }}>Dettagli</button>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        <div className="pd-table-footer">
-          {filtered.length} di {padroncini.length} padroncini
-        </div>
+        <div className="pd-table-footer">{filtered.length} di {padroncini.length} padroncini</div>
       </div>
 
-      {/* ── PANNELLO DETTAGLIO ── */}
       {selectedP && (
-        <PadroncinoDetail
-          p={selectedP}
-          tab={tab}
-          setTab={setTab}
-          onRefresh={load}
-        />
+        <PadroncinoDetail p={selectedP} tab={tab} setTab={setTab} onRefresh={load} />
       )}
 
       <NuovoPadroncinoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleCreate} />
@@ -254,21 +372,18 @@ export default function Padroncini() {
 function PadroncinoDetail({
   p, tab, setTab, onRefresh,
 }: {
-  p: Padroncino;
-  tab: string;
-  setTab: (t: any) => void;
-  onRefresh: () => void;
+  p: Padroncino; tab: string; setTab: (t: any) => void; onRefresh: () => void;
 }) {
   const durc = scadenzaInfo(p.scadenzaDurc);
-  const dvr = scadenzaInfo(p.scadenzaDvr);
+  const dvr  = scadenzaInfo(p.scadenzaDvr);
 
   const TABS = [
-    { key: 'info', label: 'Anagrafica' },
-    { key: 'mezzi', label: `Mezzi (${p.mezziAssegnati?.length ?? 0})` },
+    { key: 'info',    label: 'Anagrafica' },
+    { key: 'mezzi',   label: `Mezzi (${p.mezziAssegnati?.length ?? 0})` },
     { key: 'palmari', label: `Palmari (${p.palmariAssegnati?.length ?? 0})` },
     { key: 'autisti', label: `Autisti (${p.codiciAutista?.length ?? 0})` },
     { key: 'storico', label: 'Storico' },
-    { key: 'log', label: 'Log' },
+    { key: 'log',     label: 'Log' },
   ];
 
   const durcLabel = !p.scadenzaDurc ? 'ASSENTE' :
@@ -280,7 +395,6 @@ function PadroncinoDetail({
 
   return (
     <div className="pd-detail-panel">
-      {/* ── Header detail ── */}
       <div className="pd-detail-header">
         <div className="pd-detail-title-row">
           <div>
@@ -296,10 +410,7 @@ function PadroncinoDetail({
               DVR: {p.scadenzaDvr ? 'PRESENTE' : 'ASSENTE'}
             </span>
             {p.fatturatoMese != null && (
-              <span className="pd-detail-fatt">Fatt. {p.fatturatoMese.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €</span>
-            )}
-            {p.bonifico != null && (
-              <span className="pd-detail-bon">Bon. {p.bonifico.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €</span>
+              <span className="pd-detail-fatt">Fatt. {fmtEur(p.fatturatoMese)}</span>
             )}
           </div>
         </div>
@@ -309,32 +420,28 @@ function PadroncinoDetail({
         </div>
       </div>
 
-      {/* ── Tabs ── */}
       <div className="pd-tabs">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >{t.label}</button>
+          <button key={t.key} className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* ── Tab Content ── */}
       <div className="pd-tab-body">
-        {tab === 'info' && <TabInfo p={p} />}
-        {tab === 'mezzi' && <TabMezzi p={p} />}
-        {tab === 'palmari' && <TabPalmari p={p} />}
-        {tab === 'autisti' && <TabAutisti p={p} />}
-        {(tab === 'storico' || tab === 'log') && (
-          <div className="pd-empty-tab">Sezione in sviluppo</div>
-        )}
+        {tab === 'info'    && <TabInfo p={p} />}
+        {tab === 'mezzi'   && <TabMezzi p={p} onRefresh={onRefresh} />}
+        {tab === 'palmari' && <TabPalmari p={p} onRefresh={onRefresh} />}
+        {tab === 'autisti' && <TabAutisti p={p} onRefresh={onRefresh} />}
+        {tab === 'storico' && <div className="pd-empty-tab">Sezione storico conteggi in sviluppo</div>}
+        {tab === 'log'     && <LogEntita entityType="padroncino" entityId={p.id} />}
       </div>
     </div>
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+// ─── FIELD ────────────────────────────────────────────
+function Field({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
   return (
     <div className="pd-field">
       <span className="pd-field-label">{label}</span>
@@ -345,9 +452,10 @@ function Field({ label, value, mono }: { label: string; value: string | null | u
   );
 }
 
+// ─── TAB INFO ─────────────────────────────────────────
 function TabInfo({ p }: { p: Padroncino }) {
   const durc = scadenzaInfo(p.scadenzaDurc);
-  const dvr = scadenzaInfo(p.scadenzaDvr);
+  const dvr  = scadenzaInfo(p.scadenzaDvr);
   return (
     <div className="pd-info-grid">
       <div className="pd-section">
@@ -392,99 +500,226 @@ function TabInfo({ p }: { p: Padroncino }) {
   );
 }
 
-function TabMezzi({ p }: { p: Padroncino }) {
-  if (!p.mezziAssegnati?.length) return <EmptyTab icon="🚚" msg="Nessun mezzo assegnato" />;
+// ─── TAB MEZZI ────────────────────────────────────────
+function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const [showAssegna, setShowAssegna] = useState(false);
+  const [mezziDisp, setMezziDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
+
+  const loadMezziDisp = async () => {
+    try {
+      const res = await mezziApi.list({ stato: 'DISPONIBILE', limit: '200' });
+      setMezziDisp(res.data.map((m: any) => ({
+        id: m.id,
+        label: `${m.targa} — ${m.marca} ${m.modello}`,
+        sub: m.alimentazione,
+      })));
+    } catch { /* ignora */ }
+  };
+
+  const handleAssegna = async (mezzoId: string, dataInizio: string) => {
+    await padronciniApi.assegnaMezzo(p.id, { mezzoId, dataInizio });
+    await onRefresh();
+  };
+
   return (
-    <div className="pd-items-table-wrap">
-      <table className="pd-items-table">
-        <thead>
-          <tr>
-            <th>TARGA</th>
-            <th>MARCA / MODELLO</th>
-            <th>TIPO</th>
-            <th>DATA INIZIO</th>
-            <th>TARIFFA (IMP.)</th>
-            <th>TARIFFA (IVATA)</th>
-            <th>NOTE</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {p.mezziAssegnati.map((m) => (
-            <tr key={m.id} className="pd-item-row">
-              <td className="pd-item-targa">{m.targa}</td>
-              <td>
-                <span className="pd-item-marca">{m.marca}</span>{' '}
-                <span className="pd-item-modello">{m.modello}</span>
-              </td>
-              <td>{m.alimentazione}</td>
-              <td>{m.dataInizio ? new Date(m.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
-              <td>{m.tariffa != null ? `${m.tariffa.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €` : <span className="pd-empty">—</span>}</td>
-              <td>{m.tariffaIvata != null ? `${m.tariffaIvata.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €` : <span className="pd-empty">—</span>}</td>
-              <td><span className="pd-note-input">Note...</span></td>
-              <td><button className="btn-primary btn-sm">Dettaglio</button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="pd-tab-actions">
+        <button
+          className="btn-primary btn-sm"
+          onClick={() => { loadMezziDisp(); setShowAssegna(true); }}
+        >
+          🔗 Assegna Mezzo
+        </button>
+      </div>
+
+      {(!p.mezziAssegnati || p.mezziAssegnati.length === 0) ? (
+        <EmptyTab icon="🚚" msg="Nessun mezzo assegnato" />
+      ) : (
+        <div className="pd-items-table-wrap">
+          <table className="pd-items-table">
+            <thead>
+              <tr>
+                <th>TARGA</th>
+                <th>MARCA / MODELLO</th>
+                <th>TIPO</th>
+                <th>DATA INIZIO</th>
+                <th>TARIFFA (IMP.)</th>
+                <th>TARIFFA (IVATA)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.mezziAssegnati.map((m) => (
+                <tr key={m.id} className="pd-item-row">
+                  <td className="pd-item-targa">{m.targa}</td>
+                  <td>
+                    <span className="pd-item-marca">{m.marca}</span>{' '}
+                    <span className="pd-item-modello">{m.modello}</span>
+                  </td>
+                  <td>{m.alimentazione}</td>
+                  <td>{m.dataInizio ? new Date(m.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
+                  <td>{m.tariffa != null ? fmtEur(m.tariffa) : <span className="pd-empty">—</span>}</td>
+                  <td>{m.tariffaIvata != null ? fmtEur(m.tariffaIvata) : <span className="pd-empty">—</span>}</td>
+                  <td><button className="btn-primary btn-sm">Dettaglio</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AssegnaModal
+        open={showAssegna}
+        onClose={() => setShowAssegna(false)}
+        onSave={handleAssegna}
+        title="Assegna Mezzo a Padroncino"
+        items={mezziDisp}
+      />
     </div>
   );
 }
 
-function TabPalmari({ p }: { p: Padroncino }) {
-  if (!p.palmariAssegnati?.length) return <EmptyTab icon="📱" msg="Nessun palmare assegnato" />;
+// ─── TAB PALMARI ──────────────────────────────────────
+function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const [showAssegna, setShowAssegna] = useState(false);
+  const [palmariDisp, setPalmariDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
+
+  const loadPalmariDisp = async () => {
+    try {
+      const res = await palmariApi.list({ stato: 'DISPONIBILE', limit: '200' });
+      setPalmariDisp(res.data.map((pal: any) => ({
+        id: pal.id,
+        label: pal.codice,
+        sub: [pal.marca, pal.modello].filter(Boolean).join(' ') || undefined,
+      })));
+    } catch { /* ignora */ }
+  };
+
+  const handleAssegna = async (palmareId: string, dataInizio: string) => {
+    await padronciniApi.assegnaPalmare(p.id, { palmareId, dataInizio });
+    await onRefresh();
+  };
+
   return (
-    <div className="pd-items-table-wrap">
-      <table className="pd-items-table">
-        <thead>
-          <tr>
-            <th>CODICE</th>
-            <th>TARIFFA</th>
-            <th>DATA INIZIO</th>
-            <th>FINE</th>
-          </tr>
-        </thead>
-        <tbody>
-          {p.palmariAssegnati.map((pal) => (
-            <tr key={pal.id} className="pd-item-row">
-              <td className="pd-item-targa">{pal.codice}</td>
-              <td>{pal.tariffa != null ? `${pal.tariffa.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €` : '—'}</td>
-              <td>{pal.dataInizio ? new Date(pal.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
-              <td>{pal.dataFine ? new Date(pal.dataFine).toLocaleDateString('it-IT') : <span className="pd-empty">—</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="pd-tab-actions">
+        <button
+          className="btn-primary btn-sm"
+          onClick={() => { loadPalmariDisp(); setShowAssegna(true); }}
+        >
+          🔗 Assegna Palmare
+        </button>
+      </div>
+
+      {(!p.palmariAssegnati || p.palmariAssegnati.length === 0) ? (
+        <EmptyTab icon="📱" msg="Nessun palmare assegnato" />
+      ) : (
+        <div className="pd-items-table-wrap">
+          <table className="pd-items-table">
+            <thead>
+              <tr>
+                <th>CODICE</th>
+                <th>TARIFFA</th>
+                <th>DATA INIZIO</th>
+                <th>FINE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.palmariAssegnati.map((pal) => (
+                <tr key={pal.id} className="pd-item-row">
+                  <td className="pd-item-targa">{pal.codice}</td>
+                  <td>{pal.tariffa != null ? fmtEur(pal.tariffa) : '—'}</td>
+                  <td>{pal.dataInizio ? new Date(pal.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
+                  <td>{pal.dataFine ? new Date(pal.dataFine).toLocaleDateString('it-IT') : <span className="pd-empty">Attivo</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AssegnaModal
+        open={showAssegna}
+        onClose={() => setShowAssegna(false)}
+        onSave={handleAssegna}
+        title="Assegna Palmare a Padroncino"
+        items={palmariDisp}
+      />
     </div>
   );
 }
 
-function TabAutisti({ p }: { p: Padroncino }) {
-  if (!p.codiciAutista?.length) return <EmptyTab icon="👤" msg="Nessun autista assegnato" />;
+// ─── TAB AUTISTI ──────────────────────────────────────
+function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const [showAssegna, setShowAssegna] = useState(false);
+  const [autistiDisp, setAutistiDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
+
+  const loadAutistiDisp = async () => {
+    try {
+      const res = await codiciAutistaApi.list({ limit: '200' });
+      const liberi = res.data.filter((a: any) =>
+        !a.assegnazioni?.some((x: any) => !x.dataFine),
+      );
+      setAutistiDisp(liberi.map((a: any) => ({
+        id: a.id,
+        label: a.codice,
+        sub: [a.nome, a.cognome].filter(Boolean).join(' ') || undefined,
+      })));
+    } catch { /* ignora */ }
+  };
+
+  const handleAssegna = async (codiceAutistaId: string, dataInizio: string) => {
+    await padronciniApi.assegnaCodice(p.id, { codiceAutistaId, dataInizio });
+    await onRefresh();
+  };
+
   return (
-    <div className="pd-items-table-wrap">
-      <table className="pd-items-table">
-        <thead>
-          <tr>
-            <th>CODICE</th>
-            <th>NOME</th>
-            <th>COGNOME</th>
-            <th>DATA INIZIO</th>
-            <th>FINE</th>
-          </tr>
-        </thead>
-        <tbody>
-          {p.codiciAutista.map((a) => (
-            <tr key={a.id} className="pd-item-row">
-              <td className="pd-item-targa">{a.codice}</td>
-              <td>{a.nome || '—'}</td>
-              <td>{a.cognome || '—'}</td>
-              <td>{a.dataInizio ? new Date(a.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
-              <td>{a.dataFine ? new Date(a.dataFine).toLocaleDateString('it-IT') : <span className="pd-empty">—</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="pd-tab-actions">
+        <button
+          className="btn-primary btn-sm"
+          onClick={() => { loadAutistiDisp(); setShowAssegna(true); }}
+        >
+          🔗 Assegna Autista
+        </button>
+      </div>
+
+      {(!p.codiciAutista || p.codiciAutista.length === 0) ? (
+        <EmptyTab icon="👤" msg="Nessun autista assegnato" />
+      ) : (
+        <div className="pd-items-table-wrap">
+          <table className="pd-items-table">
+            <thead>
+              <tr>
+                <th>CODICE</th>
+                <th>NOME</th>
+                <th>COGNOME</th>
+                <th>DATA INIZIO</th>
+                <th>FINE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.codiciAutista.map((a) => (
+                <tr key={a.id} className="pd-item-row">
+                  <td className="pd-item-targa">{a.codice}</td>
+                  <td>{a.nome || '—'}</td>
+                  <td>{a.cognome || '—'}</td>
+                  <td>{a.dataInizio ? new Date(a.dataInizio).toLocaleDateString('it-IT') : '—'}</td>
+                  <td>{a.dataFine ? new Date(a.dataFine).toLocaleDateString('it-IT') : <span className="pd-empty">Attivo</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <AssegnaModal
+        open={showAssegna}
+        onClose={() => setShowAssegna(false)}
+        onSave={handleAssegna}
+        title="Assegna Autista a Padroncino"
+        items={autistiDisp}
+      />
     </div>
   );
 }
@@ -492,8 +727,8 @@ function TabAutisti({ p }: { p: Padroncino }) {
 function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
   return (
     <div className="pd-empty-tab">
-      <span>{icon}</span>
-      <p>{msg}</p>
+      <span style={{ fontSize: 32 }}>{icon}</span>
+      <span>{msg}</span>
     </div>
   );
 }

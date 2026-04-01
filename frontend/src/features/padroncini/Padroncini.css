@@ -237,3 +237,26 @@
 }
 .btn-outline:hover { border-color: var(--border-hover); color: var(--text-primary); }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+.pd-tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 0 14px 0;
+  gap: 8px;
+}
+ 
+/* Stato badge (se non già presente) */
+.pd-stato-attivo  { background: rgba(34,197,94,.12);  color: #16a34a; }
+.pd-stato-dismesso { background: rgba(100,116,139,.12); color: #64748b; }
+ 
+/* Empty tab */
+.pd-empty-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 13px;
+}

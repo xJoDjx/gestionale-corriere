@@ -496,3 +496,40 @@
 .btn-ghost-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+.dm-tabs-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  background: var(--bg-secondary);
+}
+ 
+.dm-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 11px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all .15s;
+  margin-bottom: -1px;
+}
+ 
+.dm-tab:hover {
+  color: var(--text-primary);
+}
+ 
+.dm-tab-active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+ 
+/* fm-badge varianti colore (usate nel topbar DettaglioMezzo) */
+.fm-badge-blue  { background: rgba(59,130,246,.12);  color: #2563eb; }
+.fm-badge-green { background: rgba(34,197,94,.12);   color: #16a34a; }
+.fm-badge-gray  { background: rgba(100,116,139,.12); color: #64748b; }
+.fm-badge-red   { background: rgba(239,68,68,.12);   color: #dc2626; }
