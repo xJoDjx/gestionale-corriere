@@ -10,6 +10,11 @@ export class AccontiController {
     return this.service.findAll(mese);
   }
 
+  @Get('verifica-codice/:codice')
+  verificaCodice(@Param('codice') codice: string) {
+    return this.service.verificaCodice(codice);
+  }
+
   @Get('padroncino/:padroncinoId')
   findByPadroncino(
     @Param('padroncinoId') padroncinoId: string,

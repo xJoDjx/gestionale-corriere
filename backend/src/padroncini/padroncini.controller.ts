@@ -45,4 +45,55 @@ export class PadronciniController {
   remove(@Param('id') id: string) {
     return this.service.remove(id, 'system');
   }
+
+  // ─── ASSEGNAZIONE MEZZO ────────────────────────────────────────
+  @Post(':id/mezzi')
+  assegnaMezzo(
+    @Param('id') padroncinoId: string,
+    @Body() body: { mezzoId: string; dataInizio: string },
+  ) {
+    return this.service.assegnaMezzo(padroncinoId, body.mezzoId, body.dataInizio, 'system');
+  }
+
+  @Delete(':id/mezzi/:assegnazioneId')
+  rimuoviMezzo(
+    @Param('id') padroncinoId: string,
+    @Param('assegnazioneId') assegnazioneId: string,
+  ) {
+    return this.service.rimuoviMezzo(padroncinoId, assegnazioneId, 'system');
+  }
+
+  // ─── ASSEGNAZIONE PALMARE ──────────────────────────────────────
+  @Post(':id/palmari')
+  assegnaPalmare(
+    @Param('id') padroncinoId: string,
+    @Body() body: { palmareId: string; dataInizio: string },
+  ) {
+    return this.service.assegnaPalmare(padroncinoId, body.palmareId, body.dataInizio, 'system');
+  }
+
+  @Delete(':id/palmari/:assegnazioneId')
+  rimuoviPalmare(
+    @Param('id') padroncinoId: string,
+    @Param('assegnazioneId') assegnazioneId: string,
+  ) {
+    return this.service.rimuoviPalmare(padroncinoId, assegnazioneId, 'system');
+  }
+
+  // ─── ASSEGNAZIONE CODICE AUTISTA ───────────────────────────────
+  @Post(':id/codici-autista')
+  assegnaCodice(
+    @Param('id') padroncinoId: string,
+    @Body() body: { codiceAutistaId: string; dataInizio: string },
+  ) {
+    return this.service.assegnaCodice(padroncinoId, body.codiceAutistaId, body.dataInizio, 'system');
+  }
+
+  @Delete(':id/codici-autista/:assegnazioneId')
+  rimuoviCodice(
+    @Param('id') padroncinoId: string,
+    @Param('assegnazioneId') assegnazioneId: string,
+  ) {
+    return this.service.rimuoviCodice(padroncinoId, assegnazioneId, 'system');
+  }
 }
