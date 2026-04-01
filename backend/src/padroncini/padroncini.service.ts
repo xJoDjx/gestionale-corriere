@@ -12,6 +12,8 @@ export class PadronciniService {
   ) {}
 
   async findAll(query: QueryPadronciniDto) {
+    // Estraiamo i parametri, ignoriamo 'include' nella logica se vogliamo 
+    // mantenere il controllo totale sulle relazioni caricate qui sotto.
     const { search, attivo, page = 1, limit = 50 } = query;
 
     const where: Prisma.PadroncinoWhereInput = {
@@ -31,24 +33,28 @@ export class PadronciniService {
         where,
         include: {
           assegnazioniMezzi: {
-            where: this.prisma.activeAssignmentFilter(),
+            where: { deletedAt: null, dataFine: null }, // Solo quelli attivi
             include: {
-              mezzo: { select: { id: true, targa: true, marca: true, modello: true } },
+              mezzo: {
+                select: { id: true, targa: true, marca: true, modello: true, alimentazione: true },
+              },
             },
           },
           assegnazioniPalmari: {
-            where: this.prisma.activeAssignmentFilter(),
+            where: { deletedAt: null, dataFine: null }, // Solo quelli attivi
             include: {
-              palmare: { select: { id: true, codice: true } },
+              palmare: { select: { id: true, codice: true, tariffaMensile: true } },
             },
           },
           codiciAutista: {
-            where: this.prisma.activeAssignmentFilter(),
+            where: { deletedAt: null, dataFine: null }, // Solo quelli attivi
             include: {
               codiceAutista: { select: { id: true, codice: true, nome: true, cognome: true } },
             },
           },
-          _count: { select: { conteggiMensili: true } },
+          _count: { 
+            select: { conteggiMensili: true } 
+          },
         },
         orderBy: { ragioneSociale: 'asc' },
         skip: (page - 1) * limit,
@@ -57,7 +63,88 @@ export class PadronciniService {
       this.prisma.padroncino.count({ where }),
     ]);
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    // Mapping pulito dei dati per il frontend
+    const mappedData = data.map((p) => ({
+      ...p, // Copia tutte le proprietà base (ragioneSociale, indirizzo, ecc.)
+      
+      // Trasformiamo le relazioni in array più semplici e piatti
+      mezziAssegnati: p.assegnazioniMezzi.map((a) => ({
+        ...a.mezzo,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+      
+      palmariAssegnati: p.assegnazioniPalmari.map((a) => ({
+        id: a.palmare.id,
+        codice: a.palmare.codice,
+        tariffa: Number(a.palmare.tariffaMensile ?? 0),
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+      
+      codiciAutista: p.codiciAutista.map((a) => ({
+        ...a.codiceAutista,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+      
+      // Pulizia dei nomi per il conteggio
+      conteggiCount: p._count.conteggiMensili,
+      
+      // Rimuoviamo le proprietà originali di Prisma che non servono più al frontend
+      assegnazioniMezzi: undefined,
+      assegnazioniPalmari: undefined,
+      _count: undefined,
+    }));
+
+    return { 
+      data: mappedData, 
+      total, 
+      page, 
+      limit, 
+      totalPages: Math.ceil(total / limit) 
+    };
+  }
+
+  async getStats() {
+    const oggi = new Date();
+    const tra30gg = new Date();
+    tra30gg.setDate(oggi.getDate() + 30);
+
+    const [attivi, totali, flottaMezzi, flottaDisponibili, palmariAttivi, palmariTotali,
+      durcScaduti, dvrAssenti] = await Promise.all([
+      this.prisma.padroncino.count({ where: { deletedAt: null, attivo: true } }),
+      this.prisma.padroncino.count({ where: { deletedAt: null } }),
+      this.prisma.mezzo.count({ where: { deletedAt: null } }),
+      this.prisma.mezzo.count({ where: { deletedAt: null, stato: 'DISPONIBILE' } }),
+      this.prisma.palmare.count({ where: { deletedAt: null, stato: 'ASSEGNATO' } }),
+      this.prisma.palmare.count({ where: { deletedAt: null } }),
+      // DURC scaduti o in scadenza entro 30gg
+      this.prisma.padroncino.count({
+        where: {
+          deletedAt: null, attivo: true,
+          OR: [
+            { scadenzaDurc: null },
+            { scadenzaDurc: { lte: tra30gg } },
+          ],
+        },
+      }),
+      // DVR assente
+      this.prisma.padroncino.count({
+        where: { deletedAt: null, attivo: true, scadenzaDvr: null },
+      }),
+    ]);
+
+    return {
+      attivi,
+      dismissi: totali - attivi,
+      totali,
+      alertDocumenti: durcScaduti + dvrAssenti,
+      flottaMezzi,
+      flottaDisponibili,
+      palmariAttivi,
+      palmariTotali,
+    };
   }
 
   async findOne(id: string) {
@@ -66,12 +153,21 @@ export class PadronciniService {
       include: {
         assegnazioniMezzi: {
           where: { deletedAt: null },
-          include: { mezzo: { select: { id: true, targa: true, marca: true, modello: true } } },
+          include: {
+            mezzo: {
+              select: {
+                id: true, targa: true, marca: true, modello: true,
+                alimentazione: true, rataNoleggio: true, canoneNoleggio: true,
+              },
+            },
+          },
           orderBy: { dataInizio: 'desc' },
         },
         assegnazioniPalmari: {
           where: { deletedAt: null },
-          include: { palmare: { select: { id: true, codice: true } } },
+          include: {
+            palmare: { select: { id: true, codice: true, tariffaMensile: true } },
+          },
           orderBy: { dataInizio: 'desc' },
         },
         codiciAutista: {
@@ -86,7 +182,36 @@ export class PadronciniService {
       },
     });
     if (!padroncino) throw new NotFoundException('Padroncino non trovato');
-    return padroncino;
+
+    return {
+      ...padroncino,
+      mezziAssegnati: padroncino.assegnazioniMezzi.map((a) => ({
+        id: a.mezzo.id,
+        targa: a.mezzo.targa,
+        marca: a.mezzo.marca,
+        modello: a.mezzo.modello,
+        alimentazione: a.mezzo.alimentazione,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+        tariffa: a.mezzo.canoneNoleggio ? Number(a.mezzo.canoneNoleggio) : null,
+        tariffaIvata: a.mezzo.canoneNoleggio ? Number(a.mezzo.canoneNoleggio) * 1.22 : null,
+      })),
+      palmariAssegnati: padroncino.assegnazioniPalmari.map((a) => ({
+        id: a.palmare.id,
+        codice: a.palmare.codice,
+        tariffa: Number(a.palmare.tariffaMensile ?? 0),
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+      codiciAutista: padroncino.codiciAutista.map((a) => ({
+        id: a.codiceAutista.id,
+        codice: a.codiceAutista.codice,
+        nome: a.codiceAutista.nome,
+        cognome: a.codiceAutista.cognome,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+    };
   }
 
   async create(dto: CreatePadroncinoDto, userId: string) {
@@ -102,38 +227,26 @@ export class PadronciniService {
   }
 
   async update(id: string, dto: UpdatePadroncinoDto, userId: string) {
-    const existing = await this.findOne(id);
-    const padroncino = await this.prisma.padroncino.update({
-      where: { id },
-      data: dto as any,
-    });
+    const existing = await this.prisma.padroncino.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new NotFoundException('Padroncino non trovato');
+
+    const updated = await this.prisma.padroncino.update({ where: { id }, data: dto as any });
     await this.audit.log({
-      userId,
-      entityType: 'padroncino',
-      entityId: id,
-      azione: 'UPDATE',
-      dataPrima: existing as any,
-      dataDopo: padroncino as any,
+      userId, entityType: 'padroncino', entityId: id,
+      azione: 'UPDATE', dataPrima: existing as any, dataDopo: updated as any,
     });
-    return padroncino;
+    return updated;
   }
 
   async remove(id: string, userId: string) {
-    await this.findOne(id);
-    await this.prisma.padroncino.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
-    await this.audit.log({
-      userId,
-      entityType: 'padroncino',
-      entityId: id,
-      azione: 'DELETE',
-    });
+    const existing = await this.prisma.padroncino.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new NotFoundException('Padroncino non trovato');
+
+    await this.prisma.padroncino.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.audit.log({ userId, entityType: 'padroncino', entityId: id, azione: 'DELETE' });
     return { deleted: true };
   }
 
-  // Lista semplificata per select/dropdown
   async listForSelect() {
     return this.prisma.padroncino.findMany({
       where: { deletedAt: null, attivo: true },
@@ -142,10 +255,9 @@ export class PadronciniService {
     });
   }
 
-  // Scadenze DURC/DVR
-  async getScadenze(giorniAvanti: number = 30) {
+  async getScadenze(giorni: number) {
     const limite = new Date();
-    limite.setDate(limite.getDate() + giorniAvanti);
+    limite.setDate(limite.getDate() + giorni);
 
     return this.prisma.padroncino.findMany({
       where: {
@@ -157,10 +269,7 @@ export class PadronciniService {
         ],
       },
       select: {
-        id: true,
-        ragioneSociale: true,
-        scadenzaDurc: true,
-        scadenzaDvr: true,
+        id: true, ragioneSociale: true, scadenzaDurc: true, scadenzaDvr: true,
       },
     });
   }

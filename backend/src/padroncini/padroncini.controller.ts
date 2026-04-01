@@ -11,6 +11,11 @@ export class PadronciniController {
     return this.service.findAll(query);
   }
 
+  @Get('stats')
+  getStats() {
+    return this.service.getStats();
+  }
+
   @Get('select')
   listForSelect() {
     return this.service.listForSelect();

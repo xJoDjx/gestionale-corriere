@@ -1,23 +1,90 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { StatoPalmare } from '@prisma/client';
 
-export class CreatePalmareDto {
-  @IsString() codice: string;
-  @IsString() @IsOptional() marca?: string;
-  @IsString() @IsOptional() modello?: string;
-  @IsString() @IsOptional() imei?: string;
-  @IsString() @IsOptional() simNumero?: string;
-  @IsNumber() @IsOptional() @Type(() => Number) tariffaMensile?: number;
-  @IsEnum(StatoPalmare) @IsOptional() stato?: StatoPalmare;
-  @IsString() @IsOptional() note?: string;
+export enum StatoPalmareEnum {
+  DISPONIBILE = 'DISPONIBILE',
+  ASSEGNATO = 'ASSEGNATO',
+  GUASTO = 'GUASTO',
+  DISMESSO = 'DISMESSO',
 }
 
-export class UpdatePalmareDto extends CreatePalmareDto {}
+export class CreatePalmareDto {
+  @IsString()
+  codice: string;
+
+  @IsOptional()
+  @IsString()
+  marca?: string;
+
+  @IsOptional()
+  @IsString()
+  modello?: string;
+
+  @IsOptional()
+  @IsString()
+  imei?: string;
+
+  @IsOptional()
+  @IsString()
+  simNumero?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tariffaMensile?: number;
+
+  @IsOptional()
+  @IsString()
+  stato?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class UpdatePalmareDto {
+  @IsOptional()
+  @IsString()
+  codice?: string;
+
+  @IsOptional()
+  @IsString()
+  marca?: string;
+
+  @IsOptional()
+  @IsString()
+  modello?: string;
+
+  @IsOptional()
+  @IsString()
+  imei?: string;
+
+  @IsOptional()
+  @IsString()
+  simNumero?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tariffaMensile?: number;
+
+  @IsOptional()
+  @IsString()
+  stato?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
 
 export class CreateAssegnazionePalmareDto {
-  @IsString() padroncinoId: string;
-  @IsDateString() dataInizio: string;
-  @IsDateString() @IsOptional() dataFine?: string;
-  @IsString() @IsOptional() note?: string;
+  @IsString()
+  padroncinoId: string;
+
+  @IsString()
+  dataInizio: string;
+
+  @IsOptional()
+  @IsString()
+  dataFine?: string;
 }

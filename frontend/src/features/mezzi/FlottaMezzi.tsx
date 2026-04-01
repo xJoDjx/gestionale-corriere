@@ -1,149 +1,287 @@
-import { useState, useMemo } from 'react';
-import type { Mezzo, MezziStats } from '../../lib/api';
+// src/features/mezzi/FlottaMezzi.tsx — API reali, dettaglio mezzo con routing
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { mezziApi, padronciniApi } from '../../lib/api';
+import type { Mezzo, MezziStats, Padroncino } from '../../lib/api';
 import NuovoMezzoModal from './NuovoMezzoModal';
+import type { NuovoMezzo } from './NuovoMezzoModal';
+import './FlottaMezzi.css';
 
+// ─── HELPERS ──────────────────────────────────────────
+const fmt = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString('it-IT') : '—';
 
-// ─── MOCK DATA (sostituire con API reali) ──────────
-const MOCK_STATS: MezziStats = {
-  totali: 33,
-  disponibili: 6,
-  assegnati: 26,
-  entrateNoleggio: 17134,
-  margine: -6863.18,
-  scadenzeImminenti: 30,
+const daysDiff = (d: string | null | undefined): number | null => {
+  if (!d) return null;
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
 };
 
-const MOCK_MEZZI: Mezzo[] = [
-  { id: '1', targa: 'GH627TF', marca: 'Ford', modello: 'TRANSIT', tipo: 'FURGONE', alimentazione: 'GASOLIO', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: null, canoneNoleggio: null, kmAttuali: 185449, kmLimite: 200000, scadenzaAssicurazione: '2026-04-10', scadenzaRevisione: '2026-05-05', assegnazioni: [{ id: 'a1', dataInizio: '2025-01-01', dataFine: null, padroncino: { id: 'p1', ragioneSociale: 'MEN LOGISTIC' } }], tags: [] },
-  { id: '2', targa: 'GH628TF', marca: 'Ford', modello: 'TRANSIT', tipo: 'FURGONE', alimentazione: 'GASOLIO', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: null, canoneNoleggio: null, kmAttuali: 158048, kmLimite: 200000, scadenzaAssicurazione: '2026-04-10', scadenzaRevisione: '2026-05-05', assegnazioni: [{ id: 'a2', dataInizio: '2025-01-01', dataFine: null, padroncino: { id: 'p1', ragioneSociale: 'MEN LOGISTIC' } }], tags: [] },
-  { id: '3', targa: 'GJ198RL', marca: 'Volkswagen', modello: 'CRAFTER', tipo: 'FURGONE', alimentazione: 'GASOLIO', categoria: 'DISTRIBUZIONE', stato: 'DISMESSO', rataNoleggio: null, canoneNoleggio: null, kmAttuali: 74853, kmLimite: 150000, scadenzaAssicurazione: '2026-08-15', scadenzaRevisione: '2027-02-10', assegnazioni: [], tags: [] },
-  { id: '4', targa: 'GM098FB', marca: 'Ford', modello: 'E-TRANSIT', tipo: 'FURGONE', alimentazione: 'ELETTRICO', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: 850, canoneNoleggio: null, kmAttuali: 107271, kmLimite: 130000, scadenzaAssicurazione: '2026-12-01', scadenzaRevisione: '2026-06-20', assegnazioni: [{ id: 'a4', dataInizio: '2025-03-01', dataFine: null, padroncino: { id: 'p1', ragioneSociale: 'MEN LOGISTIC' } }], tags: [] },
-  { id: '5', targa: 'GM099FB', marca: 'Ford', modello: 'E-TRANSIT', tipo: 'FURGONE', alimentazione: 'ELETTRICO', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: 850, canoneNoleggio: null, kmAttuali: 104209, kmLimite: 130000, scadenzaAssicurazione: '2026-12-01', scadenzaRevisione: '2026-06-20', assegnazioni: [{ id: 'a5', dataInizio: '2025-03-01', dataFine: null, padroncino: { id: 'p2', ragioneSociale: 'DI NARDO' } }], tags: [] },
-  { id: '6', targa: 'GM100FB', marca: 'Ford', modello: 'E-TRANSIT', tipo: 'FURGONE', alimentazione: 'ELETTRICO', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: 930, canoneNoleggio: null, kmAttuali: 84714, kmLimite: 130000, scadenzaAssicurazione: '2026-12-01', scadenzaRevisione: '2026-06-20', assegnazioni: [{ id: 'a6', dataInizio: '2025-03-01', dataFine: null, padroncino: { id: 'p1', ragioneSociale: 'MEN LOGISTIC' } }], tags: [] },
-  { id: '7', targa: 'GR496EZ', marca: 'Ford', modello: 'TRANSIT', tipo: 'FURGONE', alimentazione: 'GASOLIO_MHEV', categoria: 'DISTRIBUZIONE', stato: 'ASSEGNATO', rataNoleggio: 150, canoneNoleggio: null, kmAttuali: 66153, kmLimite: 200000, scadenzaAssicurazione: '2026-10-15', scadenzaRevisione: '2027-07-01', assegnazioni: [{ id: 'a7', dataInizio: '2025-06-01', dataFine: null, padroncino: { id: 'p3', ragioneSociale: 'EL SPEDIZIONI' } }], tags: [] },
-  { id: '8', targa: 'GS610JM', marca: 'Cupra', modello: 'BORN', tipo: 'AUTO', alimentazione: 'ELETTRICO', categoria: 'AUTO_AZIENDALE', stato: 'DISPONIBILE', rataNoleggio: null, canoneNoleggio: null, kmAttuali: 31786, kmLimite: null, scadenzaAssicurazione: '2026-08-15', scadenzaRevisione: '2027-04-01', assegnazioni: [{ id: 'a8', dataInizio: '2025-01-01', dataFine: null, padroncino: { id: 'p4', ragioneSociale: 'Vinicio Altomare' } }], tags: [] },
-];
+const scadenzaLabel = (d: string | null | undefined) => {
+  const diff = daysDiff(d);
+  if (diff === null) return null;
+  if (diff < 0) return { label: `${Math.abs(diff)}gg fa`, cls: 'scad-expired', icon: '⚠️' };
+  if (diff <= 30) return { label: `${diff}gg`, cls: 'scad-warning', icon: '✅' };
+  return { label: `${diff}gg`, cls: 'scad-ok', icon: '✅' };
+};
 
-type StatoFilter = 'TUTTI' | 'DISPONIBILE' | 'ASSEGNATO' | 'IN_REVISIONE' | 'FUORI_SERVIZIO' | 'VENDUTO';
-type CategoriaFilter = 'TUTTI' | 'DISTRIBUZIONE' | 'AUTO_AZIENDALE';
+const kmPercent = (km: number | null, limite: number | null) => {
+  if (!km || !limite) return 0;
+  return Math.min(100, Math.round((km / limite) * 100));
+};
 
+const fmtEur = (n: number | null | undefined) =>
+  n == null ? '—' : n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+
+const STATO_COLORS: Record<string, string> = {
+  ASSEGNATO: 'badge-blue',
+  DISPONIBILE: 'badge-green',
+  IN_REVISIONE: 'badge-yellow',
+  FUORI_SERVIZIO: 'badge-red',
+  VENDUTO: 'badge-gray',
+  DISMESSO: 'badge-gray',
+};
+
+const ALIM_COLORS: Record<string, string> = {
+  GASOLIO: 'tag-gray',
+  ELETTRICO: 'tag-green',
+  'GASOLIO+MHEV': 'tag-blue',
+  BENZINA: 'tag-orange',
+};
+
+// ─── COMPONENTE PRINCIPALE ────────────────────────────
 export default function FlottaMezzi() {
-  const [search, setSearch] = useState('');
-  const [statoFilter, setStatoFilter] = useState<StatoFilter>('TUTTI');
-  const [categoriaFilter, setCategoriaFilter] = useState<CategoriaFilter>('TUTTI');
-  const [showNuovo, setShowNuovo] = useState(false);
-  const stats = MOCK_STATS;
+  const navigate = useNavigate();
 
-  const filteredMezzi = useMemo(() => {
-    return MOCK_MEZZI.filter((m) => {
-      if (statoFilter !== 'TUTTI' && m.stato !== statoFilter) return false;
-      if (categoriaFilter !== 'TUTTI' && m.categoria !== categoriaFilter) return false;
-      if (search) {
-        const s = search.toLowerCase();
-        return (
-          m.targa.toLowerCase().includes(s) ||
-          m.marca.toLowerCase().includes(s) ||
-          m.modello.toLowerCase().includes(s) ||
-          m.assegnazioni?.[0]?.padroncino.ragioneSociale.toLowerCase().includes(s)
-        );
-      }
-      return true;
+  const [mezzi, setMezzi] = useState<Mezzo[]>([]);
+  const [stats, setStats] = useState<MezziStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [filtroStato, setFiltroStato] = useState('TUTTI');
+  const [filtroCategoria, setFiltroCategoria] = useState('TUTTI');
+  const [nuovoOpen, setNuovoOpen] = useState(false);
+
+  // ─── Fetch dati ─────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [listResp, statsResp] = await Promise.all([
+        mezziApi.list({ limit: '200' }),
+        mezziApi.stats(),
+      ]);
+      setMezzi(listResp.data);
+      setStats(statsResp);
+    } catch (e: any) {
+      setError(e.message || 'Errore caricamento dati');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ─── Filtri ──────────────────────────────────────────
+  const STATI = ['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'IN_REVISIONE', 'FUORI_SERVIZIO', 'VENDUTO'];
+  const CATEGORIE = ['TUTTI', 'DISTRIB.', 'AUTO AZ.'];
+
+  const filtered = useMemo(() => {
+    return mezzi.filter((m) => {
+      const s = search.toLowerCase();
+      const matchSearch =
+        m.targa.toLowerCase().includes(s) ||
+        m.marca.toLowerCase().includes(s) ||
+        m.modello.toLowerCase().includes(s) ||
+        (m.assegnazioni?.[0]?.padroncino.ragioneSociale ?? '').toLowerCase().includes(s);
+      const matchStato =
+        filtroStato === 'TUTTI' || m.stato.toUpperCase() === filtroStato.replace(' ', '_');
+      const matchCat =
+        filtroCategoria === 'TUTTI' ||
+        (filtroCategoria === 'DISTRIB.' && m.categoria?.toLowerCase().includes('distrib')) ||
+        (filtroCategoria === 'AUTO AZ.' && m.categoria?.toLowerCase().includes('auto'));
+      return matchSearch && matchStato && matchCat;
     });
-  }, [search, statoFilter, categoriaFilter]);
+  }, [mezzi, search, filtroStato, filtroCategoria]);
+
+  // ─── Conteggio scadenze ──────────────────────────────
+  const scadenzeCount = useMemo(
+    () => mezzi.filter((m) => {
+      const d1 = daysDiff(m.scadenzaAssicurazione);
+      const d2 = daysDiff(m.scadenzaRevisione);
+      return (d1 !== null && d1 <= 30) || (d2 !== null && d2 <= 30);
+    }).length,
+    [mezzi]
+  );
+
+  // ─── Crea mezzo ─────────────────────────────────────
+  const handleCreate = async (form: NuovoMezzo) => {
+    try {
+      await mezziApi.create({
+        targa: form.targa.toUpperCase(),
+        marca: form.marca,
+        modello: form.modello,
+        tipo: form.tipo,
+        alimentazione: form.alimentazione,
+        categoria: form.categoria,
+        kmAttuali: form.kmAttuali ? parseInt(form.kmAttuali) : undefined,
+        kmLimite: form.kmLimite ? parseInt(form.kmLimite) : undefined,
+        rataNoleggio: form.rataNoleggio ? parseFloat(form.rataNoleggio) : undefined,
+        canoneNoleggio: form.canoneNoleggio ? parseFloat(form.canoneNoleggio) : undefined,
+        scadenzaAssicurazione: form.scadenzaAssicurazione || undefined,
+        scadenzaRevisione: form.scadenzaRevisione || undefined,
+        scadenzaBollo: form.scadenzaBollo || undefined,
+        proprietario: form.societaNoleggio || undefined,
+        inizioNoleggio: form.inizioNoleggio || undefined,
+        fineNoleggio: form.fineNoleggio || undefined,
+        note: form.note || undefined,
+      });
+      await loadData();
+    } catch (e: any) {
+      alert('Errore creazione mezzo: ' + e.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="fm-page">
+        <div className="fm-loading">
+          <div className="fm-spinner" />
+          <span>Caricamento flotta...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="fm-page">
+        <div className="fm-error">
+          <span>⚠️ {error}</span>
+          <button className="btn-primary" onClick={loadData}>Riprova</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flotta-page">
-      {/* Header */}
-      <div className="page-header">
+    <div className="fm-page">
+      {/* ── HEADER ── */}
+      <div className="fm-header">
         <h1>Flotta Mezzi</h1>
-        <div className="header-actions">
-          <button className="btn-ghost">
-            <WarningIcon /> 3 DURC scaduti
-          </button>
-          <button className="btn-ghost">
-            <SearchIcon /> Cerca
-          </button>
+        <div className="fm-header-actions">
+          {scadenzeCount > 0 && (
+            <span className="fm-durc-badge">
+              ⚠️ {scadenzeCount} mezzo/i con scadenze entro 30 giorni
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <StatCard label="TOTALI" value={stats.totali} sub={`${stats.assegnati} assegnati`} icon="🚛" />
-        <StatCard label="DISPONIBILI" value={stats.disponibili} sub="pronti" icon="✅" />
-        <StatCard
-          label="ENTRATE NOLEGGIO"
-          value={`${stats.entrateNoleggio.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €`}
-          sub="mensile"
-          variant="warning"
-        />
-        <StatCard
-          label="MARGINE"
-          value={`${stats.margine.toLocaleString('it-IT', { minimumFractionDigits: 2 })} €`}
-          sub="rata – canone"
-          variant={stats.margine < 0 ? 'danger' : 'success'}
-        />
+      {/* ── STATS ── */}
+      <div className="fm-stats-row">
+        <div className="fm-stat-card">
+          <div className="fm-stat-icon">🚚</div>
+          <div>
+            <div className="fm-stat-val">{stats?.totali ?? mezzi.length}</div>
+            <div className="fm-stat-label">TOTALI</div>
+            <div className="fm-stat-sub">{stats?.assegnati ?? 0} assegnati</div>
+          </div>
+        </div>
+        <div className="fm-stat-card">
+          <div className="fm-stat-icon fm-stat-icon-green">🚚</div>
+          <div>
+            <div className="fm-stat-val">{stats?.disponibili ?? 0}</div>
+            <div className="fm-stat-label">DISPONIBILI</div>
+            <div className="fm-stat-sub">pronti</div>
+          </div>
+        </div>
+        <div className="fm-stat-card">
+          <div>
+            <div className="fm-stat-val">{fmtEur(stats?.entrateNoleggio ?? null)}</div>
+            <div className="fm-stat-label">ENTRATE NOLEGGIO</div>
+            <div className="fm-stat-sub">mensile</div>
+          </div>
+          <div className="fm-stat-expand">⊞</div>
+        </div>
+        <div className="fm-stat-card">
+          <div>
+            <div className={`fm-stat-val ${(stats?.margine ?? 0) < 0 ? 'fm-stat-negative' : ''}`}>
+              {fmtEur(stats?.margine ?? null)}
+            </div>
+            <div className="fm-stat-label">MARGINE</div>
+            <div className="fm-stat-sub">rata – canone</div>
+          </div>
+          <div className="fm-stat-expand">⊞</div>
+        </div>
       </div>
 
-      {/* Alert scadenze */}
-      {stats.scadenzeImminenti > 0 && (
-        <div className="alert-bar">
-          <WarningIcon /> {stats.scadenzeImminenti} mezzo/i con scadenze entro 30 giorni
+      {/* ── ALERT SCADENZE ── */}
+      {scadenzeCount > 0 && (
+        <div className="fm-alert-banner">
+          ⚠️ {scadenzeCount} mezzo/i con scadenze entro 30 giorni
         </div>
       )}
 
-      {/* Filtri */}
-      <div className="filters-bar">
-        <div className="search-input">
-          <SearchIcon />
+      {/* ── TOOLBAR ── */}
+      <div className="fm-toolbar">
+        <div className="fm-search-wrap">
+          <span className="fm-search-icon">🔍</span>
           <input
-            type="text"
+            className="fm-search"
             placeholder="Cerca targa, marca, modello, padroncino..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="filter-chips">
-          {(['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'IN_REVISIONE', 'FUORI_SERVIZIO', 'VENDUTO'] as StatoFilter[]).map(
-            (s) => (
-              <button
-                key={s}
-                className={`chip ${statoFilter === s ? 'chip-active' : ''}`}
-                onClick={() => setStatoFilter(s)}
-              >
-                {s === 'TUTTI' ? 'Tutti' : s.replace('_', ' ')}
-              </button>
-            ),
-          )}
-        </div>
-
-        <div className="filter-chips">
-          {(['TUTTI', 'DISTRIBUZIONE', 'AUTO_AZIENDALE'] as CategoriaFilter[]).map((c) => (
+        <div className="fm-filters">
+          {STATI.map((s) => (
             <button
-              key={c}
-              className={`chip chip-categoria ${categoriaFilter === c ? 'chip-active' : ''}`}
-              onClick={() => setCategoriaFilter(c)}
+              key={s}
+              className={`fm-filter-btn ${filtroStato === s ? 'fm-filter-active' : ''}`}
+              onClick={() => setFiltroStato(s)}
             >
-              {c === 'TUTTI' ? 'Tutti' : c === 'DISTRIBUZIONE' ? '🟣 Distrib.' : '🟢 Auto Az.'}
+              {s === 'TUTTI' ? 'TUTTI' : s.replace('_', ' ')}
             </button>
           ))}
         </div>
 
-        <div className="filter-actions">
-          <button className="btn-primary" onClick={() => setShowNuovo(true)}>+ Distribuzione</button>
-          <NuovoMezzoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={(d) => console.log(d)} />
-          <button className="btn-outline">+ Auto Aziendale</button>
-          <button className="btn-ghost">📥 Importa Excel</button>
+        <div className="fm-cat-filters">
+          <button
+            className={`fm-cat-btn fm-cat-all ${filtroCategoria === 'TUTTI' ? 'fm-cat-active' : ''}`}
+            onClick={() => setFiltroCategoria('TUTTI')}
+          >TUTTI</button>
+          <button
+            className={`fm-cat-btn fm-cat-distrib ${filtroCategoria === 'DISTRIB.' ? 'fm-cat-active' : ''}`}
+            onClick={() => setFiltroCategoria('DISTRIB.')}
+          >🚛 DISTRIB.</button>
+          <button
+            className={`fm-cat-btn fm-cat-auto ${filtroCategoria === 'AUTO AZ.' ? 'fm-cat-active' : ''}`}
+            onClick={() => setFiltroCategoria('AUTO AZ.')}
+          >🚗 AUTO AZ.</button>
+        </div>
+
+        <div className="fm-actions">
+          <button className="btn-primary" onClick={() => setNuovoOpen(true)}>
+            + Distribuzione
+          </button>
+          <button className="btn-outline" onClick={() => {}}>
+            + Auto Aziendale
+          </button>
+          <button className="btn-outline" onClick={() => {}}>
+            📥 Importa Excel
+          </button>
         </div>
       </div>
 
-      {/* Tabella */}
-      <div className="table-container">
-        <table>
+      {/* ── TABELLA ── */}
+      <div className="fm-table-wrap">
+        <table className="fm-table">
           <thead>
             <tr>
-              <th>TARGA</th>
-              <th>MARCA/MODELLO</th>
+              <th>TARGA ↕</th>
+              <th>MARCA/MODELLO ↕</th>
               <th>TIPO</th>
               <th>STATO</th>
               <th>PADRONCINO</th>
@@ -156,140 +294,104 @@ export default function FlottaMezzi() {
             </tr>
           </thead>
           <tbody>
-            {filteredMezzi.map((mezzo) => (
-              <MezzoRow key={mezzo.id} mezzo={mezzo} />
-            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={11} className="fm-empty-row">Nessun mezzo trovato</td>
+              </tr>
+            )}
+            {filtered.map((m) => {
+              const padroncino = m.assegnazioni?.find((a) => !a.dataFine)?.padroncino;
+              const assicInfo = scadenzaLabel(m.scadenzaAssicurazione);
+              const revInfo = scadenzaLabel(m.scadenzaRevisione);
+              const kmPct = kmPercent(m.kmAttuali, m.kmLimite);
+              const kmColor = kmPct >= 90 ? 'km-bar-red' : kmPct >= 70 ? 'km-bar-orange' : kmPct >= 40 ? 'km-bar-yellow' : 'km-bar-green';
+              const alimKey = (m.alimentazione || '').toUpperCase().replace(/ /g, '+');
+              return (
+                <tr key={m.id} className="fm-row">
+                  <td>
+                    <div className="fm-targa-cell">
+                      <span className="fm-targa">{m.targa}</span>
+                      {m.categoria && (
+                        <span className={`fm-cat-tag ${ALIM_COLORS[alimKey] || 'tag-gray'}`}>
+                          {m.categoria.startsWith('DISTRIB') ? '🚛 DISTRIB.' : '🚗 AUTO AZ.'}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="fm-marca-cell">
+                      <span className="fm-marca">{m.marca}</span>
+                      <span className="fm-modello-tag"> {m.modello}</span>
+                      <span className="fm-alim"> · {m.alimentazione}</span>
+                    </div>
+                  </td>
+                  <td>{m.tipo || 'Furgone'}</td>
+                  <td>
+                    <span className={`fm-badge ${STATO_COLORS[m.stato.toUpperCase()] || 'badge-gray'}`}>
+                      {m.stato}
+                    </span>
+                  </td>
+                  <td>
+                    {padroncino ? (
+                      <span className="fm-padroncino">{padroncino.ragioneSociale}</span>
+                    ) : (
+                      <span className="fm-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {assicInfo ? (
+                      <span className={`fm-scad ${assicInfo.cls}`}>
+                        {assicInfo.icon} {assicInfo.label}
+                      </span>
+                    ) : <span className="fm-empty">—</span>}
+                  </td>
+                  <td>
+                    {revInfo ? (
+                      <span className={`fm-scad ${revInfo.cls}`}>
+                        {revInfo.icon} {revInfo.label}
+                      </span>
+                    ) : <span className="fm-empty">—</span>}
+                  </td>
+                  <td>
+                    {m.rataNoleggio ? fmtEur(m.rataNoleggio) : <span className="fm-empty">—</span>}
+                  </td>
+                  <td>
+                    {m.kmAttuali != null
+                      ? m.kmAttuali.toLocaleString('it-IT')
+                      : <span className="fm-empty">—</span>}
+                  </td>
+                  <td>
+                    {m.kmLimite ? (
+                      <div className="fm-km-cell">
+                        <div className="fm-km-bar-bg">
+                          <div
+                            className={`fm-km-bar-fill ${kmColor}`}
+                            style={{ width: `${kmPct}%` }}
+                          />
+                        </div>
+                        <span className={`fm-km-pct ${kmColor.replace('bar', 'text')}`}>{kmPct}%</span>
+                      </div>
+                    ) : <span className="fm-empty">—</span>}
+                  </td>
+                  <td>
+                    <div className="fm-row-actions">
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={() => navigate(`/flotta/${m.id}`)}
+                      >
+                        Dettaglio
+                      </button>
+                      <button className="fm-doc-btn">📄</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      <NuovoMezzoModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />
     </div>
-  );
-}
-
-// ─── COMPONENTS ───────────────────────────────────────
-
-function StatCard({
-  label, value, sub, icon, variant,
-}: {
-  label: string; value: string | number; sub: string; icon?: string; variant?: string;
-}) {
-  return (
-    <div className={`stat-card ${variant ? `stat-${variant}` : ''}`}>
-      <div className="stat-header">
-        <span className="stat-label">{label}</span>
-        {icon && <span className="stat-icon">{icon}</span>}
-      </div>
-      <div className="stat-value">{value}</div>
-      <div className="stat-sub">{sub}</div>
-    </div>
-  );
-}
-
-function MezzoRow({ mezzo }: { mezzo: Mezzo }) {
-  const padroncino = mezzo.assegnazioni?.[0]?.padroncino;
-  const kmPercent = mezzo.kmLimite ? Math.round((mezzo.kmAttuali || 0) / mezzo.kmLimite * 100) : null;
-
-  const alimentazioneLabel = ({
-    GASOLIO: 'Gasolio',
-    ELETTRICO: 'Elettrico',
-    GASOLIO_MHEV: 'Gasolio+mhev',
-    BENZINA: 'Benzina',
-    IBRIDO: 'Ibrido',
-  } as Record<string, string>)[mezzo.alimentazione] || mezzo.alimentazione;
-
-  const scadAssicurazione = mezzo.scadenzaAssicurazione ? formatScadenza(mezzo.scadenzaAssicurazione) : null;
-  const scadRevisione = mezzo.scadenzaRevisione ? formatScadenza(mezzo.scadenzaRevisione) : null;
-
-  return (
-    <tr>
-      <td>
-        <div className="targa-cell">
-          <span className="targa">{mezzo.targa}</span>
-          <span className={`cat-badge cat-${mezzo.categoria.toLowerCase()}`}>
-            {mezzo.categoria === 'DISTRIBUZIONE' ? 'DISTRIB.' : 'AUTO AZ.'}
-          </span>
-        </div>
-      </td>
-      <td>
-        <div className="marca-cell">
-          <span className="marca">{mezzo.marca} {mezzo.modello}</span>
-          <span className="alimentazione">• {alimentazioneLabel}</span>
-        </div>
-      </td>
-      <td className="text-muted">{mezzo.tipo === 'FURGONE' ? 'Furgone' : mezzo.tipo === 'AUTO' ? 'Auto' : mezzo.tipo}</td>
-      <td><StatoBadge stato={mezzo.stato} /></td>
-      <td className="padroncino-cell">{padroncino?.ragioneSociale || '—'}</td>
-      <td>{scadAssicurazione ? <ScadenzaBadge {...scadAssicurazione} /> : '—'}</td>
-      <td>{scadRevisione ? <ScadenzaBadge {...scadRevisione} /> : '—'}</td>
-      <td className="text-right">{mezzo.rataNoleggio ? `${mezzo.rataNoleggio.toLocaleString('it-IT')} €` : '—'}</td>
-      <td className="text-right mono">{mezzo.kmAttuali?.toLocaleString('it-IT') || '—'}</td>
-      <td>
-        {kmPercent !== null && (
-          <div className="km-bar-container">
-            <div
-              className={`km-bar ${kmPercent > 80 ? 'km-danger' : kmPercent > 60 ? 'km-warning' : 'km-ok'}`}
-              style={{ width: `${Math.min(kmPercent, 100)}%` }}
-            />
-            <span className="km-label">{kmPercent}%</span>
-          </div>
-        )}
-      </td>
-      <td>
-        <button className="btn-detail">Dettaglio</button>
-      </td>
-    </tr>
-  );
-}
-
-function StatoBadge({ stato }: { stato: string }) {
-  const config: Record<string, { label: string; cls: string }> = {
-    ASSEGNATO: { label: 'ASSEGNATO', cls: 'badge-green' },
-    DISPONIBILE: { label: 'DISPONIBILE', cls: 'badge-blue' },
-    DISMESSO: { label: 'DISMESSO', cls: 'badge-gray' },
-    IN_REVISIONE: { label: 'IN REVISIONE', cls: 'badge-orange' },
-    FUORI_SERVIZIO: { label: 'FUORI SERVIZIO', cls: 'badge-red' },
-    VENDUTO: { label: 'VENDUTO', cls: 'badge-gray' },
-  };
-  const c = config[stato] || { label: stato, cls: 'badge-gray' };
-  return <span className={`badge ${c.cls}`}>{c.label}</span>;
-}
-
-function ScadenzaBadge({ label, variant }: { label: string; variant: string }) {
-  const icon = variant === 'danger' ? '⚠️' : variant === 'warning' ? '⚠️' : '✅';
-  return (
-    <span className={`scadenza-badge scadenza-${variant}`}>
-      {icon} {label}
-    </span>
-  );
-}
-
-function formatScadenza(dateStr: string): { label: string; variant: string } {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diff = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diff < 0) return { label: `${Math.abs(diff)}gg fa`, variant: 'danger' };
-  if (diff <= 30) return { label: `${diff}gg`, variant: 'warning' };
-  if (diff <= 90) return { label: `${diff}gg`, variant: 'info' };
-  return { label: `${diff}gg`, variant: 'ok' };
-}
-
-// ─── ICONS ────────────────────────────────────────────
-function SearchIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
-
-function WarningIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
   );
 }

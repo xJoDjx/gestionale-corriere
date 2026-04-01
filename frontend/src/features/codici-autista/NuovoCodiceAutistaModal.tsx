@@ -12,10 +12,16 @@ export interface NuovoCodiceAutista {
   codice: string;
   nome: string;
   cognome: string;
+  tariffaFissa: string;
+  tariffaRitiro: string;
+  target: string;
   note: string;
 }
 
-const EMPTY: NuovoCodiceAutista = { codice: '', nome: '', cognome: '', note: '' };
+const EMPTY: NuovoCodiceAutista = {
+  codice: '', nome: '', cognome: '',
+  tariffaFissa: '', tariffaRitiro: '', target: '', note: '',
+};
 
 export default function NuovoCodiceAutistaModal({ open, onClose, onSave }: Props) {
   const [form, setForm] = useState<NuovoCodiceAutista>(EMPTY);
@@ -29,8 +35,6 @@ export default function NuovoCodiceAutistaModal({ open, onClose, onSave }: Props
   const validate = () => {
     const e: Partial<Record<keyof NuovoCodiceAutista, string>> = {};
     if (!form.codice.trim()) e.codice = 'Obbligatorio';
-    if (!form.nome.trim()) e.nome = 'Obbligatorio';
-    if (!form.cognome.trim()) e.cognome = 'Obbligatorio';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -42,46 +46,57 @@ export default function NuovoCodiceAutistaModal({ open, onClose, onSave }: Props
     onClose();
   };
 
-  const handleClose = () => { setForm(EMPTY); setErrors({}); onClose(); };
-
   return (
-    <Modal open={open} onClose={handleClose} title="Nuovo Codice Autista" subtitle="Crea un nuovo codice identificativo autista" width={520}>
+    <Modal open={open} onClose={() => { setForm(EMPTY); setErrors({}); onClose(); }} title="Nuovo Codice Autista" subtitle="Aggiungi un codice autista" width={500}>
       <div className="form-grid">
         <span className="form-section-title">DATI AUTISTA</span>
-
-        <div className="form-field span-2">
-          <label className="form-label">Codice autista <span className="req">*</span></label>
+        <div className="form-field">
+          <label className="form-label">Codice <span className="req">*</span></label>
           <input
             className={`form-input ${errors.codice ? 'input-error' : ''}`}
+            placeholder="es. 5001"
             value={form.codice}
-            onChange={(e) => set('codice', e.target.value.toUpperCase())}
-            placeholder="AUT009"
-            style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '16px', letterSpacing: '0.05em' }}
+            onChange={(e) => set('codice', e.target.value)}
           />
           {errors.codice && <span className="field-error">{errors.codice}</span>}
         </div>
 
+        <div className="form-row-2">
+          <div className="form-field">
+            <label className="form-label">Nome</label>
+            <input className="form-input" value={form.nome} onChange={(e) => set('nome', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label className="form-label">Cognome</label>
+            <input className="form-input" value={form.cognome} onChange={(e) => set('cognome', e.target.value)} />
+          </div>
+        </div>
+
+        <span className="form-section-title">TARIFFE</span>
+        <div className="form-row-2">
+          <div className="form-field">
+            <label className="form-label">Tariffa Fissa (€)</label>
+            <input className="form-input" type="number" placeholder="es. 155.00" value={form.tariffaFissa} onChange={(e) => set('tariffaFissa', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label className="form-label">Tariffa Ritiro (€)</label>
+            <input className="form-input" type="number" placeholder="es. 1.00" value={form.tariffaRitiro} onChange={(e) => set('tariffaRitiro', e.target.value)} />
+          </div>
+        </div>
         <div className="form-field">
-          <label className="form-label">Nome <span className="req">*</span></label>
-          <input className={`form-input ${errors.nome ? 'input-error' : ''}`} value={form.nome} onChange={(e) => set('nome', e.target.value)} placeholder="Mario" />
-          {errors.nome && <span className="field-error">{errors.nome}</span>}
+          <label className="form-label">Target</label>
+          <input className="form-input" type="number" placeholder="es. 100" value={form.target} onChange={(e) => set('target', e.target.value)} />
         </div>
 
         <div className="form-field">
-          <label className="form-label">Cognome <span className="req">*</span></label>
-          <input className={`form-input ${errors.cognome ? 'input-error' : ''}`} value={form.cognome} onChange={(e) => set('cognome', e.target.value)} placeholder="Rossi" />
-          {errors.cognome && <span className="field-error">{errors.cognome}</span>}
-        </div>
-
-        <div className="form-field span-2">
           <label className="form-label">Note</label>
-          <textarea className="form-textarea" value={form.note} onChange={(e) => set('note', e.target.value)} placeholder="Note sull'autista…" rows={3} />
+          <textarea className="form-input" rows={2} value={form.note} onChange={(e) => set('note', e.target.value)} />
         </div>
       </div>
 
-      <div className="form-actions">
-        <button className="btn-outline" onClick={handleClose}>Annulla</button>
-        <button className="btn-primary" onClick={handleSave}>💾 Salva Codice</button>
+      <div className="modal-actions">
+        <button className="btn-outline" onClick={() => { setForm(EMPTY); setErrors({}); onClose(); }}>Annulla</button>
+        <button className="btn-primary" onClick={handleSave}>Salva</button>
       </div>
     </Modal>
   );

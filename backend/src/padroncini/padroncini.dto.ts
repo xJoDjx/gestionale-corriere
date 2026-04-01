@@ -22,4 +22,5 @@ export class QueryPadronciniDto {
   @IsOptional() @IsBoolean() @Type(() => Boolean) attivo?: boolean;
   @IsOptional() @Type(() => Number) page?: number;
   @IsOptional() @Type(() => Number) limit?: number;
+  @IsOptional() @IsString() include?: string;
 }

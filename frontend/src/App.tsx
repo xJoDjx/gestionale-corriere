@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Dashboard from './features/dashboard/Dashboard';
 import FlottaMezzi from './features/mezzi/FlottaMezzi';
+import DettaglioMezzo from './features/mezzi/DettaglioMezzo';
 import ConteggiMensili from './features/conteggi/ConteggiMensili';
 import PadronciniPage from './features/padroncini/Padroncini';
 import PalmariPage from './features/palmari/Palmari';
@@ -34,6 +35,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/flotta" element={<FlottaMezzi />} />
+          <Route path="/flotta/:id" element={<DettaglioMezzo />} />
           <Route path="/conteggi" element={<ConteggiMensili />} />
           <Route path="/padroncini" element={<PadronciniPage />} />
           <Route path="/palmari" element={<PalmariPage />} />

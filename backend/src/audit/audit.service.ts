@@ -5,7 +5,7 @@ export interface AuditPayload {
   userId: string;
   entityType: string;
   entityId: string;
-  azione: 'CREATE' | 'UPDATE' | 'DELETE';
+  azione: 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSEGNA' | 'CHIUDI_ASSEGNAZIONE';
   dataPrima?: Record<string, any>;
   dataDopo?: Record<string, any>;
 }
