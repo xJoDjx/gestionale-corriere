@@ -1,4 +1,10 @@
-import { Controller, Get, Post, Put, Delete, Param, Query, Body } from '@nestjs/common';
+import {
+  Controller, Get, Post, Put, Delete, Param, Query, Body,
+  UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { PadronciniService } from './padroncini.service';
 import { CreatePadroncinoDto, UpdatePadroncinoDto, QueryPadronciniDto } from './padroncini.dto';
 
@@ -95,5 +101,62 @@ export class PadronciniController {
     @Param('assegnazioneId') assegnazioneId: string,
   ) {
     return this.service.rimuoviCodice(padroncinoId, assegnazioneId, 'system');
+  }
+
+  // ─── DOCUMENTI ─────────────────────────────────────────────────
+  @Get(':id/documenti')
+  getDocumenti(@Param('id') id: string) {
+    return this.service.getDocumenti(id);
+  }
+
+  @Post(':id/documenti')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/padroncini',
+        filename: (_req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+      limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+      fileFilter: (_req, file, cb) => {
+        const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xls', '.xlsx'];
+        const ext = extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Tipo file non supportato'), false);
+        }
+      },
+    }),
+  )
+  async addDocumento(
+    @Param('id') padroncinoId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { nome?: string; tipo: string; scadenza?: string; note?: string },
+  ) {
+    if (!file) throw new BadRequestException('File obbligatorio');
+    return this.service.addDocumento(
+      padroncinoId,
+      {
+        nome: body.nome || file.originalname,
+        tipo: body.tipo,
+        filePath: file.path,
+        mimeType: file.mimetype,
+        dimensione: file.size,
+        scadenza: body.scadenza,
+        note: body.note,
+      },
+      'system',
+    );
+  }
+
+  @Delete(':id/documenti/:documentoId')
+  removeDocumento(
+    @Param('id') padroncinoId: string,
+    @Param('documentoId') documentoId: string,
+  ) {
+    return this.service.removeDocumento(padroncinoId, documentoId, 'system');
   }
 }

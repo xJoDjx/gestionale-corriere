@@ -7,3 +7,4 @@ dist/
 # Ignora eventuali file log o configurazioni locali
 .DS_Store
 .env
+.pdf

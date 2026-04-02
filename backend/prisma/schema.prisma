@@ -120,11 +120,6 @@ model Mezzo {
   deletedAt DateTime? @map("deleted_at")
 
   assegnazioni  AssegnazioneMezzo[]
-  documenti     Documento[]         @relation("DocumentiMezzo")
-  tags          Tag[]               @relation("TagMezzo")
-  noteEntita    Nota[]              @relation("NoteMezzo")
-  conteggiRighe ConteggiRiga[]      @relation("RigheMezzo")
-
   ricaricheElettriche RicaricaElettrica[]
 
   @@index([stato])
@@ -204,6 +199,7 @@ model Padroncino {
   // Scadenze documenti
   scadenzaDurc DateTime? @map("scadenza_durc")
   scadenzaDvr  DateTime? @map("scadenza_dvr")
+  dvrEsente  Boolean   @default(false) @map("dvr_esente")
 
   attivo    Boolean   @default(true)
   note      String?
@@ -215,10 +211,6 @@ model Padroncino {
   assegnazioniPalmari AssegnazionePalmare[]
   codiciAutista       AssegnazioneCodiceAutista[]
   conteggiMensili     ConteggioMensile[]
-  documenti           Documento[]                 @relation("DocumentiPadroncino")
-  tags                Tag[]                       @relation("TagPadroncino")
-  noteEntita          Nota[]                      @relation("NotePadroncino")
-
   ricaricheElettriche RicaricaElettrica[]
 
   @@index([deletedAt])
@@ -244,9 +236,6 @@ model Palmare {
   deletedAt      DateTime?    @map("deleted_at")
 
   assegnazioni  AssegnazionePalmare[]
-  documenti     Documento[]           @relation("DocumentiPalmare")
-  tags          Tag[]                 @relation("TagPalmare")
-  conteggiRighe ConteggiRiga[]        @relation("RighePalmare")
 
   @@index([deletedAt])
   @@map("palmari")
@@ -339,7 +328,6 @@ model Acconto {
   deletedAt       DateTime? @map("deleted_at")
 
   codiceAutista CodiceAutista  @relation(fields: [codiceAutistaId], references: [id])
-  conteggiRighe ConteggiRiga[] @relation("RigheAcconto")
 
   @@index([codiceAutistaId])
   @@index([mese])
@@ -395,11 +383,6 @@ model ConteggiRiga {
 
   conteggioMensile ConteggioMensile @relation(fields: [conteggioMensileId], references: [id], onDelete: Cascade)
 
-  // Relazioni opzionali per riferimenti
-  mezzo   Mezzo?   @relation("RigheMezzo", fields: [riferimentoId], references: [id], map: "fk_righe_mezzo")
-  palmare Palmare? @relation("RighePalmare", fields: [riferimentoId], references: [id], map: "fk_righe_palmare")
-  acconto Acconto? @relation("RigheAcconto", fields: [riferimentoId], references: [id], map: "fk_righe_acconto")
-
   @@index([conteggioMensileId])
   @@index([tipo])
   @@map("conteggi_righe")
@@ -419,20 +402,15 @@ model Documento {
   entityType String    @map("entity_type") // "mezzo", "padroncino", "palmare"
   entityId   String    @map("entity_id")
   nome       String
-  tipo       String? // "DURC", "DVR", "ASSICURAZIONE", etc.
+  tipo       String?   // "DURC", "DVR", "CONTRATTO", etc.
   filePath   String    @map("file_path")
   mimeType   String?   @map("mime_type")
-  dimensione Int? // bytes
+  dimensione Int?
   scadenza   DateTime?
   note       String?
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
   deletedAt  DateTime? @map("deleted_at")
-
-  // Relazioni polimorfiche
-  mezzo      Mezzo?      @relation("DocumentiMezzo", fields: [entityId], references: [id], map: "fk_doc_mezzo")
-  padroncino Padroncino? @relation("DocumentiPadroncino", fields: [entityId], references: [id], map: "fk_doc_padroncino")
-  palmare    Palmare?    @relation("DocumentiPalmare", fields: [entityId], references: [id], map: "fk_doc_palmare")
 
   @@index([entityType, entityId])
   @@index([scadenza])
@@ -451,13 +429,10 @@ model Tag {
   nome       String
   colore     String? @default("#6366f1")
 
-  mezzo      Mezzo?      @relation("TagMezzo", fields: [entityId], references: [id], map: "fk_tag_mezzo")
-  padroncino Padroncino? @relation("TagPadroncino", fields: [entityId], references: [id], map: "fk_tag_padroncino")
-  palmare    Palmare?    @relation("TagPalmare", fields: [entityId], references: [id], map: "fk_tag_palmare")
-
   @@index([entityType, entityId])
   @@map("tags")
 }
+
 
 model Nota {
   id         String   @id @default(cuid())
@@ -465,9 +440,6 @@ model Nota {
   entityId   String   @map("entity_id")
   contenuto  String
   createdAt  DateTime @default(now()) @map("created_at")
-
-  mezzo      Mezzo?      @relation("NoteMezzo", fields: [entityId], references: [id], map: "fk_nota_mezzo")
-  padroncino Padroncino? @relation("NotePadroncino", fields: [entityId], references: [id], map: "fk_nota_padroncino")
 
   @@index([entityType, entityId])
   @@map("note")

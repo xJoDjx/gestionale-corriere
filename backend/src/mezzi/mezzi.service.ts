@@ -10,29 +10,28 @@ export class MezziService {
     private audit: AuditService,
   ) {}
 
-  // ─── Normalizza DTO: mappa alias frontend → campi schema ───
-private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
-  const { proprietario, nContratto, ...rest } = dto as any;
-  const data: Record<string, any> = { ...rest };
+  // ─── Normalizza DTO ─────────────────────────────────
+  private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
+    const { proprietario, nContratto, ...rest } = dto as any;
+    const data: Record<string, any> = { ...rest };
 
-  if (proprietario && !data.societaNoleggio) data.societaNoleggio = proprietario;
-  if (nContratto && !data.riferimentoContratto) data.riferimentoContratto = nContratto;
-  delete data.proprietario;
-  delete data.nContratto;
+    if (proprietario && !data.societaNoleggio) data.societaNoleggio = proprietario;
+    if (nContratto && !data.riferimentoContratto) data.riferimentoContratto = nContratto;
+    delete data.proprietario;
+    delete data.nContratto;
 
-  const dateFields = [
-    'scadenzaAssicurazione', 'scadenzaRevisione', 'scadenzaBollo',
-    'scadenzaTagliando', 'scadenzaTachigrafo', 'inizioNoleggio', 'fineNoleggio',
-  ];
-  for (const field of dateFields) {
-    if (data[field] && typeof data[field] === 'string' && data[field].length === 10) {
-      // "2026-05-02" → "2026-05-02T00:00:00.000Z"
-      data[field] = new Date(data[field] + 'T00:00:00.000Z');
+    const dateFields = [
+      'scadenzaAssicurazione', 'scadenzaRevisione', 'scadenzaBollo',
+      'scadenzaTagliando', 'scadenzaTachigrafo', 'inizioNoleggio', 'fineNoleggio',
+    ];
+    for (const field of dateFields) {
+      if (data[field] && typeof data[field] === 'string' && data[field].length === 10) {
+        data[field] = new Date(data[field] + 'T00:00:00.000Z');
+      }
     }
-  }
 
-  return data;
-}
+    return data;
+  }
 
   // ─── LIST ────────────────────────────────────────────
   async findAll(query: QueryMezziDto) {
@@ -64,7 +63,7 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
             orderBy: { dataInizio: 'desc' },
             take: 1,
           },
-          tags: true,
+          // tags e documenti rimossi dallo schema (relazioni polimorfiche eliminate)
         },
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
@@ -73,13 +72,7 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
       this.prisma.mezzo.count({ where }),
     ]);
 
-    return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   // ─── STATS ──────────────────────────────────────────
@@ -103,17 +96,11 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
       }),
     ]);
 
-    const entrateNoleggio = canoniRaw.reduce(
-      (s, m) => s + Number(m.canoneNoleggio ?? 0), 0,
-    );
-    const canoniNoleggio = canoniRaw.reduce(
-      (s, m) => s + Number(m.rataNoleggio ?? 0), 0,
-    );
+    const entrateNoleggio = canoniRaw.reduce((s, m) => s + Number(m.canoneNoleggio ?? 0), 0);
+    const canoniNoleggio  = canoniRaw.reduce((s, m) => s + Number(m.rataNoleggio   ?? 0), 0);
 
     return {
-      totali,
-      disponibili,
-      assegnati,
+      totali, disponibili, assegnati,
       entrateNoleggio,
       margine: entrateNoleggio - canoniNoleggio,
       scadenzeImminenti,
@@ -121,7 +108,7 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
   }
 
   // ─── SCADENZE ───────────────────────────────────────
-  async getScadenze(giorni: number = 30) {
+  async getScadenze(giorni = 30) {
     const entro = new Date(Date.now() + giorni * 86400000);
     return this.prisma.mezzo.findMany({
       where: {
@@ -154,9 +141,7 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
           include: { padroncino: { select: { id: true, ragioneSociale: true } } },
           orderBy: { dataInizio: 'desc' },
         },
-        documenti: { where: { deletedAt: null } },
-        tags: true,
-        noteEntita: { orderBy: { createdAt: 'desc' } },
+        // tags, documenti, noteEntita rimossi: relazioni polimorfiche eliminate dallo schema
       },
     });
     if (!mezzo) throw new NotFoundException('Mezzo non trovato');
@@ -172,11 +157,8 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
     const mezzo = await this.prisma.mezzo.create({ data: data as any });
 
     await this.audit.log({
-      userId,
-      entityType: 'mezzo',
-      entityId: mezzo.id,
-      azione: 'CREATE',
-      dataDopo: mezzo as any,
+      userId, entityType: 'mezzo', entityId: mezzo.id,
+      azione: 'CREATE', dataDopo: mezzo as any,
     });
 
     return mezzo;
@@ -187,18 +169,11 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
     const existing = await this.findOne(id);
     const data = this.normalizeDto(dto);
 
-    const mezzo = await this.prisma.mezzo.update({
-      where: { id },
-      data: data as any,
-    });
+    const mezzo = await this.prisma.mezzo.update({ where: { id }, data: data as any });
 
     await this.audit.log({
-      userId,
-      entityType: 'mezzo',
-      entityId: id,
-      azione: 'UPDATE',
-      dataPrima: existing as any,
-      dataDopo: mezzo as any,
+      userId, entityType: 'mezzo', entityId: id,
+      azione: 'UPDATE', dataPrima: existing as any, dataDopo: mezzo as any,
     });
 
     return mezzo;
@@ -208,23 +183,17 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
   async remove(id: string, userId: string) {
     const existing = await this.findOne(id);
 
-    await this.prisma.mezzo.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+    await this.prisma.mezzo.update({ where: { id }, data: { deletedAt: new Date() } });
 
     await this.audit.log({
-      userId,
-      entityType: 'mezzo',
-      entityId: id,
-      azione: 'DELETE',
-      dataPrima: existing as any,
+      userId, entityType: 'mezzo', entityId: id,
+      azione: 'DELETE', dataPrima: existing as any,
     });
 
     return { deleted: true };
   }
 
-  // ─── ASSEGNAZIONI ──────────────────────────────────
+  // ─── ASSEGNAZIONI ───────────────────────────────────
   async createAssegnazione(mezzoId: string, dto: CreateAssegnazioneMezzoDto, userId: string) {
     await this.findOne(mezzoId);
 
@@ -232,7 +201,6 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
     const attiva = await this.prisma.assegnazioneMezzo.findFirst({
       where: { mezzoId, deletedAt: null, dataFine: null },
     });
-
     if (attiva) {
       await this.prisma.assegnazioneMezzo.update({
         where: { id: attiva.id },
@@ -245,53 +213,48 @@ private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
         mezzoId,
         padroncinoId: dto.padroncinoId,
         dataInizio: new Date(dto.dataInizio),
-        dataFine: dto.dataFine ? new Date(dto.dataFine) : null,
-        note: dto.note,
+        dataFine: dto.dataFine ? new Date(dto.dataFine) : undefined,
       },
+      include: { padroncino: { select: { ragioneSociale: true } } },
     });
 
-    // Aggiorna stato mezzo
-    await this.prisma.mezzo.update({
-      where: { id: mezzoId },
-      data: { stato: 'ASSEGNATO' },
-    });
+    // Aggiorna stato mezzo → ASSEGNATO
+    await this.prisma.mezzo.update({ where: { id: mezzoId }, data: { stato: 'ASSEGNATO' } });
 
     await this.audit.log({
-      userId,
-      entityType: 'mezzo',
-      entityId: mezzoId,
+      userId, entityType: 'assegnazione_mezzo', entityId: assegnazione.id,
       azione: 'ASSEGNA',
-      dataDopo: assegnazione as any,
+      dataDopo: { mezzoId, padroncinoId: dto.padroncinoId, ragioneSociale: assegnazione.padroncino.ragioneSociale } as any,
     });
 
     return assegnazione;
   }
 
   async chiudiAssegnazione(assegnazioneId: string, userId: string) {
-    const assegnazione = await this.prisma.assegnazioneMezzo.findFirst({
+    const ass = await this.prisma.assegnazioneMezzo.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
+      include: { mezzo: { select: { id: true } } },
     });
-    if (!assegnazione) throw new NotFoundException('Assegnazione non trovata');
+    if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
-    const updated = await this.prisma.assegnazioneMezzo.update({
+    await this.prisma.assegnazioneMezzo.update({
       where: { id: assegnazioneId },
       data: { dataFine: new Date() },
     });
 
-    // Aggiorna stato mezzo
-    await this.prisma.mezzo.update({
-      where: { id: assegnazione.mezzoId },
-      data: { stato: 'DISPONIBILE' },
+    // Aggiorna stato mezzo → DISPONIBILE (se nessuna altra assegnazione attiva)
+    const altre = await this.prisma.assegnazioneMezzo.count({
+      where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
     });
+    if (altre === 0) {
+      await this.prisma.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
+    }
 
     await this.audit.log({
-      userId,
-      entityType: 'mezzo',
-      entityId: assegnazione.mezzoId,
+      userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId,
       azione: 'CHIUDI_ASSEGNAZIONE',
-      dataDopo: updated as any,
     });
 
-    return updated;
+    return { closed: true };
   }
 }

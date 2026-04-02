@@ -32,12 +32,10 @@ export class PalmariService {
         include: {
           assegnazioni: {
             where: { deletedAt: null },
-            include: {
-              padroncino: { select: { id: true, ragioneSociale: true } },
-            },
+            include: { padroncino: { select: { id: true, ragioneSociale: true } } },
             orderBy: { dataInizio: 'desc' },
           },
-          tags: true,
+          // tags e documenti rimossi: relazioni polimorfiche eliminate dallo schema
         },
         orderBy: { codice: 'asc' },
         skip: (page - 1) * limit,
@@ -46,7 +44,6 @@ export class PalmariService {
       this.prisma.palmare.count({ where }),
     ]);
 
-    // Mappa assegnazioni con ragioneSociale flat
     const mappedData = data.map((p) => ({
       ...p,
       assegnazioni: p.assegnazioni.map((a) => ({
@@ -91,12 +88,21 @@ export class PalmariService {
           include: { padroncino: { select: { id: true, ragioneSociale: true } } },
           orderBy: { dataInizio: 'desc' },
         },
-        documenti: { where: { deletedAt: null } },
-        tags: true,
+        // documenti e tags rimossi: relazioni polimorfiche eliminate dallo schema
       },
     });
     if (!palmare) throw new NotFoundException('Palmare non trovato');
-    return palmare;
+
+    return {
+      ...palmare,
+      assegnazioni: palmare.assegnazioni.map((a) => ({
+        id: a.id,
+        padroncinoId: a.padroncinoId,
+        ragioneSociale: a.padroncino.ragioneSociale,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+    };
   }
 
   async create(dto: CreatePalmareDto, userId: string) {
@@ -112,11 +118,11 @@ export class PalmariService {
   }
 
   async update(id: string, dto: UpdatePalmareDto, userId: string) {
-    const existing = await this.findOne(id);
+    await this.findOne(id);
     const palmare = await this.prisma.palmare.update({ where: { id }, data: dto as any });
     await this.audit.log({
       userId, entityType: 'palmare', entityId: id,
-      azione: 'UPDATE', dataPrima: existing as any, dataDopo: palmare as any,
+      azione: 'UPDATE', dataDopo: palmare as any,
     });
     return palmare;
   }
@@ -142,7 +148,7 @@ export class PalmariService {
       });
     }
 
-    // Aggiorna stato palmare
+    // Aggiorna stato palmare → ASSEGNATO
     await this.prisma.palmare.update({ where: { id: palmareId }, data: { stato: 'ASSEGNATO' } });
 
     const assegnazione = await this.prisma.assegnazionePalmare.create({
@@ -150,38 +156,48 @@ export class PalmariService {
         palmareId,
         padroncinoId: dto.padroncinoId,
         dataInizio: new Date(dto.dataInizio),
+        dataFine: dto.dataFine ? new Date(dto.dataFine) : undefined,
       },
-      include: { padroncino: { select: { id: true, ragioneSociale: true } } },
+      include: { padroncino: { select: { ragioneSociale: true } } },
     });
 
     await this.audit.log({
-      userId, entityType: 'palmare', entityId: palmareId,
-      azione: 'ASSEGNA', dataDopo: assegnazione as any,
+      userId, entityType: 'assegnazione_palmare', entityId: assegnazione.id,
+      azione: 'ASSEGNA',
+      dataDopo: { palmareId, padroncinoId: dto.padroncinoId, ragioneSociale: assegnazione.padroncino.ragioneSociale } as any,
     });
-    return assegnazione;
+
+    return {
+      ...assegnazione,
+      ragioneSociale: assegnazione.padroncino.ragioneSociale,
+    };
   }
 
   async chiudiAssegnazione(assegnazioneId: string, userId: string) {
-    const assegnazione = await this.prisma.assegnazionePalmare.findFirst({
+    const ass = await this.prisma.assegnazionePalmare.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
+      include: { palmare: { select: { id: true } } },
     });
-    if (!assegnazione) throw new NotFoundException('Assegnazione non trovata');
+    if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
-    const updated = await this.prisma.assegnazionePalmare.update({
+    await this.prisma.assegnazionePalmare.update({
       where: { id: assegnazioneId },
       data: { dataFine: new Date() },
     });
 
-    // Aggiorna stato palmare a DISPONIBILE
-    await this.prisma.palmare.update({
-      where: { id: assegnazione.palmareId },
-      data: { stato: 'DISPONIBILE' },
+    // Aggiorna stato palmare → DISPONIBILE (se nessuna altra assegnazione attiva)
+    const altre = await this.prisma.assegnazionePalmare.count({
+      where: { palmareId: ass.palmare.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
     });
+    if (altre === 0) {
+      await this.prisma.palmare.update({ where: { id: ass.palmare.id }, data: { stato: 'DISPONIBILE' } });
+    }
 
     await this.audit.log({
-      userId, entityType: 'palmare', entityId: assegnazione.palmareId,
-      azione: 'CHIUDI_ASSEGNAZIONE', dataDopo: updated as any,
+      userId, entityType: 'assegnazione_palmare', entityId: assegnazioneId,
+      azione: 'CHIUDI_ASSEGNAZIONE',
     });
-    return updated;
+
+    return { closed: true };
   }
 }
