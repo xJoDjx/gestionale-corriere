@@ -46,6 +46,10 @@ interface RigaCSV {
   energiaKwh: number;
 }
 
+function normalizeTarga(value?: string | null): string {
+  return (value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 function parseEnergy(raw: string): number {
   if (!raw || raw.trim() === '0') return 0;
   return parseFloat(raw.replace(',', '.')) || 0;
@@ -126,7 +130,7 @@ export default function RicaricheElettriche() {
       const map = new Map<string, MezzoInfo>();
       for (const m of res.data) {
         const ass = (m as any).assegnazioni?.find((a: any) => !a.dataFine);
-        map.set(m.targa.toUpperCase(), {
+        map.set(normalizeTarga(m.targa), {
           id: m.id, targa: m.targa,
           maggiorazioneRicarica: (m as any).maggiorazioneRicarica ?? null,
           padroncino: ass?.padroncino?.ragioneSociale ?? null,
@@ -225,15 +229,16 @@ export default function RicaricheElettriche() {
       const fatKwh   = parseFloat(fatturaKwh.replace(',', '.')) || 0;
 
       const sess = righeAnteprima.map((r) => {
+        const targaNorm = normalizeTarga(r.targa);
         const tipo: 'INTERNA' | 'ESTERNA' = isInterna(r.stazione) ? 'INTERNA' : 'ESTERNA';
-        const mInfo = mezziMap.get(r.targa.toUpperCase());
+        const mInfo = mezziMap.get(targaNorm);
         const mag   = mInfo?.maggiorazioneRicarica ?? magDef;
         const cu    = tipo === 'INTERNA' ? costoInt : costoExt;
         const base  = r.energiaKwh * cu;
         const tot   = base * (1 + mag / 100);
 
         return {
-          targa:            r.targa.toUpperCase(),
+          targa:            targaNorm || r.targa.toUpperCase(),
           sessioneId:       r.sessionId,
           tipoRicarica:     tipo,
           stazione:         r.stazione,

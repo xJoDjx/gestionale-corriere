@@ -705,7 +705,14 @@ interface Documento {
   createdAt: string;
 }
 
-function TabDocumenti({ p }: { p: Padroncino }) {
+function normalizeDocPath(filePath: string) {
+  return filePath
+    .replace(/\\/g, '/')
+    .replace(/^\.?\/*/, '')
+    .replace(/^uploads\/padroncini\//, '');
+}
+
+function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promise<void> }) {
   const [docs, setDocs] = useState<Documento[]>((p as any).documenti || []);
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -746,6 +753,7 @@ function TabDocumenti({ p }: { p: Padroncino }) {
       setSelectedFile(null);
       setUploadForm({ nome: '', tipo: 'CONTRATTO', scadenza: '', note: '' });
       await loadDocs();
+      await onRefresh();
     } catch (e: any) {
       alert('Errore upload: ' + e.message);
     } finally {
@@ -758,6 +766,7 @@ function TabDocumenti({ p }: { p: Padroncino }) {
     try {
       await fetch(`${API_BASE}/padroncini/${p.id}/documenti/${docId}`, { method: 'DELETE' });
       await loadDocs();
+      await onRefresh();
     } catch (e: any) {
       alert('Errore: ' + e.message);
     }
@@ -863,7 +872,7 @@ function TabDocumenti({ p }: { p: Padroncino }) {
                   <tr key={d.id} className="pd-item-row">
                     <td>
                       <a
-                        href={`${API_BASE.replace('/api', '')}/uploads/padroncini/${d.filePath.split('/').pop()}`}
+                        href={`${API_BASE.replace('/api', '')}/uploads/padroncini/${normalizeDocPath(d.filePath)}`}
                         target="_blank" rel="noreferrer"
                         style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
                       >
@@ -1075,7 +1084,7 @@ function PadroncinoDetail({
         {tab === 'mezzi' && <TabMezzi p={p} onRefresh={handleRefresh} />}
         {tab === 'palmari' && <TabPalmari p={p} onRefresh={handleRefresh} />}
         {tab === 'autisti' && <TabAutisti p={p} onRefresh={handleRefresh} />}
-        {tab === 'documenti' && <TabDocumenti p={p} />}
+        {tab === 'documenti' && <TabDocumenti p={p} onRefresh={handleRefresh} />}
         {tab === 'log' && <LogEntita entityType="padroncino" entityId={p.id} />}
       </div>
 

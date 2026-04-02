@@ -29,6 +29,10 @@ export interface ImportRicaricheDto {
   sessioni: SessioneRicaricaDto[];
 }
 
+function normalizeTarga(value?: string | null): string {
+  return (value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 @Injectable()
 export class RicaricheService {
   constructor(private prisma: PrismaService) {}
@@ -123,7 +127,7 @@ export class RicaricheService {
     }
 
     // Arricchisci con dati dal DB (mezzoId, padroncinoId, categoriaMezzo)
-    const targhe = [...new Set(sessioni.map((s) => s.targa.toUpperCase()))];
+    const targhe = [...new Set(sessioni.map((s) => normalizeTarga(s.targa)).filter(Boolean))];
     const mezziDB = await this.prisma.mezzo.findMany({
       where: { targa: { in: targhe }, deletedAt: null },
       include: {
@@ -143,16 +147,17 @@ export class RicaricheService {
       },
     });
 
-    const mezzoMap = new Map(mezziDB.map((m) => [m.targa.toUpperCase(), m]));
+    const mezzoMap = new Map(mezziDB.map((m) => [normalizeTarga(m.targa), m]));
 
     // Crea tutte le sessioni
     const create = sessioni.map((s) => {
-      const mezzo = mezzoMap.get(s.targa.toUpperCase());
+      const targaNorm = normalizeTarga(s.targa);
+      const mezzo = mezzoMap.get(targaNorm);
       const assegnazioneAttiva = mezzo?.assegnazioni?.[0];
       const primoGiornoMese = new Date(`${mese}-01`);
 
       return {
-        targa: s.targa.toUpperCase(),
+        targa: targaNorm || (s.targa ?? '').toUpperCase(),
         sessioneId: s.sessioneId,
         tipoRicarica: s.tipoRicarica,
         stazione: s.stazione,

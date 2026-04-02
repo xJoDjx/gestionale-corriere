@@ -458,6 +458,19 @@ export class PadronciniService {
          ${noteVal}, ${now}, ${now})
     `;
 
+    const tipoNorm = data.tipo?.toUpperCase?.();
+    if (tipoNorm === 'DURC') {
+      await this.prisma.padroncino.update({
+        where: { id: padroncinoId },
+        data: { scadenzaDurc: scad },
+      });
+    } else if (tipoNorm === 'DVR') {
+      await this.prisma.padroncino.update({
+        where: { id: padroncinoId },
+        data: { scadenzaDvr: scad, dvrEsente: false },
+      });
+    }
+
     await this.audit.log({
       userId, entityType: 'documento', entityId: newId, azione: 'CREATE',
       dataDopo: { nome: data.nome, tipo: data.tipo, padroncinoId } as any,
