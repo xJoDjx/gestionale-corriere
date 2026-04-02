@@ -1,5 +1,5 @@
 // src/features/ricariche/RicaricheElettriche.tsx
-import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react'; 
+import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
 import { api, mezziApi } from '../../lib/api';
 import './RicaricheElettriche.css';
 
@@ -168,8 +168,9 @@ export default function RicaricheElettriche() {
   }, [fatturaImporto, fatturaKwh]);
 
   // ── aggiorna tariffe mese esistente ──
+  // NOTA: richiede endpoint PUT /ricariche/:mese/tariffe nel backend
   const handleAggiornaTariffe = async () => {
-    if (!costoInternoKwh) return alert("Inserisci dati validi per la bolletta (Importo e kWh).");
+    if (!costoInternoKwh) return alert('Inserisci dati validi per la bolletta (Importo e kWh).');
     setSaving(true);
     try {
       await api.put(`/ricariche/${mese}/tariffe`, {
@@ -178,9 +179,9 @@ export default function RicaricheElettriche() {
         costoEsternoKwh: parseFloat(costoEsterno.replace(',', '.')),
       });
       await caricaMese(mese);
-      alert("Tariffe aggiornate e sessioni ricalcolate con successo!");
+      alert('Tariffe aggiornate e sessioni ricalcolate con successo!');
     } catch (e: any) {
-      alert("Errore aggiornamento tariffe: " + e.message);
+      alert('Errore aggiornamento tariffe: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -190,6 +191,7 @@ export default function RicaricheElettriche() {
   const leggiFile = (f: File) => {
     setNomeFile(f.name);
     const reader = new FileReader();
+    // Legge il file e salva l'anteprima — NON calcola ancora i costi
     reader.onload = (e) => setRigheAnteprima(parseCSV(e.target?.result as string));
     reader.readAsText(f, 'utf-8');
   };
@@ -202,16 +204,25 @@ export default function RicaricheElettriche() {
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (f) leggiFile(f);
+    // Reset input per permettere di caricare lo stesso file di nuovo
+    if (e.target) e.target.value = '';
   };
 
   // ── import CSV: Step 2 Conferma ──
+  // FIX: il campo si chiama "importo" nel backend (SessioneRicaricaDto), non "costoFinale"
+  // FIX: aggiungere i campi snapshot costoInternoKwh, costoEsternoKwh, fatturaImporto, fatturaKwh
+  // FIX: endpoint POST /ricariche (senza /importa) per evitare conflitti con @Delete(':mese')
   const handleConfermaImport = async () => {
-    if (!costoInternoKwh) return alert('Inserisci importo fattura e kWh per calcolare il costo interno prima di importare.');
+    if (!costoInternoKwh) {
+      return alert('Inserisci importo fattura e kWh per calcolare il costo interno prima di importare.');
+    }
     setSaving(true);
     try {
       const costoInt = costoInternoKwh;
       const costoExt = parseFloat(costoEsterno.replace(',', '.')) || 0;
       const magDef   = parseFloat(magDefault) || 20;
+      const fatImp   = parseFloat(fatturaImporto.replace(',', '.')) || 0;
+      const fatKwh   = parseFloat(fatturaKwh.replace(',', '.')) || 0;
 
       const sess = righeAnteprima.map((r) => {
         const tipo: 'INTERNA' | 'ESTERNA' = isInterna(r.stazione) ? 'INTERNA' : 'ESTERNA';
@@ -220,37 +231,42 @@ export default function RicaricheElettriche() {
         const cu    = tipo === 'INTERNA' ? costoInt : costoExt;
         const base  = r.energiaKwh * cu;
         const tot   = base * (1 + mag / 100);
+
         return {
-          targa: r.targa.toUpperCase(), 
-          sessioneId: r.sessionId, // Se back-end lo richiede
-          tipoRicarica: tipo, 
-          stazione: r.stazione, 
-          durata: r.durata,
-          inizioSessione: r.inizioSessione, 
-          fineSessione: r.fineSessione,
-          kwh: r.energiaKwh, 
-          costoUnitario: cu, 
-          costoBase: base,
-          maggiorazione: mag, 
-          costoFinale: tot
+          targa:            r.targa.toUpperCase(),
+          sessioneId:       r.sessionId,
+          tipoRicarica:     tipo,
+          stazione:         r.stazione,
+          durata:           r.durata,
+          inizioSessione:   r.inizioSessione,
+          fineSessione:     r.fineSessione,
+          kwh:              r.energiaKwh,
+          costoUnitario:    cu,
+          costoBase:        base,
+          maggiorazione:    mag,
+          // ↓ "importo" è il campo atteso da SessioneRicaricaDto nel backend
+          importo:          isFinite(tot) ? tot : 0,
+          // ↓ snapshot tariffe — necessari per il ricalcolo futuro
+          costoInternoKwh:  costoInt,
+          costoEsternoKwh:  costoExt,
+          fatturaImporto:   fatImp,
+          fatturaKwh:       fatKwh,
         };
       });
 
-      await api.post('/ricariche/importa', { 
-        mese, 
-        sessioni: sess,
-        tariffe: {
-          fatturaImporto: parseFloat(fatturaImporto.replace(',', '.')),
-          fatturaKwh: parseFloat(fatturaKwh.replace(',', '.')),
-          costoEsternoKwh: costoExt
-        }
-      });
+      // FIX endpoint: POST /ricariche invece di /ricariche/importa
+      // (evita il conflitto di routing con @Delete(':mese') in NestJS)
+      await api.post('/ricariche/importa', { mese, sessioni: sess });
+
       setShowImport(false);
       setRigheAnteprima([]);
       setNomeFile('');
       await Promise.all([caricaMese(mese), caricaMesi()]);
-    } catch (e: any) { alert('Errore importazione: ' + e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      alert('Errore importazione: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const annullaImport = () => {
@@ -260,8 +276,14 @@ export default function RicaricheElettriche() {
 
   const eliminaMese = async () => {
     if (!confirm(`Eliminare tutti i dati di ${mese}?`)) return;
-    await api.delete(`/ricariche/${mese}`);
-    setSessioni([]); setTariffe(null); await caricaMesi();
+    try {
+      await api.delete(`/ricariche/${mese}`);
+      setSessioni([]); setTariffe(null);
+      setFatturaImporto(''); setFatturaKwh(''); setCostoEsterno('0.870');
+      await caricaMesi();
+    } catch (e: any) {
+      alert('Errore eliminazione: ' + e.message);
+    }
   };
 
   // ── filtro dettaglio ──
@@ -289,52 +311,46 @@ export default function RicaricheElettriche() {
     };
   }, [sessioni]);
 
-  // ── riepilogo per targa con fallback su mezziMap ──
+  // ── riepilogo per targa con fallback padroncino su mezziMap ──
   const riepilogo = useMemo(() => {
-    const map = new Map<string, { 
-      targa: string; 
-      padroncino: string | null; 
-      categoria: string | null; 
-      kwhInt: number; 
-      kwhExt: number; 
-      costoInt: number; 
-      costoExt: number; 
-      costoTot: number; 
-      sessioni: SessioneDB[] 
+    const map = new Map<string, {
+      targa: string;
+      padroncino: string | null;
+      categoria: string | null;
+      kwhInt: number;
+      kwhExt: number;
+      costoInt: number;
+      costoExt: number;
+      costoTot: number;
+      sessioni: SessioneDB[];
     }>();
 
     for (const s of sessioni) {
       if (!map.has(s.targa)) {
         const infoMezzo = mezziMap.get(s.targa);
-        const padroncinoFallback = infoMezzo?.padroncino ?? null;
-        const categoriaFallback = infoMezzo?.categoria ?? null;
-
         map.set(s.targa, {
-          targa: s.targa,
-          padroncino: s.padroncino ?? padroncinoFallback,
-          categoria: s.categoriaMezzo ?? categoriaFallback,
-          kwhInt: 0,
-          kwhExt: 0,
-          costoInt: 0,
-          costoExt: 0,
-          costoTot: 0,
+          targa:      s.targa,
+          // Priorità: padroncino dalla sessione DB → fallback dalla mezziMap (assegnazione attuale)
+          padroncino: s.padroncino ?? infoMezzo?.padroncino ?? null,
+          categoria:  s.categoriaMezzo ?? infoMezzo?.categoria ?? null,
+          kwhInt: 0, kwhExt: 0, costoInt: 0, costoExt: 0, costoTot: 0,
           sessioni: [],
         });
       }
 
       const e = map.get(s.targa)!;
       if (s.tipoRicarica === 'INTERNA') {
-        e.kwhInt += s.kwh;
+        e.kwhInt  += s.kwh;
         e.costoInt += s.costoFinale;
       } else {
-        e.kwhExt += s.kwh;
+        e.kwhExt  += s.kwh;
         e.costoExt += s.costoFinale;
       }
       e.costoTot += s.costoFinale;
       e.sessioni.push(s);
     }
     return Array.from(map.values()).sort((a, b) => b.costoTot - a.costoTot);
-  }, [sessioni, mezziMap]); 
+  }, [sessioni, mezziMap]);
 
   const hasDati = sessioni.length > 0;
 
@@ -367,17 +383,36 @@ export default function RicaricheElettriche() {
         </div>
       )}
 
-      {/* ── PANNELLO MODIFICA TARIFFE MESE (Visibile se ci sono dati e non siamo in import) ── */}
+      {/* ── PANNELLO MODIFICA TARIFFE (solo se ci sono dati e non si sta importando) ── */}
       {hasDati && !showImport && (
         <div className="ric-tariffe-edit-panel">
           <div className="ric-panel-title">📝 Modifica tariffe mese</div>
           <div className="ric-edit-grid">
-            <input className="ric-input" type="number" step="0.01" placeholder="Importo fattura €" value={fatturaImporto} onChange={e => setFatturaImporto(e.target.value)} />
-            <input className="ric-input" type="number" step="0.001" placeholder="kWh fatturati" value={fatturaKwh} onChange={e => setFatturaKwh(e.target.value)} />
-            <input className="ric-input" type="number" step="0.001" placeholder="€/kWh esterno" value={costoEsterno} onChange={e => setCostoEsterno(e.target.value)} />
-            <button className="btn-success" onClick={handleAggiornaTariffe} disabled={saving}>
-              {saving ? '⏳...' : '🔄 Aggiorna e Ricalcola'}
-            </button>
+            <div className="ric-config-field">
+              <label>Importo fattura (€)</label>
+              <input className="ric-input" type="number" step="0.01" placeholder="1250.00"
+                value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
+            </div>
+            <div className="ric-config-field">
+              <label>kWh fatturati</label>
+              <input className="ric-input" type="number" step="0.001" placeholder="2850"
+                value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
+            </div>
+            <div className="ric-config-field">
+              <label>€/kWh esterno</label>
+              <input className="ric-input" type="number" step="0.001" placeholder="0.870"
+                value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
+            </div>
+            <div className="ric-config-field" style={{ justifyContent: 'flex-end' }}>
+              {costoInternoKwh && (
+                <div style={{ fontSize: 12, color: '#16a34a', marginBottom: 4 }}>
+                  Interno calcolato: <strong>{fmtE4(costoInternoKwh)} €/kWh</strong>
+                </div>
+              )}
+              <button className="btn-primary" onClick={handleAggiornaTariffe} disabled={saving || !costoInternoKwh}>
+                {saving ? '⏳ Salvataggio...' : '🔄 Aggiorna e Ricalcola'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -386,37 +421,47 @@ export default function RicaricheElettriche() {
       {showImport && (
         <div className="ric-import-panel">
           <div className="ric-import-title">📂 Importa sessioni {mese}</div>
-          
+
           {righeAnteprima.length === 0 ? (
-            // Step 1: Drop/Select CSV
-            <div className={`ric-upload-zone ${dragOver ? 'ric-upload-drag' : ''}`}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} 
+            /* Step 1: Carica il file CSV */
+            <div
+              className={`ric-upload-zone ${dragOver ? 'ric-upload-drag' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop} 
-              onClick={() => fileRef.current?.click()}>
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+            >
               <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={onFileChange} />
               <div className="ric-upload-prompt">
                 <span className="ric-upload-icon">📂</span>
                 <div>
                   <div className="ric-upload-title">{hasDati ? `Sostituisci dati ${mese}` : `Carica CSV ${mese}`}</div>
-                  <div className="ric-upload-hint">Trascina CSV o clicca per selezionare</div>
+                  <div className="ric-upload-hint">Trascina il file CSV o clicca per selezionare</div>
                 </div>
               </div>
             </div>
           ) : (
-            // Step 2: Configura tariffe e conferma
+            /* Step 2: Imposta le tariffe e conferma */
             <div className="ric-import-config">
               <div className="ric-import-info">
-                📄 File: <strong>{nomeFile}</strong> ({righeAnteprima.length} sessioni trovate in anteprima)
+                📄 File: <strong>{nomeFile}</strong> — <strong>{righeAnteprima.length}</strong> sessioni rilevate.
+                Imposta le tariffe e conferma l'importazione.
               </div>
               <div className="ric-config-grid3">
+                {/* Colonna 1: Interne */}
                 <div className="ric-config-section">
                   <div className="ric-config-sub">⚡ Ricariche Interne (JuiceBox)</div>
                   <div className="ric-config-row">
-                    <div className="ric-config-field"><label>Importo fattura (€)</label>
-                      <input className="ric-input" type="number" step="0.01" placeholder="1250.00" value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} /></div>
-                    <div className="ric-config-field"><label>kWh fatturati</label>
-                      <input className="ric-input" type="number" step="0.001" placeholder="2850" value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} /></div>
+                    <div className="ric-config-field">
+                      <label>Importo fattura (€)</label>
+                      <input className="ric-input" type="number" step="0.01" placeholder="1250.00"
+                        value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
+                    </div>
+                    <div className="ric-config-field">
+                      <label>kWh fatturati</label>
+                      <input className="ric-input" type="number" step="0.001" placeholder="2850"
+                        value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
+                    </div>
                   </div>
                   <div className={`ric-kwh-result ${costoInternoKwh ? 'ric-kwh-ok' : 'ric-kwh-empty'}`}>
                     {costoInternoKwh
@@ -424,24 +469,40 @@ export default function RicaricheElettriche() {
                       : <span className="ric-kwh-placeholder">→ inserisci fattura e kWh</span>}
                   </div>
                 </div>
+
+                {/* Colonna 2: Esterne */}
                 <div className="ric-config-section">
                   <div className="ric-config-sub">🔌 Ricariche Esterne</div>
-                  <div className="ric-config-field"><label>Costo kWh esterno (€)</label>
-                    <input className="ric-input" type="number" step="0.001" placeholder="0.870" value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} /></div>
+                  <div className="ric-config-field">
+                    <label>Costo kWh esterno (€)</label>
+                    <input className="ric-input" type="number" step="0.001" placeholder="0.870"
+                      value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
+                  </div>
                 </div>
+
+                {/* Colonna 3: Maggiorazione + Azioni */}
                 <div className="ric-config-section">
                   <div className="ric-config-sub">📊 Maggiorazione e Conferma</div>
-                  <div className="ric-config-field"><label>% se non su mezzo</label>
+                  <div className="ric-config-field">
+                    <label>% default (se non impostata sul mezzo)</label>
                     <div className="ric-input-suffix-wrap">
-                      <input className="ric-input" type="number" step="1" min="0" value={magDefault} onChange={(e) => setMagDefault(e.target.value)} />
+                      <input className="ric-input" type="number" step="1" min="0"
+                        value={magDefault} onChange={(e) => setMagDefault(e.target.value)} />
                       <span className="ric-input-suffix">%</span>
                     </div>
                   </div>
-                  <div className="ric-import-actions" style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn-primary" onClick={handleConfermaImport} disabled={saving || !costoInternoKwh}>
+                  <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <button
+                      className="btn-primary"
+                      onClick={handleConfermaImport}
+                      disabled={saving || !costoInternoKwh}
+                      title={!costoInternoKwh ? 'Inserisci i dati della bolletta per procedere' : ''}
+                    >
                       {saving ? '⏳ Salvataggio...' : '🚀 Conferma Import'}
                     </button>
-                    <button className="btn-outline" onClick={annullaImport} disabled={saving}>Annulla</button>
+                    <button className="btn-outline" onClick={annullaImport} disabled={saving}>
+                      ↩ Cambia file
+                    </button>
                   </div>
                 </div>
               </div>
@@ -523,6 +584,7 @@ export default function RicaricheElettriche() {
                     <th style={{ textAlign: 'right' }}>Costo Int.</th>
                     <th style={{ textAlign: 'right' }}>kWh Ext.</th>
                     <th style={{ textAlign: 'right' }}>Costo Ext.</th>
+                    <th style={{ textAlign: 'right' }}>MAG.%</th> 
                     <th style={{ textAlign: 'right' }}>TOTALE</th>
                   </tr>
                 </thead>
@@ -532,8 +594,10 @@ export default function RicaricheElettriche() {
                     const esp = espansoTarga === r.targa;
                     return (
                       <Fragment key={r.targa}>
-                        <tr className={`ric-row ric-row-riepilogo ${esp ? 'ric-row-expanded' : ''}`}
-                          onClick={() => setEspansoTarga(esp ? null : r.targa)}>
+                        <tr
+                          className={`ric-row ric-row-riepilogo ${esp ? 'ric-row-expanded' : ''}`}
+                          onClick={() => setEspansoTarga(esp ? null : r.targa)}
+                        >
                           <td className="ric-expand-btn">{esp ? '▲' : '▼'}</td>
                           <td><span className="ric-targa">{r.targa}</span></td>
                           <td>{cat.label !== '—' ? <span className={`ric-cat-badge ${cat.cls}`}>{cat.label}</span> : <span className="ric-na">—</span>}</td>
@@ -542,15 +606,24 @@ export default function RicaricheElettriche() {
                           <td style={{ textAlign: 'right' }} className="ric-num">{r.costoInt > 0 ? <span className="ric-badge-int-sm">{fmtE(r.costoInt)} €</span> : '—'}</td>
                           <td style={{ textAlign: 'right' }} className="ric-num">{r.kwhExt > 0 ? fmtK(r.kwhExt) : '—'}</td>
                           <td style={{ textAlign: 'right' }} className="ric-num">{r.costoExt > 0 ? <span className="ric-badge-ext-sm">{fmtE(r.costoExt)} €</span> : '—'}</td>
+                          <td style={{ textAlign: 'right' }}> 
+                            <span className="ric-mag-badge">
+                              {r.sessioni.length > 0 ? `${r.sessioni[0].maggiorazione}%` : '—'}
+                            </span>
+                          </td>
                           <td style={{ textAlign: 'right' }}><strong className="ric-costo">{fmtE(r.costoTot)} €</strong></td>
                         </tr>
+                        {/* Dettaglio sessioni espanse per questa targa */}
                         {esp && (
                           <tr className="ric-detail-row">
-                            <td colSpan={9}>
+                            <td colSpan={10}>
                               <table className="ric-sub-table">
                                 <thead>
                                   <tr>
-                                    <th>TIPO</th><th>STAZIONE</th><th>INIZIO</th><th>DURATA</th>
+                                    <th>TIPO</th>
+                                    <th>STAZIONE</th>
+                                    <th>INIZIO</th>
+                                    <th>DURATA</th>
                                     <th style={{ textAlign: 'right' }}>kWh</th>
                                     <th style={{ textAlign: 'right' }}>€/kWh</th>
                                     <th style={{ textAlign: 'right' }}>COST. BASE</th>
@@ -559,8 +632,8 @@ export default function RicaricheElettriche() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                    {r.sessioni.map((s, idx) => (
-                                      <tr key={s.id || idx} className="ric-sub-row">
+                                  {r.sessioni.map((s, idx) => (
+                                    <tr key={s.id || idx} className="ric-sub-row">
                                       <td><span className={`ric-tipo-badge ${s.tipoRicarica === 'INTERNA' ? 'ric-badge-int' : 'ric-badge-ext'}`}>{s.tipoRicarica === 'INTERNA' ? '⚡ INT' : '🔌 EXT'}</span></td>
                                       <td className="ric-stazione" title={s.stazione ?? ''}>{s.stazione?.split(' - ').slice(1).join(' - ') || s.stazione}</td>
                                       <td className="ric-data">{s.inizioSessione}</td>
@@ -583,7 +656,7 @@ export default function RicaricheElettriche() {
                 </tbody>
                 <tfoot>
                   <tr className="ric-foot">
-                    <td colSpan={4}><strong>TOTALE ({riepilogo.length} mezzi)</strong></td>
+                    <td colSpan={5}><strong>TOTALE ({riepilogo.length} mezzi)</strong></td>
                     <td style={{ textAlign: 'right' }}><strong>{fmtK(stats.kwhInt)}</strong></td>
                     <td style={{ textAlign: 'right' }}><strong>{fmtE(stats.costoInt)} €</strong></td>
                     <td style={{ textAlign: 'right' }}><strong>{fmtK(stats.kwhExt)}</strong></td>
@@ -601,11 +674,20 @@ export default function RicaricheElettriche() {
               <div className="ric-filters">
                 <div className="ric-search-wrap">
                   <span>🔍</span>
-                  <input className="ric-search" placeholder="Cerca targa, padroncino, stazione…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  <input
+                    className="ric-search"
+                    placeholder="Cerca targa, padroncino, stazione…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
                 </div>
                 <div className="ric-tipo-filters">
                   {(['TUTTI', 'INTERNA', 'ESTERNA'] as const).map((t) => (
-                    <button key={t} className={`ric-tipo-btn ${filtroTipo === t ? 'ric-tipo-active' : ''}`} onClick={() => setFiltroTipo(t)}>
+                    <button
+                      key={t}
+                      className={`ric-tipo-btn ${filtroTipo === t ? 'ric-tipo-active' : ''}`}
+                      onClick={() => setFiltroTipo(t)}
+                    >
                       {t === 'TUTTI' ? 'Tutti' : t === 'INTERNA' ? '⚡ Interne' : '🔌 Esterne'}
                     </button>
                   ))}
@@ -625,7 +707,9 @@ export default function RicaricheElettriche() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sessFiltr.length === 0 && <tr><td colSpan={12} className="ric-empty">Nessuna sessione trovata</td></tr>}
+                    {sessFiltr.length === 0 && (
+                      <tr><td colSpan={12} className="ric-empty">Nessuna sessione trovata</td></tr>
+                    )}
                     {sessFiltr.map((s, i) => {
                       const cat = catLabel(s.categoriaMezzo);
                       return (
