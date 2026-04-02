@@ -226,6 +226,38 @@ export class RicaricheService {
     }));
   }
 
+  async aggiornaTariffe(mese: string, tariffe: { fatturaImporto?: number; fatturaKwh?: number; costoEsternoKwh?: number }) {
+    // Aggiorna snapshot su tutte le sessioni del mese
+    await this.prisma.ricaricaElettrica.updateMany({
+      where: { mese, deletedAt: null },
+      data: {
+        ...(tariffe.fatturaImporto != null && { fatturaImporto: tariffe.fatturaImporto }),
+        ...(tariffe.fatturaKwh != null && { fatturaKwh: tariffe.fatturaKwh }),
+        ...(tariffe.costoEsternoKwh != null && { costoEsternoKwh: tariffe.costoEsternoKwh }),
+      },
+    });
+    
+    // Se cambiano fatturaImporto/fatturaKwh, ricalcola costoUnitario e importo per le INTERNE
+    if (tariffe.fatturaImporto != null && tariffe.fatturaKwh != null && tariffe.fatturaKwh > 0) {
+      const nuovoCostoInt = tariffe.fatturaImporto / tariffe.fatturaKwh;
+      const sessioni = await this.prisma.ricaricaElettrica.findMany({
+        where: { mese, deletedAt: null, tipoRicarica: 'INTERNA' }
+      });
+      for (const s of sessioni) {
+        const kwh = Number(s.kwh);
+        const mag = Number(s.maggiorazione);
+        const nuovaBase = kwh * nuovoCostoInt;
+        const nuovoTot = nuovaBase * (1 + mag / 100);
+        await this.prisma.ricaricaElettrica.update({
+          where: { id: s.id },
+          data: { costoUnitario: nuovoCostoInt, costoBase: nuovaBase, importo: nuovoTot, costoInternoKwh: nuovoCostoInt },
+        });
+      }
+    }
+    return { aggiornate: true, mese };
+  }
+
+
   /**
    * Elimina tutte le sessioni di un mese
    */

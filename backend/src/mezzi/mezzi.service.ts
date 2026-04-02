@@ -11,25 +11,28 @@ export class MezziService {
   ) {}
 
   // ─── Normalizza DTO: mappa alias frontend → campi schema ───
-  private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
-    const { proprietario, nContratto, ...rest } = dto as any;
-    const data: Record<string, any> = { ...rest };
+private normalizeDto(dto: CreateMezzoDto): Record<string, any> {
+  const { proprietario, nContratto, ...rest } = dto as any;
+  const data: Record<string, any> = { ...rest };
 
-    // alias "proprietario" → "societaNoleggio" (se societaNoleggio non è già fornito)
-    if (proprietario && !data.societaNoleggio) {
-      data.societaNoleggio = proprietario;
+  if (proprietario && !data.societaNoleggio) data.societaNoleggio = proprietario;
+  if (nContratto && !data.riferimentoContratto) data.riferimentoContratto = nContratto;
+  delete data.proprietario;
+  delete data.nContratto;
+
+  const dateFields = [
+    'scadenzaAssicurazione', 'scadenzaRevisione', 'scadenzaBollo',
+    'scadenzaTagliando', 'scadenzaTachigrafo', 'inizioNoleggio', 'fineNoleggio',
+  ];
+  for (const field of dateFields) {
+    if (data[field] && typeof data[field] === 'string' && data[field].length === 10) {
+      // "2026-05-02" → "2026-05-02T00:00:00.000Z"
+      data[field] = new Date(data[field] + 'T00:00:00.000Z');
     }
-    // alias "nContratto" → "riferimentoContratto"
-    if (nContratto && !data.riferimentoContratto) {
-      data.riferimentoContratto = nContratto;
-    }
-
-    // rimuovi campi alias non mappabili direttamente a prisma
-    delete data.proprietario;
-    delete data.nContratto;
-
-    return data;
   }
+
+  return data;
+}
 
   // ─── LIST ────────────────────────────────────────────
   async findAll(query: QueryMezziDto) {

@@ -1,5 +1,4 @@
-// src/features/padroncini/Padroncini.tsx — AGGIORNATO
-// Aggiunte: pulsanti assegna nelle tab Mezzi/Palmari/Autisti + tab Log funzionante
+// src/features/padroncini/Padroncini.tsx
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
@@ -370,25 +369,55 @@ export default function PadronciniPage() {
 
 // ─── DETTAGLIO PADRONCINO ─────────────────────────────
 function PadroncinoDetail({
-  p, tab, setTab, onRefresh,
+  p: initialP,
+  tab,
+  setTab,
+  onRefresh,
 }: {
-  p: Padroncino; tab: string; setTab: (t: any) => void; onRefresh: () => void;
+  p: Padroncino;
+  tab: string;
+  setTab: (t: any) => void;
+  onRefresh: () => void;
 }) {
+  const [p, setP] = useState(initialP);
+
+  // Scarica tutti i dettagli strutturati (mezziAssegnati, palmariAssegnati, codiciAutista mappati)
+  const fetchDetail = useCallback(async () => {
+    try {
+      const updated = await padronciniApi.detail(initialP.id);
+      setP(updated);
+    } catch (error) {
+      console.error("Errore durante il caricamento del dettaglio:", error);
+    }
+  }, [initialP.id]);
+
+  // Sincronizza lo stato locale e carica i dettagli approfonditi all'apertura
+  useEffect(() => {
+    setP(initialP);
+    fetchDetail();
+  }, [initialP.id, fetchDetail]);
+
+  const handleRefresh = useCallback(async () => {
+    await fetchDetail(); // Aggiorna pannello dettaglio
+    onRefresh();         // Aggiorna lista in background
+  }, [fetchDetail, onRefresh]);
+
   const durc = scadenzaInfo(p.scadenzaDurc);
-  const dvr  = scadenzaInfo(p.scadenzaDvr);
+  const dvr = scadenzaInfo(p.scadenzaDvr);
 
   const TABS = [
-    { key: 'info',    label: 'Anagrafica' },
-    { key: 'mezzi',   label: `Mezzi (${p.mezziAssegnati?.length ?? 0})` },
+    { key: 'info', label: 'Anagrafica' },
+    { key: 'mezzi', label: `Mezzi (${p.mezziAssegnati?.length ?? 0})` },
     { key: 'palmari', label: `Palmari (${p.palmariAssegnati?.length ?? 0})` },
     { key: 'autisti', label: `Autisti (${p.codiciAutista?.length ?? 0})` },
     { key: 'storico', label: 'Storico' },
-    { key: 'log',     label: 'Log' },
+    { key: 'log', label: 'Log' },
   ];
 
   const durcLabel = !p.scadenzaDurc ? 'ASSENTE' :
     durc?.cls === 'pd-scad-expired' ? 'SCADUTO' :
     durc?.cls === 'pd-scad-warning' ? 'IN SCADENZA' : 'REGOLARE';
+
   const durcCls = durcLabel === 'SCADUTO' ? 'pd-doc-expired' :
     durcLabel === 'IN SCADENZA' ? 'pd-doc-warning' :
     durcLabel === 'ASSENTE' ? 'pd-doc-absent' : 'pd-doc-ok';
@@ -422,19 +451,23 @@ function PadroncinoDetail({
 
       <div className="pd-tabs">
         {TABS.map((t) => (
-          <button key={t.key} className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`} onClick={() => setTab(t.key)}>
+          <button
+            key={t.key}
+            className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
             {t.label}
           </button>
         ))}
       </div>
 
       <div className="pd-tab-body">
-        {tab === 'info'    && <TabInfo p={p} />}
-        {tab === 'mezzi'   && <TabMezzi p={p} onRefresh={onRefresh} />}
-        {tab === 'palmari' && <TabPalmari p={p} onRefresh={onRefresh} />}
-        {tab === 'autisti' && <TabAutisti p={p} onRefresh={onRefresh} />}
+        {tab === 'info' && <TabInfo p={p} />}
+        {tab === 'mezzi' && <TabMezzi p={p} onRefresh={handleRefresh} />}
+        {tab === 'palmari' && <TabPalmari p={p} onRefresh={handleRefresh} />}
+        {tab === 'autisti' && <TabAutisti p={p} onRefresh={handleRefresh} />}
         {tab === 'storico' && <div className="pd-empty-tab">Sezione storico conteggi in sviluppo</div>}
-        {tab === 'log'     && <LogEntita entityType="padroncino" entityId={p.id} />}
+        {tab === 'log' && <LogEntita entityType="padroncino" entityId={p.id} />}
       </div>
     </div>
   );
