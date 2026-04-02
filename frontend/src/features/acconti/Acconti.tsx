@@ -57,7 +57,7 @@ function normalizeAcconto(raw: any): Acconto {
   return {
     id: raw.id,
     codice: raw.codice ?? raw.codiceAutista?.codice ?? '—',
-    nomeAutista: raw.nomeAutista ?? [raw.codiceAutista?.nome, raw.codiceAutista?.cognome].filter(Boolean).join(' ') || 'N/D',
+    nomeAutista: raw.nomeAutista ?? ([raw.codiceAutista?.nome, raw.codiceAutista?.cognome].filter(Boolean).join(' ') || 'N/D'),
     ragioneSociale: raw.ragioneSociale ?? 'N/A',
     padroncinoId: raw.padroncinoId ?? null,
     importo: Number(raw.importo),

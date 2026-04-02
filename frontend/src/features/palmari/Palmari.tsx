@@ -83,6 +83,16 @@ export default function Palmari() {
     }
   };
 
+  const handleDelete = async (id: string, codice: string) => {
+    if (!confirm(`Eliminare il palmare "${codice}"? L'operazione è irreversibile.`)) return;
+    try {
+      await palmariApi.delete(id);
+      await load();
+    } catch (e: any) {
+      alert('Errore eliminazione: ' + e.message);
+    }
+  };
+
   const STATI_FILTRO = ['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'GUASTO', 'DISMESSO'];
 
   if (loading) return (
@@ -223,7 +233,7 @@ export default function Palmari() {
                     {attiva?.dataFine ? fmt(attiva.dataFine) : <span className="palm-empty">—</span>}
                   </td>
                   <td>
-                    <div className="palm-row-actions">
+                  <div className="palm-row-actions">
                       <button
                         className="btn-primary btn-sm"
                         onClick={() => navigate(`/palmari/${p.id}`)}
@@ -231,6 +241,11 @@ export default function Palmari() {
                         Dettaglio
                       </button>
                       <button className="palm-doc-btn">📄</button>
+                      <button
+                        className="palm-del-btn"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(p.id, p.codice); }}
+                        title="Elimina palmare"
+                      >🗑</button>
                     </div>
                   </td>
                 </tr>

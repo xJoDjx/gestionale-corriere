@@ -12,6 +12,7 @@ import DettaglioCodiceAutista from './features/codici-autista/DettaglioCodiceAut
 import AccontiPage from './features/acconti/Acconti';
 import GestioneUtenti from './features/utenti/GestioneUtenti';
 import LogStorico from './features/log/LogStorico';
+import RicaricheElettriche from './features/ricariche/RicaricheElettriche';
 import './styles/global.css';
 import './features/mezzi/FlottaMezzi.css';
 import './features/conteggi/ConteggiMensili.css';
@@ -21,6 +22,7 @@ import './features/palmari/Palmari.css';
 import './features/codici-autista/CodiciAutisti.css';
 import './features/acconti/Acconti.css';
 import './features/log/LogStorico.css';
+import './features/ricariche/RicaricheElettriche.css';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -50,7 +52,7 @@ export default function App() {
           <Route path="/acconti" element={<AccontiPage />} />
           <Route path="/utenti" element={<GestioneUtenti />} />
           <Route path="/log" element={<LogStorico />} />
-          <Route path="/ricariche" element={<Placeholder title="Ricariche Elettriche" />} />
+          <Route path="/ricariche" element={<RicaricheElettriche />} />
           <Route path="/ricerca" element={<Placeholder title="Ricerca Globale" />} />
           <Route path="/esportazione" element={<Placeholder title="Esportazione" />} />
           <Route path="/impostazioni" element={<Placeholder title="Impostazioni" />} />

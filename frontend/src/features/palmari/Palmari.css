@@ -185,3 +185,23 @@
 }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* Tasto elimina nelle liste */
+.fm-del-btn,
+.palm-del-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all .15s;
+  line-height: 1;
+}
+.fm-del-btn:hover,
+.palm-del-btn:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}

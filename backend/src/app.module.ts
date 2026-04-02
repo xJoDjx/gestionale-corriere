@@ -9,6 +9,7 @@ import { AccontiModule } from './acconti/acconti.module';
 import { ConteggiModule } from './conteggi/conteggi.module';
 import { AuditModule } from './audit/audit.module';
 import { UsersModule } from './user/users.module';
+import { RicaricheModule } from './ricariche/ricariche.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsersModule } from './user/users.module';
     AccontiModule,
     ConteggiModule,
     UsersModule,
+    RicaricheModule,
   ],
 })
 export class AppModule {}

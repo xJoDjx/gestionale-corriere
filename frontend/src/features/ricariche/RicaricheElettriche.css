@@ -1,0 +1,432 @@
+/* ═══════════════════════════════════════════════════════
+   RICARICHE ELETTRICHE
+═══════════════════════════════════════════════════════ */
+
+.ric-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1400px;
+}
+
+/* ── HEADER ── */
+.ric-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.ric-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+.ric-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ── CONFIG PANEL ── */
+.ric-config-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) { .ric-config-panel { grid-template-columns: 1fr; } }
+
+.ric-config-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.ric-config-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.ric-config-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ric-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ric-config-field label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.ric-input {
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  transition: border-color .15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.ric-input:focus { outline: none; border-color: var(--accent, #6366f1); }
+
+.ric-input-suffix-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ric-input-suffix-wrap .ric-input { padding-right: 36px; }
+.ric-input-suffix {
+  position: absolute;
+  right: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* Risultato costo interno kWh */
+.ric-kwh-result {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  min-height: 40px;
+  transition: all .2s;
+}
+.ric-kwh-ok {
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+.ric-kwh-empty {
+  background: var(--bg-tertiary);
+}
+.ric-kwh-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: #16a34a;
+  font-variant-numeric: tabular-nums;
+}
+.ric-kwh-unit {
+  font-size: 13px;
+  color: #16a34a;
+  font-weight: 600;
+}
+.ric-kwh-placeholder {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── UPLOAD ZONE ── */
+.ric-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--bg-card);
+}
+.ric-upload-zone:hover, .ric-upload-drag {
+  border-color: var(--accent, #6366f1);
+  background: rgba(99,102,241,.04);
+}
+.ric-upload-done {
+  border-style: solid;
+  border-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.ric-upload-prompt, .ric-upload-success {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ric-upload-icon { font-size: 28px; }
+.ric-upload-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.ric-upload-hint { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.ric-upload-filename { font-size: 14px; font-weight: 600; color: #16a34a; }
+.ric-upload-count { font-size: 12px; color: #16a34a; margin-top: 2px; }
+
+/* ── STATS ── */
+.ric-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ric-stat {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ric-stat-int { border-color: #a7f3d0; background: #f0fdf4; }
+.ric-stat-ext { border-color: #fde68a; background: #fffbeb; }
+.ric-stat-total { border-color: var(--accent, #6366f1); }
+
+.ric-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.ric-stat-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ric-stat-val small { font-size: 13px; font-weight: 500; }
+.ric-stat-sub { font-size: 12px; color: var(--text-secondary); }
+
+/* ── TABS ── */
+.ric-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+.ric-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all .15s;
+  margin-bottom: -1px;
+}
+.ric-tab:hover { color: var(--text-primary); }
+.ric-tab-active {
+  color: var(--accent, #6366f1);
+  border-bottom-color: var(--accent, #6366f1);
+}
+
+/* ── FILTRI ── */
+.ric-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ric-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  flex: 1;
+  min-width: 200px;
+}
+.ric-search {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  width: 100%;
+}
+
+.ric-tipo-filters { display: flex; gap: 6px; }
+.ric-tipo-btn {
+  padding: 6px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: var(--font-sans);
+}
+.ric-tipo-btn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.ric-tipo-active { border-color: var(--accent, #6366f1); color: var(--accent, #6366f1); background: rgba(99,102,241,.06); }
+
+/* ── TABELLA ── */
+.ric-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: auto;
+}
+.ric-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ric-table th {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ric-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.ric-row:last-child td { border-bottom: none; }
+.ric-row:hover td { background: var(--bg-hover); }
+.ric-row-int:hover td { background: rgba(34,197,94,.05); }
+.ric-row-ext:hover td { background: rgba(234,179,8,.05); }
+
+.ric-foot td {
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+/* Celle speciali */
+.ric-targa {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: monospace;
+  letter-spacing: .03em;
+}
+.ric-padroncino {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.ric-stazione {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ric-data, .ric-durata { font-size: 12px; color: var(--text-secondary); }
+.ric-num { font-variant-numeric: tabular-nums; font-size: 13px; }
+.ric-na { color: var(--text-muted); font-style: italic; }
+.ric-costo { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ric-empty { text-align: center; padding: 40px; color: var(--text-muted); }
+
+/* Badges */
+.ric-tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ric-badge-int { background: #dcfce7; color: #15803d; }
+.ric-badge-ext { background: #fef9c3; color: #854d0e; }
+.ric-badge-int-sm { color: #15803d; font-weight: 600; }
+.ric-badge-ext-sm { color: #854d0e; font-weight: 600; }
+
+.ric-mag-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ── AGGIUNTE v2 ── */
+
+.ric-loading { display:flex; align-items:center; gap:12px; padding:48px; justify-content:center; color:var(--text-secondary); }
+.ric-spinner { width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent,#6366f1); border-radius:50%; animation:ric-spin .8s linear infinite; }
+@keyframes ric-spin { to { transform:rotate(360deg); } }
+.ric-error { padding:24px; color:#dc2626; background:#fef2f2; border-radius:var(--radius-lg); border:1px solid #fecaca; }
+
+.ric-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 24px; gap:12px; }
+.ric-empty-icon { font-size:48px; }
+.ric-empty-title { font-size:18px; font-weight:700; color:var(--text-primary); }
+.ric-empty-hint { font-size:13px; color:var(--text-secondary); }
+
+/* Storico mesi */
+.ric-mesi-strip { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ric-mesi-label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); }
+.ric-mese-chip { padding:4px 10px; border:1.5px solid var(--border); border-radius:999px; background:var(--bg-secondary); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; color:var(--text-secondary); display:inline-flex; align-items:center; gap:5px; }
+.ric-mese-chip:hover { border-color:var(--accent,#6366f1); color:var(--accent,#6366f1); }
+.ric-mese-chip-active { border-color:var(--accent,#6366f1); background:rgba(99,102,241,.08); color:var(--accent,#6366f1); }
+.ric-mese-cnt { background:var(--bg-tertiary); border-radius:999px; padding:0 5px; font-size:10px; }
+
+/* Import panel */
+.ric-import-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px; display:flex; flex-direction:column; gap:16px; }
+.ric-import-title { font-size:13px; font-weight:700; color:var(--text-primary); padding-bottom:8px; border-bottom:1px solid var(--border); }
+.ric-config-grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+@media (max-width:800px) { .ric-config-grid3 { grid-template-columns:1fr; } }
+.ric-config-section { background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; gap:10px; }
+.ric-config-sub { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); }
+.ric-config-row { display:flex; gap:10px; }
+.ric-config-row .ric-config-field { flex:1; }
+.ric-config-field { display:flex; flex-direction:column; gap:4px; }
+.ric-config-field label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+
+/* Mese selector nell'header */
+.ric-header-actions { display:flex; align-items:center; gap:10px; }
+.ric-mese-wrap { display:flex; align-items:center; gap:6px; }
+.ric-mese-wrap label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted); }
+.ric-mese-input { padding:6px 10px; border:1.5px solid var(--border); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-primary); font-size:13px; font-family:var(--font-sans); }
+.ric-del-mese { color:#dc2626 !important; border-color:#fecaca !important; }
+.ric-del-mese:hover { background:#fef2f2 !important; }
+
+/* Tariffe snapshot bar */
+.ric-tariffe-bar { display:flex; gap:10px; flex-wrap:wrap; }
+.ric-tariffa-chip { padding:6px 12px; border-radius:var(--radius-md); font-size:12px; display:flex; align-items:center; gap:6px; }
+.ric-tariffa-int { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+.ric-tariffa-ext { background:#fffbeb; border:1px solid #fde68a; color:#854d0e; }
+.ric-tariffa-chip em { font-style:normal; opacity:.75; }
+
+/* Badges categoria mezzo */
+.ric-cat-badge { display:inline-flex; align-items:center; padding:2px 7px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+.ric-cat-dist { background:#eff6ff; color:#1d4ed8; }
+.ric-cat-auto { background:#f5f3ff; color:#6d28d9; }
+
+/* Riepilogo expand */
+.ric-row-riepilogo { cursor:pointer; }
+.ric-row-riepilogo:hover td { background:var(--bg-hover); }
+.ric-row-expanded td { background:rgba(99,102,241,.04) !important; font-weight:600; }
+.ric-expand-btn { color:var(--text-muted); font-size:10px; padding:0 6px !important; }
+.ric-detail-row td { background:var(--bg-secondary) !important; padding:0 !important; border-bottom:1px solid var(--border); }
+
+/* Sotto-tabella sessioni espanse */
+.ric-sub-table { width:100%; border-collapse:collapse; font-size:12px; }
+.ric-sub-table th { padding:7px 12px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); background:var(--bg-tertiary); border-bottom:1px solid var(--border); }
+.ric-sub-table td { padding:7px 12px; border-bottom:1px solid var(--border); }
+.ric-sub-row:last-child td { border-bottom:none; }
+.ric-sub-row:hover td { background:var(--bg-hover); }

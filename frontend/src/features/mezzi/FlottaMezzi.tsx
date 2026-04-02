@@ -142,6 +142,16 @@ export default function FlottaMezzi() {
     }
   };
 
+  const handleDelete = async (id: string, targa: string) => {
+    if (!confirm(`Eliminare il mezzo "${targa}"? L'operazione è irreversibile.`)) return;
+    try {
+      await mezziApi.delete(id);
+      await loadData();
+    } catch (e: any) {
+      alert('Errore eliminazione: ' + e.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fm-page">
@@ -382,6 +392,11 @@ export default function FlottaMezzi() {
                         Dettaglio
                       </button>
                       <button className="fm-doc-btn">📄</button>
+                      <button
+                        className="fm-del-btn"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(m.id, m.targa); }}
+                        title="Elimina mezzo"
+                      >🗑</button>
                     </div>
                   </td>
                 </tr>
