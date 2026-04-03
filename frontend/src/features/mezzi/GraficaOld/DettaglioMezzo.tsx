@@ -245,9 +245,9 @@ export default function DettaglioMezzo() {
     : '';
 
   const TABS = [
-    { key: 'info', label: 'Info mezzo' },
-    { key: 'assegnazioni', label: `Assegnazioni (${mezzo.assegnazioni?.length ?? 0})` },
-    { key: 'log', label: 'Log' },
+    { key: 'info', label: '📋 Info & Dati' },
+    { key: 'assegnazioni', label: `🔗 Assegnazioni (${mezzo.assegnazioni?.length ?? 0})` },
+    { key: 'log', label: '📜 Log' },
   ];
 
   return (
@@ -255,7 +255,7 @@ export default function DettaglioMezzo() {
       {/* ── TOPBAR ── */}
       <div className="dm-topbar">
         <button className="btn-ghost-sm" onClick={() => navigate('/flotta')}>← Flotta Mezzi</button>
-        <div className="dm-topbar-title">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800, letterSpacing: '.05em' }}>
             {mezzo.targa}
           </h1>

@@ -20,7 +20,7 @@ const scadenzaLabel = (d: string | null | undefined) => {
   const diff = daysDiff(d);
   if (diff === null) return null;
   if (diff < 0) return { label: `${Math.abs(diff)}gg fa`, cls: 'scad-expired', icon: '⚠️' };
-  if (diff <= 30) return { label: `${diff}gg`, cls: 'scad-warning', icon: '⚠️' };
+  if (diff <= 30) return { label: `${diff}gg`, cls: 'scad-warning', icon: '✅' };
   return { label: `${diff}gg`, cls: 'scad-ok', icon: '✅' };
 };
 
@@ -41,9 +41,11 @@ const STATO_COLORS: Record<string, string> = {
   DISMESSO: 'badge-gray',
 };
 
-const CAT_COLORS: Record<string, string> = {
-  DISTRIBUZIONE: 'tag-blue',
-  AUTO_AZIENDALE: 'tag-purple',
+const ALIM_COLORS: Record<string, string> = {
+  GASOLIO: 'tag-gray',
+  ELETTRICO: 'tag-green',
+  'GASOLIO+MHEV': 'tag-blue',
+  BENZINA: 'tag-orange',
 };
 
 // ─── COMPONENTE PRINCIPALE ────────────────────────────
@@ -313,14 +315,14 @@ export default function FlottaMezzi() {
               const revInfo = scadenzaLabel(m.scadenzaRevisione);
               const kmPct = kmPercent(m.kmAttuali, m.kmLimite);
               const kmColor = kmPct >= 90 ? 'km-bar-red' : kmPct >= 70 ? 'km-bar-orange' : kmPct >= 40 ? 'km-bar-yellow' : 'km-bar-green';
-               const categoryKey = (m.categoria || '').toUpperCase();
+              const alimKey = (m.alimentazione || '').toUpperCase().replace(/ /g, '+');
               return (
                 <tr key={m.id} className="fm-row">
                   <td>
                     <div className="fm-targa-cell">
                       <span className="fm-targa">{m.targa}</span>
                       {m.categoria && (
-                        <span className={`fm-cat-tag ${CAT_COLORS[categoryKey] || 'tag-gray'}`}>
+                        <span className={`fm-cat-tag ${ALIM_COLORS[alimKey] || 'tag-gray'}`}>
                           {m.categoria.startsWith('DISTRIB') ? '🚛 DISTRIB.' : '🚗 AUTO AZ.'}
                         </span>
                       )}
