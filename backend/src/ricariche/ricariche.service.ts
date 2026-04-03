@@ -155,6 +155,13 @@ export class RicaricheService {
       const mezzo = mezzoMap.get(targaNorm);
       const assegnazioneAttiva = mezzo?.assegnazioni?.[0];
       const primoGiornoMese = new Date(`${mese}-01`);
+      const costoUnitario = Number(s.costoUnitario) || 0;
+      const costoBase = Number(s.kwh) * costoUnitario;
+      const maggiorazioneMezzo = mezzo?.maggiorazioneRicarica != null
+        ? Number(mezzo.maggiorazioneRicarica)
+        : null;
+      const maggiorazione = maggiorazioneMezzo ?? Number(s.maggiorazione || 0);
+      const importo = costoBase * (1 + maggiorazione / 100);
 
       return {
         targa: targaNorm || (s.targa ?? '').toUpperCase(),
@@ -165,10 +172,10 @@ export class RicaricheService {
         inizioSessione: s.inizioSessione,
         fineSessione: s.fineSessione,
         kwh: s.kwh,
-        costoUnitario: s.costoUnitario,
-        costoBase: s.costoBase,
-        maggiorazione: s.maggiorazione,
-        importo: s.importo,
+        costoUnitario,
+        costoBase,
+        maggiorazione,
+        importo,
         categoriaMezzo: mezzo?.categoria ?? s.categoriaMezzo ?? null,
         mezzoId: mezzo?.id ?? null,
         padroncinoId: assegnazioneAttiva?.padroncino?.id ?? null,
