@@ -1,5 +1,6 @@
 4) quando creo un utente devo poter scegliere le sezioni da poter visualizzare e o modificare
 5) nella pagina padroncino nei log dovrebbero essere registrate tutte le operazioni inerenti a quel padroncino.. possiamo "filtrarle" dal log storigo generale e isnerirle..
+6) possibilità di modificare la % di maggiorazione direttamente dalla pagina ricarica , deve essere piu dinamica
 
 
 

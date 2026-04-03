@@ -77,6 +77,20 @@ export class ConteggiService {
     });
     if (exists) throw new BadRequestException('Conteggio già esistente per questo mese');
 
+    // ─── AUTO-CHIUDI conteggi BOZZA del mese precedente per lo stesso padroncino
+    const [year, month] = dto.mese.split('-').map(Number);   // ← dto.mese
+    const prevDate = new Date(year, month - 2, 1);
+    const prevMese = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+    await this.prisma.conteggioMensile.updateMany({
+      where: {
+        padroncinoId: dto.padroncinoId,   // ← dto.padroncinoId
+        mese: prevMese,
+        stato: 'BOZZA',
+        deletedAt: null,
+      },
+      data: { stato: 'CHIUSO' },
+    });   
     // Crea conteggio
     const conteggio = await this.prisma.conteggioMensile.create({
       data: {

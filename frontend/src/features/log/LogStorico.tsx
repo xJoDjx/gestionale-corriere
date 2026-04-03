@@ -1,5 +1,5 @@
 // src/features/log/LogStorico.tsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { api } from '../../lib/api';
 import './LogStorico.css';
 
@@ -250,9 +250,8 @@ export default function LogStorico() {
             </thead>
             <tbody>
               {entries.map((e) => (
-                <>
-                  <tr
-                    key={e.id}
+                <Fragment key={e.id}>
+                  <tr key={e.id}
                     className={`log-row ${expanded === e.id ? 'log-row-expanded' : ''}`}
                     onClick={() => setExpanded(expanded === e.id ? null : e.id)}
                   >
@@ -289,7 +288,7 @@ export default function LogStorico() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

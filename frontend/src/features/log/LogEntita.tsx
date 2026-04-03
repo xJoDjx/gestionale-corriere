@@ -1,6 +1,6 @@
 // src/features/log/LogEntita.tsx
 // Componente riutilizzabile: mostra il log audit di una singola entità
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { api } from '../../lib/api';
 import './LogStorico.css';
 
@@ -108,7 +108,7 @@ export default function LogEntita({ entityType, entityId }: Props) {
         </thead>
         <tbody>
           {entries.map((e) => (
-            <>
+            <Fragment key={e.id}>
               <tr
                 key={e.id}
                 className={`log-row ${expanded === e.id ? 'log-row-expanded' : ''}`}
@@ -136,7 +136,7 @@ export default function LogEntita({ entityType, entityId }: Props) {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

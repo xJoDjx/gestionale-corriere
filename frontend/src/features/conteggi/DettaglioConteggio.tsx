@@ -668,12 +668,18 @@ export default function DettaglioConteggio() {
   const [cassaAcconti, setCassaAcconti] = useState<RigaCassaAcconto[]>([]);
 
   // Caricamento dati reali
+  // ─── STATO CONTEGGIO (per blocco su CHIUSO/CONFERMATO) ────────────────────
+  const [statoConteggio, setStatoConteggio] = useState<'BOZZA' | 'CHIUSO' | 'CONFERMATO'>('BOZZA');
+  const [saving, setSaving] = useState(false);
+
+  const isReadonly = statoConteggio === 'CHIUSO' || statoConteggio === 'CONFERMATO';
+
+  // ─── Caricamento dati ────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
     try {
-      // Carica padroncino + acconti + conteggio del mese in parallelo
       const [pad, accontiRaw, conteggiList] = await Promise.all([
         padronciniApi.detail(id),
         api.get<any[]>(`/acconti/padroncino/${id}?mese=${mese}`),
@@ -681,61 +687,154 @@ export default function DettaglioConteggio() {
       ]);
       setPadroncino(pad);
 
-      // Salva l'id del conteggio se esiste già
       const conteggio = conteggiList[0] ?? null;
-      setConteggioId(conteggio?.id ?? null);
-
-      // Checklist da localStorage
+      const cId = conteggio?.id ?? null;
+      setConteggioId(cId);
+      setStatoConteggio(conteggio?.stato ?? 'BOZZA');
       setChecklist(loadChecklist(id, mese));
 
-      // Righe fatturato — vuote all'inizio (l'utente le inserisce)
-      setRigheF([]);
+      // ─── Se esiste già un conteggio salvato, RICARICA LE RIGHE DAL DB ───
+      if (conteggio && conteggio.righe?.length > 0) {
+        const righe = conteggio.righe;
 
-      // Mezzi assegnati → righe noleggio
-      const mezziRighe: RigaNoleggioMezzo[] = (pad.mezziAssegnati ?? []).map((m: any) => ({
-        id: `mez-${m.id ?? m.mezzoId}`,
-        mezzoId: m.id ?? m.mezzoId,
-        targa: m.targa,
-        valoreRataNoIva: m.tariffa ?? null,
-        percIva: 22,
-        alimentazione: m.alimentazione ?? 'DIESEL',
-        note: '',
-        isManuale: false,
-      }));
-      setRigheM(mezziRighe);
+        setRigheF(
+          righe
+            .filter((r: any) => r.tipo === 'FATTURATO')
+            .map((r: any) => ({
+              id: r.id,
+              descrizione: r.descrizione,
+              valore: Number(r.importo),
+              nota: r.note ?? '',
+              _dbId: r.id,
+            }))
+        );
 
-      // Mezzi elettrici → righe ricariche
-      // Prova a caricare i costi reali dal modulo ricariche se disponibili
-      const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      let ricaricheDB: Record<string, number> = {};
-      try {
-        // Prima ricalcola i padroncinoId su sessioni eventualmente orfane
-        await api.patch(`/ricariche/${mese}/ricalcola-padroncini`, {}).catch(() => {});
-        
-        const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
-        const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
-        if (entryPad?.mezzi) {
-          for (const d of entryPad.mezzi) {
-            ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
+        setRigheM(
+          righe
+            .filter((r: any) => r.tipo === 'NOLEGGIO')
+            .map((r: any) => {
+              const m = (pad.mezziAssegnati ?? []).find(
+                (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
+              );
+              return {
+                id: r.id,
+                mezzoId: r.riferimentoId,
+                targa: m?.targa ?? r.descrizione.replace('Noleggio ', '').split(' ')[0],
+                valoreRataNoIva: Number(r.importo) / 1.22,
+                percIva: 22,
+                alimentazione: m?.alimentazione ?? 'DIESEL',
+                note: r.note ?? '',
+                isManuale: r.modificaManuale,
+                _dbId: r.id,
+              };
+            })
+        );
+
+        setRigheR(
+          righe
+            .filter((r: any) => r.tipo === 'RICARICA')
+            .map((r: any) => {
+              const m = (pad.mezziAssegnati ?? []).find(
+                (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
+              );
+              return {
+                id: r.id,
+                mezzoId: r.riferimentoId,
+                targa: m?.targa ?? '',
+                costoRicarica: Number(r.importo) / 1.05,
+                percIva: 5,
+                note: r.note ?? '',
+                isManuale: r.modificaManuale,
+                _dbId: r.id,
+              };
+            })
+        );
+
+        setRigheV(
+          righe
+            .filter((r: any) => r.tipo === 'ADDEBITO')
+            .map((r: any) => ({
+              id: r.id,
+              descrizione: r.descrizione,
+              valoreNoIva: Number(r.importo) / (1 + (r.categoria === 'bollo' ? 0 : 0.22)),
+              percIva: 22,
+              note: r.note ?? '',
+              _dbId: r.id,
+            }))
+        );
+
+        setAccrediti(
+          righe
+            .filter((r: any) => r.tipo === 'ACCREDITO' || r.tipo === 'BONUS')
+            .map((r: any) => ({
+              id: r.id,
+              descrizione: r.descrizione,
+              valore: Number(r.importo),
+              nota: r.note ?? '',
+              _dbId: r.id,
+            }))
+        );
+
+        setFineMese(
+          righe
+            .filter((r: any) => r.tipo === 'FINE_MESE')
+            .map((r: any) => ({
+              id: r.id,
+              descrizione: r.descrizione,
+              valore: Number(r.importo),
+              nota: r.note ?? '',
+              _dbId: r.id,
+            }))
+        );
+      } else {
+        // ─── Nessun conteggio in DB: inizializza da padroncino ────────────
+        setRigheF([]);
+
+        const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let ricaricheDB: Record<string, number> = {};
+        try {
+          const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
+          const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
+          if (entryPad?.mezzi) {
+            for (const d of entryPad.mezzi) {
+              ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
+            }
           }
-        }
-      } catch { /* ignora */ }
+        } catch { /* ignora */ }
 
-      const ricaricheRighe: RigaRicarica[] = (pad.mezziAssegnati ?? [])
-        .filter((m: any) => m.alimentazione === 'ELETTRICO')
-        .map((m: any) => ({
-          id: `ric-${m.id ?? m.mezzoId}`,
-          mezzoId: m.id ?? m.mezzoId,
-          targa: m.targa,
-          costoRicarica: ricaricheDB[normTarga(m.targa)] ?? null,  // ← usa norm
-          percIva: 5,
-          note: '',
-          isManuale: false,
-        }));
+        setRigheM(
+          (pad.mezziAssegnati ?? []).map((m: any) => ({
+            id: `mez-${m.id ?? m.mezzoId}`,
+            mezzoId: m.id ?? m.mezzoId,
+            targa: m.targa,
+            valoreRataNoIva: m.tariffa ?? null,
+            percIva: 22,
+            alimentazione: m.alimentazione ?? 'DIESEL',
+            note: '',
+            isManuale: false,
+          }))
+        );
 
-      setRigheR(ricaricheRighe)
+        setRigheR(
+          (pad.mezziAssegnati ?? [])
+            .filter((m: any) => m.alimentazione === 'ELETTRICO')
+            .map((m: any) => ({
+              id: `ric-${m.id ?? m.mezzoId}`,
+              mezzoId: m.id ?? m.mezzoId,
+              targa: m.targa,
+              costoRicarica: ricaricheDB[normTarga(m.targa)] ?? null,
+              percIva: 5,
+              note: '',
+              isManuale: false,
+            }))
+        );
 
-      // Acconti → cassa prima nota (readonly)
+        setRigheV([]);
+        setAccrediti([]);
+        setFineMese([]);
+      }
+
+      // Acconti — sempre freschi dal DB (readonly)
       const cassaRighe: RigaCassaAcconto[] = (accontiRaw ?? []).map((a: any) => ({
         id: `acc-${a.id}`,
         accontoId: a.id,
@@ -760,15 +859,169 @@ export default function DettaglioConteggio() {
   // ─── Elimina conteggio ────────────────────────────────────────────────────
   const handleEliminaConteggio = async () => {
     if (!conteggioId) return;
-    if (!confirm(`Eliminare il conteggio di ${formatMese(mese)} per questo padroncino?\nL'operazione è irreversibile.`)) return;
+    if (!confirm(
+      `Eliminare il conteggio di ${formatMese(mese)} per ${padroncino?.ragioneSociale}?\n` +
+      `Tutte le righe verranno cancellate. Operazione irreversibile.`
+    )) return;
     setDeletingConteggio(true);
     try {
       await conteggiApi.remove(conteggioId);
-      navigate('/conteggi');
+      setConteggioId(null);
+      setStatoConteggio('BOZZA');
+      setRigheF([]);
+      setRigheM([]);  // oppure navigate('/conteggi') se preferisci uscire
+      setRigheR([]);
+      setRigheV([]);
+      setAccrediti([]);
+      setFineMese([]);
+      alert('✅ Conteggio eliminato. Ora puoi crearne uno nuovo salvando.');
     } catch (e: any) {
-      alert('Errore eliminazione: ' + e.message);
+      alert('❌ Errore eliminazione: ' + e.message);
     } finally {
       setDeletingConteggio(false);
+    }
+  };
+
+  // ─── SALVA TUTTO NEL DB ──────────────────────────────────────────────────
+  const handleSalva = async () => {
+    if (!id || isReadonly) return;
+    setSaving(true);
+    try {
+      // ✅ NUOVO — crea solo se non esiste, altrimenti usa l'id già in stato
+      let cId = conteggioId;
+      if (!cId) {
+        // Doppio controllo: potrebbe esistere in DB ma non in stato locale
+        const esistenti = await conteggiApi.list(mese, id);
+        if (esistenti.length > 0) {
+          cId = esistenti[0].id;
+          setConteggioId(cId);
+        } else {
+          const nuovoConteggio = await conteggiApi.create(id, mese);
+          cId = nuovoConteggio.id;
+          setConteggioId(cId);
+        }
+      }
+
+      // 2. Cancella tutte le righe esistenti NON manuali e riscrivi
+      //    (strategia "replace all" per semplicità e correttezza)
+      // Prima: ottieni le righe attuali dal DB
+      const conteggioAttuale = await conteggiApi.detail(cId);
+      for (const r of conteggioAttuale.righe) {
+        await conteggiApi.deleteRiga(r.id);
+      }
+
+      // 3. Ricrea tutte le righe dallo stato locale
+      let ordine = 0;
+
+      for (const r of righeF) {
+        if (!r.valore && r.valore !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'FATTURATO',
+          descrizione: r.descrizione || 'Fatturato',
+          importo: r.valore,
+          segno: 'POSITIVO',
+          categoria: 'fatturato',
+          ordine: ordine++,
+          modificaManuale: true,
+          note: r.nota || null,
+        });
+      }
+
+      // Palmari (calcolato automaticamente)
+      if (numeroPalmari > 0 && tariffaPalmareGiornaliera > 0) {
+        await conteggiApi.addRiga(cId, {
+          tipo: 'PALMARE',
+          descrizione: `Palmari ×${numeroPalmari} × ${giorniMese}gg @ ${tariffaPalmareGiornaliera}€/g`,
+          importo: +(numeroPalmari * tariffaPalmareGiornaliera * giorniMese).toFixed(2),
+          segno: 'NEGATIVO',
+          categoria: 'palmari',
+          ordine: ordine++,
+          modificaManuale: false,
+          note: null,
+        });
+      }
+
+      for (const r of righeM) {
+        if (!r.valoreRataNoIva && r.valoreRataNoIva !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'NOLEGGIO',
+          descrizione: `Noleggio ${r.targa}`,
+          importo: +(r.valoreRataNoIva * (1 + r.percIva / 100)).toFixed(2),
+          segno: 'NEGATIVO',
+          categoria: 'noleggio',
+          riferimentoTipo: 'mezzo',
+          riferimentoId: r.mezzoId ?? undefined,
+          ordine: ordine++,
+          modificaManuale: r.isManuale ?? false,
+          note: r.note || null,
+        });
+      }
+
+      for (const r of righeR) {
+        if (!r.costoRicarica && r.costoRicarica !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'RICARICA',
+          descrizione: `Ricarica elettrica ${r.targa}`,
+          importo: +(r.costoRicarica * (1 + r.percIva / 100)).toFixed(2),
+          segno: 'NEGATIVO',
+          categoria: 'ricariche',
+          riferimentoTipo: 'mezzo',
+          riferimentoId: r.mezzoId ?? undefined,
+          ordine: ordine++,
+          modificaManuale: r.isManuale ?? false,
+          note: r.note || null,
+        });
+      }
+
+      for (const r of righeV) {
+        if (!r.valoreNoIva && r.valoreNoIva !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'ADDEBITO',
+          descrizione: r.descrizione || 'Addebito',
+          importo: +(r.valoreNoIva * (1 + r.percIva / 100)).toFixed(2),
+          segno: 'NEGATIVO',
+          categoria: 'addebiti',
+          ordine: ordine++,
+          modificaManuale: true,
+          note: r.note || null,
+        });
+      }
+
+      for (const r of accrediti) {
+        if (!r.valore && r.valore !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'ACCREDITO',
+          descrizione: r.descrizione || 'Accredito',
+          importo: r.valore,
+          segno: 'POSITIVO',
+          categoria: 'accrediti',
+          ordine: ordine++,
+          modificaManuale: true,
+          note: r.nota || null,
+        });
+      }
+
+      for (const r of fineMese) {
+        if (!r.valore && r.valore !== 0) continue;
+        await conteggiApi.addRiga(cId, {
+          tipo: 'FINE_MESE',
+          descrizione: r.descrizione || 'Fine mese',
+          importo: r.valore,
+          segno: 'POSITIVO',
+          categoria: 'fine_mese',
+          ordine: ordine++,
+          modificaManuale: true,
+          note: r.nota || null,
+        });
+      }
+
+      alert('✅ Conteggio salvato correttamente!');
+      await loadData(); // Ricarica dal DB per sincronizzare gli id reali
+
+    } catch (e: any) {
+      alert('❌ Errore salvataggio: ' + (e.message ?? 'Errore sconosciuto'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -891,20 +1144,35 @@ export default function DettaglioConteggio() {
           >
             {aggiornaRicariche ? '⏳' : '⚡'} Aggiorna Ricariche
           </button>
-          <button className="btn-outline btn-sm">💾 Salva</button>
+          <button
+            className="btn-primary btn-sm"
+            onClick={handleSalva}
+            disabled={saving || isReadonly}
+            title={isReadonly ? 'Conteggio chiuso — non modificabile' : ''}
+          >
+            {saving ? '⏳ Salvando...' : '💾 Salva'}
+          </button>
           <button className="btn-primary btn-sm">📄 Genera PDF</button>
+
+          {/* Mostra il tasto elimina SOLO se abbiamo un ID (ovvero se il record esiste nel DB) */}
           {conteggioId && (
             <button
               className="btn-danger btn-sm"
               onClick={handleEliminaConteggio}
               disabled={deletingConteggio}
-              title="Elimina questo conteggio"
             >
-              {deletingConteggio ? '⏳' : '🗑️'} Elimina
+              {deletingConteggio ? '⏳' : '🗑️'} Elimina conteggio
             </button>
           )}
         </div>
       </div>
+
+      {isReadonly && (
+        <div className="dc-readonly-banner">
+          🔒 Conteggio {statoConteggio === 'CONFERMATO' ? 'CONFERMATO' : 'CHIUSO'} — sola lettura.
+          Nessuna modifica verrà accettata.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="dc-tabs">
