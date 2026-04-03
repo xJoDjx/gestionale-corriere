@@ -23,6 +23,10 @@ import './features/codici-autista/CodiciAutisti.css';
 import './features/acconti/Acconti.css';
 import './features/log/LogStorico.css';
 import './features/ricariche/RicaricheElettriche.css';
+import ConteggiPage from './features/conteggi/ConteggiPage';
+import DettaglioConteggio from './features/conteggi/DettaglioConteggio';
+import './features/conteggi/ConteggiPage.css';
+import './features/conteggi/DettaglioConteggio.css';
 
 function Placeholder({ title }: { title: string }) {
   return (
@@ -43,7 +47,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/flotta" element={<FlottaMezzi />} />
           <Route path="/flotta/:id" element={<DettaglioMezzo />} />
-          <Route path="/conteggi" element={<ConteggiMensili />} />
+          <Route path="/conteggi" element={<ConteggiPage />} />
+          <Route path="/conteggi/:id" element={<DettaglioConteggio />} />
           <Route path="/padroncini" element={<PadronciniPage />} />
           <Route path="/palmari" element={<PalmariPage />} />
           <Route path="/palmari/:id" element={<DettaglioPalmare />} />

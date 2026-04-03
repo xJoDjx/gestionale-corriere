@@ -211,7 +211,7 @@ export default function DettaglioPalmare() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa mensile (€)</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa giornaliera (€)</label>
                 <input
                   type="number" step="0.01"
                   style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}

@@ -34,6 +34,7 @@ export interface BulkResult {
   errore?: string;
 }
 
+// ─── CONTEGGI API ────────────────────────────────────
 export const conteggiApi = {
   list: (mese?: string, padroncinoId?: string) => {
     const params = new URLSearchParams();
@@ -42,31 +43,22 @@ export const conteggiApi = {
     const qs = params.toString();
     return api.get<ConteggioMensile[]>(`/conteggi${qs ? '?' + qs : ''}`);
   },
-
   detail: (id: string) =>
     api.get<ConteggioMensile>(`/conteggi/${id}`),
-
   create: (padroncinoId: string, mese: string) =>
     api.post<ConteggioMensile>('/conteggi', { padroncinoId, mese }),
-
   generaBulk: (mese: string) =>
     api.post<BulkResult[]>('/conteggi/bulk', { mese }),
-
   updateStato: (id: string, stato: string) =>
     api.put<ConteggioMensile>(`/conteggi/${id}/stato`, { stato }),
-
   rigenera: (id: string) =>
     api.post<ConteggioMensile>(`/conteggi/${id}/rigenera`, {}),
-
   addRiga: (conteggioId: string, data: Partial<ConteggiRiga>) =>
     api.post<ConteggiRiga>(`/conteggi/${conteggioId}/righe`, data),
-
   updateRiga: (rigaId: string, data: Partial<ConteggiRiga>) =>
     api.put<ConteggiRiga>(`/conteggi/righe/${rigaId}`, data),
-
   deleteRiga: (rigaId: string) =>
     api.delete(`/conteggi/righe/${rigaId}`),
-
   remove: (id: string) =>
     api.delete(`/conteggi/${id}`),
 };
