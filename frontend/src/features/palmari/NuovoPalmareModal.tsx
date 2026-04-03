@@ -18,7 +18,7 @@ export interface NuovoPalmare {
 }
 
 const EMPTY: NuovoPalmare = {
-  codice: '', seriale: '', modello: '', tariffa: '35', sim: '', note: '',
+  codice: '', seriale: '', modello: '', tariffa: '1.99', sim: '', note: '',
 };
 
 export default function NuovoPalmareModal({ open, onClose, onSave }: Props) {

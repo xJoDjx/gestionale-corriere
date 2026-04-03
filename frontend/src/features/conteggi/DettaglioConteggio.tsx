@@ -706,16 +706,17 @@ export default function DettaglioConteggio() {
 
       // Mezzi elettrici → righe ricariche
       // Prova a caricare i costi reali dal modulo ricariche se disponibili
+      const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
       let ricaricheDB: Record<string, number> = {};
       try {
         const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
         const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
-        if (entryPad?.dettaglio) {
-          for (const d of entryPad.dettaglio) {
-            ricaricheDB[d.targa] = Number(d.costoTot ?? 0);
+        if (entryPad?.mezzi) {
+          for (const d of entryPad.mezzi) {
+            ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
           }
         }
-      } catch { /* ignora — ricariche non ancora caricate */ }
+      } catch { /* ignora */ }
 
       const ricaricheRighe: RigaRicarica[] = (pad.mezziAssegnati ?? [])
         .filter((m: any) => m.alimentazione === 'ELETTRICO')
@@ -723,12 +724,13 @@ export default function DettaglioConteggio() {
           id: `ric-${m.id ?? m.mezzoId}`,
           mezzoId: m.id ?? m.mezzoId,
           targa: m.targa,
-          costoRicarica: ricaricheDB[m.targa] ?? null,
+          costoRicarica: ricaricheDB[normTarga(m.targa)] ?? null,  // ← usa norm
           percIva: 5,
           note: '',
           isManuale: false,
         }));
-      setRigheR(ricaricheRighe);
+
+      setRigheR(ricaricheRighe)
 
       // Acconti → cassa prima nota (readonly)
       const cassaRighe: RigaCassaAcconto[] = (accontiRaw ?? []).map((a: any) => ({
@@ -771,30 +773,30 @@ export default function DettaglioConteggio() {
   const handleAggiornaRicariche = async () => {
     if (!id) return;
     setAggiornaRicariche(true);
+    const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
     try {
       const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
       const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
-      if (!entryPad?.dettaglio?.length) {
+      if (!entryPad?.mezzi?.length) {          // ← mezzi (non dettaglio)
         alert('Nessuna ricarica trovata per questo padroncino nel mese selezionato.');
         return;
       }
       const nuoviCosti: Record<string, number> = {};
-      for (const d of entryPad.dettaglio) {
-        nuoviCosti[d.targa] = Number(d.costoTot ?? 0);
+      for (const d of entryPad.mezzi) {        // ← mezzi
+        nuoviCosti[normTarga(d.targa)] = Number(d.costo ?? 0);  // ← costo
       }
       setRigheR((prev) => prev.map((r) => ({
         ...r,
-        costoRicarica: nuoviCosti[r.targa] ?? r.costoRicarica,
+        costoRicarica: nuoviCosti[normTarga(r.targa)] ?? r.costoRicarica,  // ← norm
       })));
-      // Aggiungi righe mancanti (nuovi mezzi elettrici con ricariche)
-      const targheEsistenti = new Set(righeR.map((r) => r.targa));
-      const nuove: RigaRicarica[] = entryPad.dettaglio
-        .filter((d: any) => !targheEsistenti.has(d.targa))
+      const targheEsistenti = new Set(righeR.map((r) => normTarga(r.targa)));
+      const nuove: RigaRicarica[] = entryPad.mezzi              // ← mezzi
+        .filter((d: any) => !targheEsistenti.has(normTarga(d.targa)))
         .map((d: any) => ({
           id: newId(),
           mezzoId: null,
           targa: d.targa,
-          costoRicarica: Number(d.costoTot ?? 0),
+          costoRicarica: Number(d.costo ?? 0),  // ← costo
           percIva: 5,
           note: 'Aggiunto da ricariche',
           isManuale: true,
@@ -806,7 +808,6 @@ export default function DettaglioConteggio() {
       setAggiornaRicariche(false);
     }
   };
-
   // ─── Helper setter generici ───────────────────────────────────────────────
   function makeSetter<T extends { id: string }>(setFn: React.Dispatch<React.SetStateAction<T[]>>) {
     return (id: string, field: keyof T, val: any) =>
