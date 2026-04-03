@@ -63,7 +63,6 @@ export class MezziService {
             orderBy: { dataInizio: 'desc' },
             take: 1,
           },
-          // tags e documenti rimossi dallo schema (relazioni polimorfiche eliminate)
         },
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
@@ -150,7 +149,11 @@ export class MezziService {
 
   // ─── CREATE ─────────────────────────────────────────
   async create(dto: CreateMezzoDto, userId: string) {
-    const exists = await this.prisma.mezzo.findUnique({ where: { targa: dto.targa } });
+    // ✅ FIX BUG 1: usare findFirst con deletedAt: null invece di findUnique
+    // findUnique trovava anche i mezzi soft-deleted, impedendo il reinserimento
+    const exists = await this.prisma.mezzo.findFirst({
+      where: { targa: dto.targa, deletedAt: null },
+    });
     if (exists) throw new ConflictException('Targa già esistente');
 
     const data = this.normalizeDto(dto);
@@ -213,9 +216,13 @@ export class MezziService {
         mezzoId,
         padroncinoId: dto.padroncinoId,
         dataInizio: new Date(dto.dataInizio),
-        dataFine: dto.dataFine ? new Date(dto.dataFine) : undefined,
+        dataFine: dto.dataFine ? new Date(dto.dataFine) : null,
+        note: dto.note,
       },
-      include: { padroncino: { select: { ragioneSociale: true } } },
+      include: {
+        padroncino: { select: { id: true, ragioneSociale: true } },
+        mezzo: { select: { targa: true } },
+      },
     });
 
     // Aggiorna stato mezzo → ASSEGNATO
@@ -224,7 +231,11 @@ export class MezziService {
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazione.id,
       azione: 'ASSEGNA',
-      dataDopo: { mezzoId, padroncinoId: dto.padroncinoId, ragioneSociale: assegnazione.padroncino.ragioneSociale } as any,
+      dataDopo: {
+        targa: assegnazione.mezzo.targa,
+        ragioneSociale: assegnazione.padroncino.ragioneSociale,
+        dataInizio: dto.dataInizio,
+      } as any,
     });
 
     return assegnazione;
@@ -233,7 +244,10 @@ export class MezziService {
   async chiudiAssegnazione(assegnazioneId: string, userId: string) {
     const ass = await this.prisma.assegnazioneMezzo.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
-      include: { mezzo: { select: { id: true } } },
+      include: {
+        mezzo: { select: { id: true, targa: true } },
+        padroncino: { select: { ragioneSociale: true } },
+      },
     });
     if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
@@ -242,17 +256,18 @@ export class MezziService {
       data: { dataFine: new Date() },
     });
 
-    // Aggiorna stato mezzo → DISPONIBILE (se nessuna altra assegnazione attiva)
-    const altre = await this.prisma.assegnazioneMezzo.count({
+    // Controlla se ci sono altre assegnazioni attive
+    const altreAttive = await this.prisma.assegnazioneMezzo.count({
       where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
     });
-    if (altre === 0) {
+    if (altreAttive === 0) {
       await this.prisma.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
     }
 
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId,
       azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: { targa: ass.mezzo.targa, ragioneSociale: ass.padroncino.ragioneSociale } as any,
     });
 
     return { closed: true };

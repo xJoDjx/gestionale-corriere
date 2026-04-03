@@ -1,4 +1,5 @@
 // src/features/palmari/DettaglioPalmare.tsx
+// BUG 2 FIX: aggiunto form state + handleSave per consentire la modifica dei dati
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { palmariApi, padronciniApi } from '../../lib/api';
@@ -29,6 +30,15 @@ export default function DettaglioPalmare() {
   const [showAssegna, setShowAssegna] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ── FIX BUG 2: stato form per modifica ──────────────────
+  const [form, setFormState] = useState<Partial<Palmare>>({});
+  const [dirty, setDirty] = useState(false);
+
+  const set = (k: keyof Palmare, v: any) => {
+    setFormState((f) => ({ ...f, [k]: v }));
+    setDirty(true);
+  };
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -38,6 +48,8 @@ export default function DettaglioPalmare() {
         padronciniApi.list({ limit: '200' }),
       ]);
       setPalmare(p);
+      setFormState(p); // ← popola il form con i dati del palmare
+      setDirty(false);
       setPadroncini(pResp.data);
     } catch (e: any) {
       setError(e.message);
@@ -47,6 +59,30 @@ export default function DettaglioPalmare() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── FIX BUG 2: salvataggio modifiche ──────────────────────
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await palmariApi.update(id, {
+        codice: form.codice,
+        marca: form.marca ?? undefined,
+        modello: form.modello ?? undefined,
+        imei: form.imei ?? undefined,
+        simNumero: form.simNumero ?? undefined,
+        tariffaMensile: form.tariffaMensile ?? undefined,
+        stato: form.stato,
+        note: form.note ?? undefined,
+      });
+      setDirty(false);
+      await load();
+    } catch (e: any) {
+      alert('Errore salvataggio: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleAssegna = async () => {
     if (!id || !assegnaForm.padroncinoId || !assegnaForm.dataInizio) return;
@@ -104,25 +140,113 @@ export default function DettaglioPalmare() {
         >← Palmari</button>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>📱 {palmare.codice}</h1>
         <span className={`palm-badge ${meta.cls}`} style={{ fontSize: 12 }}>{meta.label.toUpperCase()}</span>
+
+        {/* ── FIX BUG 2: pulsante Salva in header ── */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {dirty && (
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+              style={{ fontSize: 13 }}
+            >
+              {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+            </button>
+          )}
+          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>✓ Salvato</span>}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-        {/* ── Scheda anagrafica ── */}
+        {/* ── FIX BUG 2: Scheda anagrafica EDITABILE ── */}
         <div className="detail-card">
           <h3 className="detail-card-title">📋 Dati Palmare</h3>
-          <table className="detail-table">
-            <tbody>
-              <tr><td>Codice</td><td><strong>{palmare.codice}</strong></td></tr>
-              <tr><td>Marca</td><td>{palmare.marca || '—'}</td></tr>
-              <tr><td>Modello</td><td>{palmare.modello || '—'}</td></tr>
-              <tr><td>IMEI</td><td style={{ fontFamily: 'monospace' }}>{palmare.imei || '—'}</td></tr>
-              <tr><td>SIM</td><td style={{ fontFamily: 'monospace' }}>{palmare.simNumero || '—'}</td></tr>
-              <tr><td>Tariffa mensile</td><td><strong style={{ color: 'var(--primary)' }}>{fmtEur(palmare.tariffaMensile)}</strong></td></tr>
-              <tr><td>Creato il</td><td>{fmt(palmare.createdAt)}</td></tr>
-              {palmare.note && <tr><td>Note</td><td style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{palmare.note}</td></tr>}
-            </tbody>
-          </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Codice</label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, boxSizing: 'border-box' }}
+                value={form.codice ?? ''}
+                onChange={(e) => set('codice', e.target.value.toUpperCase())}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Marca</label>
+                <input
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.marca ?? ''}
+                  onChange={(e) => set('marca', e.target.value)}
+                  placeholder="—"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Modello</label>
+                <input
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.modello ?? ''}
+                  onChange={(e) => set('modello', e.target.value)}
+                  placeholder="—"
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>IMEI / Seriale</label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                value={form.imei ?? ''}
+                onChange={(e) => set('imei', e.target.value)}
+                placeholder="—"
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>SIM / Numero</label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                value={form.simNumero ?? ''}
+                onChange={(e) => set('simNumero', e.target.value)}
+                placeholder="—"
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa mensile (€)</label>
+                <input
+                  type="number" step="0.01"
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  value={form.tariffaMensile ?? ''}
+                  onChange={(e) => set('tariffaMensile', e.target.value ? parseFloat(e.target.value) : null)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Stato</label>
+                <select
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.stato ?? ''}
+                  onChange={(e) => set('stato', e.target.value)}
+                >
+                  <option value="DISPONIBILE">Disponibile</option>
+                  <option value="ASSEGNATO">Assegnato</option>
+                  <option value="GUASTO">Guasto</option>
+                  <option value="DISMESSO">Dismesso</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Note</label>
+              <textarea
+                rows={2}
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                value={form.note ?? ''}
+                onChange={(e) => set('note', e.target.value)}
+                placeholder="Note aggiuntive…"
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Creato il {fmt(palmare.createdAt)}
+            </div>
+          </div>
         </div>
 
         {/* ── Assegnazione attiva ── */}
@@ -185,87 +309,39 @@ export default function DettaglioPalmare() {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn-primary btn-sm" onClick={handleAssegna} disabled={saving}>
-                  {saving ? 'Salvo...' : 'Conferma'}
+                  {saving ? '⏳...' : '🔗 Conferma'}
                 </button>
-                <button
-                  className="btn-sm"
-                  style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}
-                  onClick={() => setShowAssegna(false)}
-                >Annulla</button>
+                <button className="btn-outline btn-sm" onClick={() => setShowAssegna(false)}>Annulla</button>
               </div>
             </div>
           )}
         </div>
-      </div>
 
-      {/* ── Storico assegnazioni ── */}
-      {storiche.length > 0 && (
-        <div className="detail-card" style={{ marginTop: 16 }}>
-          <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
-          <table className="detail-table" style={{ width: '100%' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>PADRONCINO</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>INIZIO</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>FINE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {storiche.map((a) => (
-                <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 12px', fontWeight: 600 }}>{a.ragioneSociale}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{fmt(a.dataInizio)}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{fmt(a.dataFine)}</td>
+        {/* ── Storico assegnazioni ── */}
+        {storiche.length > 0 && (
+          <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+            <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>Padroncino</th>
+                  <th>Data inizio</th>
+                  <th>Data fine</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <style>{`
-        .detail-card {
-          background: var(--bg-secondary);
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          padding: 20px;
-        }
-        .detail-card-title {
-          font-size: 13px;
-          font-weight: 700;
-          color: var(--text-secondary);
-          text-transform: uppercase;
-          letter-spacing: .05em;
-          margin: 0 0 14px 0;
-        }
-        .detail-table { width: 100%; border-collapse: collapse; }
-        .detail-table td {
-          padding: 7px 0;
-          font-size: 13px;
-          color: var(--text-primary);
-          border-bottom: 1px solid var(--border);
-        }
-        .detail-table td:first-child {
-          color: var(--text-muted);
-          font-weight: 500;
-          width: 45%;
-          padding-right: 12px;
-        }
-        .palm-badge {
-          display: inline-block;
-          padding: 3px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: .04em;
-        }
-        .badge-blue   { background: rgba(59,130,246,.12); color: #2563eb; }
-        .badge-green  { background: rgba(34,197,94,.12);  color: #16a34a; }
-        .badge-red    { background: rgba(239,68,68,.12);  color: #dc2626; }
-        .badge-gray   { background: rgba(100,116,139,.12); color: #64748b; }
-        .btn-primary { padding: 8px 18px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
-        .btn-sm { padding: 5px 12px; font-size: 12px; }
-      `}</style>
+              </thead>
+              <tbody>
+                {storiche.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.ragioneSociale}</td>
+                    <td>{fmt(a.dataInizio)}</td>
+                    <td>{fmt(a.dataFine)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

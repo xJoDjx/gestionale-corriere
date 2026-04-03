@@ -46,12 +46,12 @@ export class RicaricheService {
       include: {
         mezzo: {
           select: {
-            id: true, 
-            targa: true, 
-            marca: true, 
+            id: true,
+            targa: true,
+            marca: true,
             modello: true,
             categoria: true,
-            maggiorazioneRicarica: true, // ORA FUNZIONA
+            maggiorazioneRicarica: true,
           },
         },
         padroncino: {
@@ -75,8 +75,7 @@ export class RicaricheService {
       tariffe,
       sessioni: righe.map((r) => ({
         id: r.id,
-        // Se r.targa è null, prova a prenderla dal mezzo relazionato
-        targa: r.targa ?? r.mezzo?.targa ?? '', 
+        targa: r.targa ?? r.mezzo?.targa ?? '',
         sessioneId: r.sessioneId,
         tipoRicarica: r.tipoRicarica,
         stazione: r.stazione,
@@ -91,11 +90,12 @@ export class RicaricheService {
         categoriaMezzo: r.categoriaMezzo ?? r.mezzo?.categoria ?? null,
         mezzoId: r.mezzoId,
         padroncinoId: r.padroncinoId,
-        padroncino: r.padroncino?.ragioneSociale ?? null, // Ora TS lo riconoscerà
+        padroncino: r.padroncino?.ragioneSociale ?? null,
         data: r.data,
       })),
     };
   }
+
   /**
    * Lista dei mesi che hanno dati ricariche
    */
@@ -157,10 +157,23 @@ export class RicaricheService {
       const primoGiornoMese = new Date(`${mese}-01`);
       const costoUnitario = Number(s.costoUnitario) || 0;
       const costoBase = Number(s.kwh) * costoUnitario;
-      const maggiorazioneMezzo = mezzo?.maggiorazioneRicarica != null
+
+      // ✅ FIX BUG 3:
+      // Il campo maggiorazioneRicarica ha @default(0) nello schema Prisma, quindi
+      // per i mezzi senza maggiorazione personalizzata il valore è 0 (non null).
+      // L'operatore ?? non scatta con 0, quindi il valore del frontend veniva
+      // ignorato e si usava sempre 0.
+      //
+      // Soluzione: considerare "impostata sul mezzo" solo se maggiorazioneRicarica > 0.
+      // Se è 0 o null, si usa la maggiorazione calcolata dal frontend (s.maggiorazione)
+      // che tiene già conto del magDefault impostato dall'utente nell'interfaccia.
+      const maggiorazioneDB = mezzo?.maggiorazioneRicarica != null
         ? Number(mezzo.maggiorazioneRicarica)
         : null;
-      const maggiorazione = maggiorazioneMezzo ?? Number(s.maggiorazione || 0);
+      const maggiorazione = (maggiorazioneDB !== null && maggiorazioneDB > 0)
+        ? maggiorazioneDB
+        : Number(s.maggiorazione || 0);
+
       const importo = costoBase * (1 + maggiorazione / 100);
 
       return {
@@ -248,12 +261,12 @@ export class RicaricheService {
         ...(tariffe.costoEsternoKwh != null && { costoEsternoKwh: tariffe.costoEsternoKwh }),
       },
     });
-    
+
     // Se cambiano fatturaImporto/fatturaKwh, ricalcola costoUnitario e importo per le INTERNE
     if (tariffe.fatturaImporto != null && tariffe.fatturaKwh != null && tariffe.fatturaKwh > 0) {
       const nuovoCostoInt = tariffe.fatturaImporto / tariffe.fatturaKwh;
       const sessioni = await this.prisma.ricaricaElettrica.findMany({
-        where: { mese, deletedAt: null, tipoRicarica: 'INTERNA' }
+        where: { mese, deletedAt: null, tipoRicarica: 'INTERNA' },
       });
       for (const s of sessioni) {
         const kwh = Number(s.kwh);
@@ -262,13 +275,17 @@ export class RicaricheService {
         const nuovoTot = nuovaBase * (1 + mag / 100);
         await this.prisma.ricaricaElettrica.update({
           where: { id: s.id },
-          data: { costoUnitario: nuovoCostoInt, costoBase: nuovaBase, importo: nuovoTot, costoInternoKwh: nuovoCostoInt },
+          data: {
+            costoUnitario: nuovoCostoInt,
+            costoBase: nuovaBase,
+            importo: nuovoTot,
+            costoInternoKwh: nuovoCostoInt,
+          },
         });
       }
     }
     return { aggiornate: true, mese };
   }
-
 
   /**
    * Elimina tutte le sessioni di un mese

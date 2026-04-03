@@ -1,4 +1,5 @@
 // src/features/codici-autista/DettaglioCodiceAutista.tsx
+// BUG 2 FIX: aggiunto form state + handleSave per consentire la modifica dei dati
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { codiciAutistaApi, padronciniApi } from '../../lib/api';
@@ -22,6 +23,15 @@ export default function DettaglioCodiceAutista() {
   const [assegnaForm, setAssegnaForm] = useState({ padroncinoId: '', dataInizio: '' });
   const [saving, setSaving] = useState(false);
 
+  // ── FIX BUG 2: stato form per modifica ──────────────────
+  const [form, setFormState] = useState<Partial<CodiceAutista>>({});
+  const [dirty, setDirty] = useState(false);
+
+  const set = (k: keyof CodiceAutista, v: any) => {
+    setFormState((f) => ({ ...f, [k]: v }));
+    setDirty(true);
+  };
+
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -31,6 +41,8 @@ export default function DettaglioCodiceAutista() {
         padronciniApi.list({ limit: '200' }),
       ]);
       setAutista(a);
+      setFormState(a); // ← popola il form con i dati correnti
+      setDirty(false);
       setPadroncini(pResp.data);
     } catch (e: any) {
       setError(e.message);
@@ -40,6 +52,28 @@ export default function DettaglioCodiceAutista() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── FIX BUG 2: salvataggio modifiche ──────────────────────
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await codiciAutistaApi.update(id, {
+        nome: form.nome ?? undefined,
+        cognome: form.cognome ?? undefined,
+        note: form.note ?? undefined,
+        tariffaFissa: form.tariffaFissa ?? undefined,
+        tariffaRitiro: form.tariffaRitiro ?? undefined,
+        target: form.target ?? undefined,
+      });
+      setDirty(false);
+      await load();
+    } catch (e: any) {
+      alert('Errore salvataggio: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleAssegna = async () => {
     if (!id || !assegnaForm.padroncinoId || !assegnaForm.dataInizio) return;
@@ -121,7 +155,6 @@ export default function DettaglioCodiceAutista() {
         <button
           onClick={handleToggleAttivo}
           style={{
-            marginLeft: 'auto',
             padding: '6px 14px', fontSize: 12, fontWeight: 600,
             background: autista.attivo ? '#fee2e2' : 'rgba(34,197,94,.12)',
             color: autista.attivo ? '#dc2626' : '#16a34a',
@@ -131,27 +164,102 @@ export default function DettaglioCodiceAutista() {
         >
           {autista.attivo ? 'Disattiva' : 'Attiva'}
         </button>
+
+        {/* ── FIX BUG 2: pulsante Salva ── */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {dirty && (
+            <button
+              className="btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+              style={{ fontSize: 13 }}
+            >
+              {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+            </button>
+          )}
+          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>✓ Salvato</span>}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-        {/* ── Dati anagrafici ── */}
+        {/* ── FIX BUG 2: Dati anagrafici EDITABILI ── */}
         <div className="detail-card">
           <h3 className="detail-card-title">📋 Dati Autista</h3>
-          <table className="detail-table">
-            <tbody>
-              <tr><td>Codice</td><td><strong style={{ fontFamily: 'monospace' }}>{autista.codice}</strong></td></tr>
-              <tr><td>Nome</td><td>{autista.nome || '—'}</td></tr>
-              <tr><td>Cognome</td><td>{autista.cognome || '—'}</td></tr>
-              <tr><td>Tariffa fissa</td><td><strong style={{ color: 'var(--primary)' }}>{fmtEur(autista.tariffaFissa)}</strong></td></tr>
-              <tr><td>Tariffa ritiro</td><td><strong style={{ color: 'var(--primary)' }}>{fmtEur(autista.tariffaRitiro)}</strong></td></tr>
-              <tr><td>Target</td><td>{autista.target != null ? autista.target : '—'}</td></tr>
-              <tr><td>Creato il</td><td>{fmt(autista.createdAt)}</td></tr>
-              {autista.note && (
-                <tr><td>Note</td><td style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{autista.note}</td></tr>
-              )}
-            </tbody>
-          </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Codice</label>
+              <input
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, boxSizing: 'border-box', cursor: 'not-allowed' }}
+                value={autista.codice}
+                readOnly
+                title="Il codice non può essere modificato"
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Nome</label>
+                <input
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.nome ?? ''}
+                  onChange={(e) => set('nome', e.target.value || null)}
+                  placeholder="—"
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Cognome</label>
+                <input
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                  value={form.cognome ?? ''}
+                  onChange={(e) => set('cognome', e.target.value || null)}
+                  placeholder="—"
+                />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa fissa (€)</label>
+                <input
+                  type="number" step="0.01"
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  value={form.tariffaFissa ?? ''}
+                  onChange={(e) => set('tariffaFissa', e.target.value ? parseFloat(e.target.value) : null)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa ritiro (€)</label>
+                <input
+                  type="number" step="0.01"
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  value={form.tariffaRitiro ?? ''}
+                  onChange={(e) => set('tariffaRitiro', e.target.value ? parseFloat(e.target.value) : null)}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Target</label>
+              <input
+                type="number" step="1"
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+                value={form.target ?? ''}
+                onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
+                placeholder="—"
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Note</label>
+              <textarea
+                rows={2}
+                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                value={form.note ?? ''}
+                onChange={(e) => set('note', e.target.value || null)}
+                placeholder="Note aggiuntive…"
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Creato il {fmt(autista.createdAt)}
+            </div>
+          </div>
         </div>
 
         {/* ── Assegnazione attiva ── */}
@@ -210,53 +318,39 @@ export default function DettaglioCodiceAutista() {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn-primary btn-sm" onClick={handleAssegna} disabled={saving}>
-                  {saving ? 'Salvo...' : 'Conferma'}
+                  {saving ? '⏳...' : '🔗 Conferma'}
                 </button>
-                <button
-                  className="btn-sm"
-                  style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}
-                  onClick={() => setShowAssegna(false)}
-                >Annulla</button>
+                <button className="btn-outline btn-sm" onClick={() => setShowAssegna(false)}>Annulla</button>
               </div>
             </div>
           )}
         </div>
-      </div>
 
-      {/* ── Storico assegnazioni ── */}
-      {storiche.length > 0 && (
-        <div className="detail-card" style={{ marginTop: 16 }}>
-          <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>PADRONCINO</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>INIZIO</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>FINE</th>
-              </tr>
-            </thead>
-            <tbody>
-              {storiche.map((a) => (
-                <tr key={a.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 12px', fontWeight: 600 }}>{a.ragioneSociale}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{fmt(a.dataInizio)}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{fmt(a.dataFine)}</td>
+        {/* ── Storico assegnazioni ── */}
+        {storiche.length > 0 && (
+          <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
+            <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
+            <table className="detail-table">
+              <thead>
+                <tr>
+                  <th>Padroncino</th>
+                  <th>Data inizio</th>
+                  <th>Data fine</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <style>{`
-        .detail-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-        .detail-card-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 14px 0; }
-        .detail-table { width: 100%; border-collapse: collapse; }
-        .detail-table td { padding: 7px 0; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--border); }
-        .detail-table td:first-child { color: var(--text-muted); font-weight: 500; width: 45%; padding-right: 12px; }
-        .btn-primary { padding: 8px 18px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
-        .btn-sm { padding: 5px 12px; font-size: 12px; }
-      `}</style>
+              </thead>
+              <tbody>
+                {storiche.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.ragioneSociale}</td>
+                    <td>{fmt(a.dataInizio)}</td>
+                    <td>{fmt(a.dataFine)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

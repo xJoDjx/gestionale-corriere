@@ -1,7 +1,6 @@
---1) i documenti salvai non si aprono {"message":"Cannot GET /uploads/padroncini/uploads/padroncini/1775137822817-67171792.pdf","error":"Not Found","statusCode":404}
---2) se carico durc o dvr in automatico devono aggiornarsi le labels presente in DOCUMENTI & SCADENZE e nelle KPI
-3) se aggiungo un mezzo che in precedenva avevo eliminato non lo fa aggiungere perche dice gia esistente (effettivamente e nel db)
-4) non è possibile modificare un palmare o un codice autista dopo averlo aggiunto ma solo visualizzare i dettagli
-5) nelle ricariche elettrice la maggiorazione per i mezzi esistenti non prende il valore di quello impostato nel dettaglio del mezzo quindi rimane a 0
-6) quando creo un utente devo poter scegliere le sezioni da poter visualizzare e o modificare
-7) nella pagina padroncino nei log dovrebbero essere registrate tutte le operazioni inerenti a quel padroncino.. possiamo "filtrarle" dal log storigo generale e isnerirle..
+4) quando creo un utente devo poter scegliere le sezioni da poter visualizzare e o modificare
+5) nella pagina padroncino nei log dovrebbero essere registrate tutte le operazioni inerenti a quel padroncino.. possiamo "filtrarle" dal log storigo generale e isnerirle..
+
+
+
+
