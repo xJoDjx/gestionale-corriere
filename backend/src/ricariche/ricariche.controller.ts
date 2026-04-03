@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Query, Body, Patch } from '@nestjs/common';
 import { RicaricheService, ImportRicaricheDto } from './ricariche.service';
 
 @Controller('ricariche')
@@ -42,6 +42,12 @@ export class RicaricheController {
   @Delete(':mese')
   eliminaMese(@Param('mese') mese: string) {
     return this.service.eliminaMese(mese);
+  }
+
+  /** Ricalcola padroncinoId su sessioni esistenti senza re-importare */
+  @Patch(':mese/ricalcola-padroncini')
+  ricalcolaPadroncini(@Param('mese') mese: string) {
+    return this.service.ricalcolaPadroncini(mese);
   }
 }
 

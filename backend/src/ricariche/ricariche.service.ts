@@ -239,8 +239,9 @@ export class RicaricheService {
       const entry = map.get(r.padroncinoId)!;
       const costo = Number(r.importo);
       entry.totale += costo;
-      const targa = r.targa ?? r.mezzo?.targa ?? 'N/A';
-      entry.mezzi.set(targa, (entry.mezzi.get(targa) ?? 0) + costo);
+      const targaNorm = normalizeTarga(r.targa ?? r.mezzo?.targa ?? '');
+      const chiave = targaNorm || 'N/A';
+      entry.mezzi.set(chiave, (entry.mezzi.get(chiave) ?? 0) + costo);
     }
 
     return Array.from(map.values()).map((e) => ({
@@ -297,4 +298,57 @@ export class RicaricheService {
     });
     return { deleted: true, mese };
   }
+  /**
+   * Ricalcola padroncinoId e mezzoId su sessioni esistenti di un mese
+   * senza cancellare i dati (fix per sessioni importate prima delle assegnazioni)
+   */
+  async ricalcolaPadroncini(mese: string) {
+    const sessioni = await this.prisma.ricaricaElettrica.findMany({
+      where: { mese, deletedAt: null },
+    });
+
+    if (sessioni.length === 0) return { aggiornate: 0 };
+
+    const targhe = [...new Set(sessioni.map((s) => normalizeTarga(s.targa ?? '')).filter(Boolean))];
+
+    const mezziDB = await this.prisma.mezzo.findMany({
+      where: { targa: { in: targhe }, deletedAt: null },
+      include: {
+        assegnazioni: {
+          where: {
+            deletedAt: null,
+            dataInizio: { lte: new Date(`${mese}-28`) },
+            OR: [
+              { dataFine: null },
+              { dataFine: { gte: new Date(`${mese}-01`) } },
+            ],
+          },
+          include: { padroncino: { select: { id: true } } },
+          orderBy: { dataInizio: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    const mezzoMap = new Map(mezziDB.map((m) => [normalizeTarga(m.targa), m]));
+
+    let aggiornate = 0;
+    for (const s of sessioni) {
+      const targaNorm = normalizeTarga(s.targa ?? '');
+      const mezzo = mezzoMap.get(targaNorm);
+      const padroncinoId = mezzo?.assegnazioni?.[0]?.padroncino?.id ?? null;
+      const mezzoId = mezzo?.id ?? null;
+
+      // Aggiorna solo se c'è qualcosa da cambiare
+      if (s.padroncinoId !== padroncinoId || s.mezzoId !== mezzoId) {
+        await this.prisma.ricaricaElettrica.update({
+          where: { id: s.id },
+          data: { padroncinoId, mezzoId },
+        });
+        aggiornate++;
+      }
+    }
+
+    return { aggiornate, mese };
+  } 
 }

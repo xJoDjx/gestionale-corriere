@@ -394,7 +394,7 @@ function TabAddebiti({
             <tr key={r.id} className="dc-excel-row">
               <td><input className="dc-excel-input dc-targa" value={r.targa} maxLength={8}
                 onChange={(e) => onRicaricheChange(r.id, 'targa', e.target.value.toUpperCase())} /></td>
-              <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.costoRicarica ?? ''}
+              <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.costoRicarica != null ? Number(r.costoRicarica).toFixed(2) : ''}
                 onChange={(e) => onRicaricheChange(r.id, 'costoRicarica', e.target.value === '' ? null : parseFloat(e.target.value))}
                 placeholder="0,00" /></td>
               <td><input className="dc-excel-input dc-excel-num" type="number" value={r.percIva}
@@ -709,6 +709,9 @@ export default function DettaglioConteggio() {
       const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
       let ricaricheDB: Record<string, number> = {};
       try {
+        // Prima ricalcola i padroncinoId su sessioni eventualmente orfane
+        await api.patch(`/ricariche/${mese}/ricalcola-padroncini`, {}).catch(() => {});
+        
         const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
         const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
         if (entryPad?.mezzi) {
@@ -783,7 +786,7 @@ export default function DettaglioConteggio() {
       }
       const nuoviCosti: Record<string, number> = {};
       for (const d of entryPad.mezzi) {        // ← mezzi
-        nuoviCosti[normTarga(d.targa)] = Number(d.costo ?? 0);  // ← costo
+        nuoviCosti[normTarga(d.targa)] = Number(Number(d.costo ?? 0).toFixed(2)); // ← costo
       }
       setRigheR((prev) => prev.map((r) => ({
         ...r,
@@ -796,7 +799,7 @@ export default function DettaglioConteggio() {
           id: newId(),
           mezzoId: null,
           targa: d.targa,
-          costoRicarica: Number(d.costo ?? 0),  // ← costo
+          costoRicarica: Number(Number(d.costo ?? 0).toFixed(2)), // ← costo
           percIva: 5,
           note: 'Aggiunto da ricariche',
           isManuale: true,
