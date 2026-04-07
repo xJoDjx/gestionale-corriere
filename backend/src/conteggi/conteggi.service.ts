@@ -70,12 +70,25 @@ export class ConteggiService {
     if (!padroncino) throw new NotFoundException('Padroncino non trovato');
 
     // Verifica unicità mese/padroncino
-    const exists = await this.prisma.conteggioMensile.findUnique({
+    const existing = await this.prisma.conteggioMensile.findFirst({
       where: {
-        padroncinoId_mese: { padroncinoId: dto.padroncinoId, mese: dto.mese },
+        padroncinoId: dto.padroncinoId,
+        mese: dto.mese,
       },
     });
-    if (exists) throw new BadRequestException('Conteggio già esistente per questo mese');
+ 
+    if (existing) {
+      if (existing.deletedAt === null) {
+        // Conteggio attivo: blocca la creazione
+        throw new BadRequestException('Conteggio già esistente per questo mese');
+      } else {
+        // Conteggio soft-deleted: rimuovilo fisicamente così la constraint si libera
+        // Le righe vengono eliminate in cascade (onDelete: Cascade nello schema)
+        await this.prisma.conteggioMensile.delete({
+          where: { id: existing.id },
+        });
+      }
+    }
 
     // ─── AUTO-CHIUDI conteggi BOZZA del mese precedente per lo stesso padroncino
     const [year, month] = dto.mese.split('-').map(Number);   // ← dto.mese

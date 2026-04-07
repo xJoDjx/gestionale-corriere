@@ -339,3 +339,14 @@
   .dc-fatturato-totali { min-width: 100%; }
   .dc-palmari-box { flex-direction: column; align-items: flex-start; }
 }
+
+ .dc-banner-chiuso {
+   background: var(--warning-bg, #fff7e6);
+   border-color: var(--warning, #f59e0b);
+   color: var(--warning-text, #92400e);
+ }
+ .dc-banner-confermato {
+   background: var(--success-bg);
+   border-color: var(--success);
+   color: var(--success-text, #166534);
+ }

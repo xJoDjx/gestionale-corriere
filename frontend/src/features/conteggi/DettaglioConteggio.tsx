@@ -672,7 +672,7 @@ export default function DettaglioConteggio() {
   const [statoConteggio, setStatoConteggio] = useState<'BOZZA' | 'CHIUSO' | 'CONFERMATO'>('BOZZA');
   const [saving, setSaving] = useState(false);
 
-  const isReadonly = statoConteggio === 'CHIUSO' || statoConteggio === 'CONFERMATO';
+  const isReadonly = statoConteggio === 'CONFERMATO';
 
   // ─── Caricamento dati ────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -686,17 +686,18 @@ export default function DettaglioConteggio() {
         conteggiApi.list(mese, id),
       ]);
       setPadroncino(pad);
-
+ 
       const conteggio = conteggiList[0] ?? null;
       const cId = conteggio?.id ?? null;
       setConteggioId(cId);
       setStatoConteggio(conteggio?.stato ?? 'BOZZA');
       setChecklist(loadChecklist(id, mese));
-
+ 
       // ─── Se esiste già un conteggio salvato, RICARICA LE RIGHE DAL DB ───
       if (conteggio && conteggio.righe?.length > 0) {
         const righe = conteggio.righe;
-
+ 
+        // Fatturato — sempre dal DB
         setRigheF(
           righe
             .filter((r: any) => r.tipo === 'FATTURATO')
@@ -708,48 +709,8 @@ export default function DettaglioConteggio() {
               _dbId: r.id,
             }))
         );
-
-        setRigheM(
-          righe
-            .filter((r: any) => r.tipo === 'NOLEGGIO')
-            .map((r: any) => {
-              const m = (pad.mezziAssegnati ?? []).find(
-                (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
-              );
-              return {
-                id: r.id,
-                mezzoId: r.riferimentoId,
-                targa: m?.targa ?? r.descrizione.replace('Noleggio ', '').split(' ')[0],
-                valoreRataNoIva: Number(r.importo) / 1.22,
-                percIva: 22,
-                alimentazione: m?.alimentazione ?? 'DIESEL',
-                note: r.note ?? '',
-                isManuale: r.modificaManuale,
-                _dbId: r.id,
-              };
-            })
-        );
-
-        setRigheR(
-          righe
-            .filter((r: any) => r.tipo === 'RICARICA')
-            .map((r: any) => {
-              const m = (pad.mezziAssegnati ?? []).find(
-                (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
-              );
-              return {
-                id: r.id,
-                mezzoId: r.riferimentoId,
-                targa: m?.targa ?? '',
-                costoRicarica: Number(r.importo) / 1.05,
-                percIva: 5,
-                note: r.note ?? '',
-                isManuale: r.modificaManuale,
-                _dbId: r.id,
-              };
-            })
-        );
-
+ 
+        // Addebiti vari — sempre dal DB
         setRigheV(
           righe
             .filter((r: any) => r.tipo === 'ADDEBITO')
@@ -762,7 +723,8 @@ export default function DettaglioConteggio() {
               _dbId: r.id,
             }))
         );
-
+ 
+        // Accrediti — sempre dal DB
         setAccrediti(
           righe
             .filter((r: any) => r.tipo === 'ACCREDITO' || r.tipo === 'BONUS')
@@ -774,7 +736,8 @@ export default function DettaglioConteggio() {
               _dbId: r.id,
             }))
         );
-
+ 
+        // Fine mese — sempre dal DB
         setFineMese(
           righe
             .filter((r: any) => r.tipo === 'FINE_MESE')
@@ -786,10 +749,138 @@ export default function DettaglioConteggio() {
               _dbId: r.id,
             }))
         );
+ 
+        // ── Noleggi e Ricariche: comportamento diverso per BOZZA vs CHIUSO/CONFERMATO ──
+        if (conteggio.stato === 'BOZZA') {
+          // BOZZA → ricalcola dai mezzi assegnati live (così i nuovi mezzi compaiono)
+          // Le righe con modificaManuale: true vengono preservate dal DB
+          const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+ 
+          let ricaricheDB: Record<string, number> = {};
+          try {
+            const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
+            const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
+            if (entryPad?.mezzi) {
+              for (const d of entryPad.mezzi) {
+                ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
+              }
+            }
+          } catch { /* ignora */ }
+ 
+          setRigheM(
+            (pad.mezziAssegnati ?? []).map((m: any) => {
+              const mezzoId = m.id ?? m.mezzoId;
+              // Cerca se esiste già una riga manuale per questo mezzo nel DB
+              const esistenteManuale = righe.find(
+                (r: any) => r.tipo === 'NOLEGGIO' && r.riferimentoId === mezzoId && r.modificaManuale
+              );
+              if (esistenteManuale) {
+                return {
+                  id: esistenteManuale.id,
+                  mezzoId,
+                  targa: m.targa,
+                  valoreRataNoIva: Number(esistenteManuale.importo) / 1.22,
+                  percIva: 22,
+                  alimentazione: m.alimentazione ?? 'DIESEL',
+                  note: esistenteManuale.note ?? '',
+                  isManuale: true,
+                  _dbId: esistenteManuale.id,
+                };
+              }
+              // Riga automatica: usa la tariffa attuale del mezzo
+              return {
+                id: `mez-${mezzoId}`,
+                mezzoId,
+                targa: m.targa,
+                valoreRataNoIva: m.tariffa ?? null,
+                percIva: 22,
+                alimentazione: m.alimentazione ?? 'DIESEL',
+                note: '',
+                isManuale: false,
+              };
+            })
+          );
+ 
+          setRigheR(
+            (pad.mezziAssegnati ?? [])
+              .filter((m: any) => m.alimentazione === 'ELETTRICO')
+              .map((m: any) => {
+                const mezzoId = m.id ?? m.mezzoId;
+                const esistenteManuale = righe.find(
+                  (r: any) => r.tipo === 'RICARICA' && r.riferimentoId === mezzoId && r.modificaManuale
+                );
+                if (esistenteManuale) {
+                  return {
+                    id: esistenteManuale.id,
+                    mezzoId,
+                    targa: m.targa,
+                    costoRicarica: Number(esistenteManuale.importo) / 1.05,
+                    percIva: 5,
+                    note: esistenteManuale.note ?? '',
+                    isManuale: true,
+                    _dbId: esistenteManuale.id,
+                  };
+                }
+                return {
+                  id: `ric-${mezzoId}`,
+                  mezzoId,
+                  targa: m.targa,
+                  costoRicarica: ricaricheDB[normTarga(m.targa)] ?? null,
+                  percIva: 5,
+                  note: '',
+                  isManuale: false,
+                };
+              })
+          );
+ 
+        } else {
+          // CHIUSO o CONFERMATO → righe fisse dal DB, non si ricalcolano
+          setRigheM(
+            righe
+              .filter((r: any) => r.tipo === 'NOLEGGIO')
+              .map((r: any) => {
+                const m = (pad.mezziAssegnati ?? []).find(
+                  (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
+                );
+                return {
+                  id: r.id,
+                  mezzoId: r.riferimentoId,
+                  targa: m?.targa ?? r.descrizione.replace('Noleggio ', '').split(' ')[0],
+                  valoreRataNoIva: Number(r.importo) / 1.22,
+                  percIva: 22,
+                  alimentazione: m?.alimentazione ?? 'DIESEL',
+                  note: r.note ?? '',
+                  isManuale: r.modificaManuale,
+                  _dbId: r.id,
+                };
+              })
+          );
+ 
+          setRigheR(
+            righe
+              .filter((r: any) => r.tipo === 'RICARICA')
+              .map((r: any) => {
+                const m = (pad.mezziAssegnati ?? []).find(
+                  (x: any) => (x.id ?? x.mezzoId) === r.riferimentoId
+                );
+                return {
+                  id: r.id,
+                  mezzoId: r.riferimentoId,
+                  targa: m?.targa ?? '',
+                  costoRicarica: Number(r.importo) / 1.05,
+                  percIva: 5,
+                  note: r.note ?? '',
+                  isManuale: r.modificaManuale,
+                  _dbId: r.id,
+                };
+              })
+          );
+        }
+ 
       } else {
         // ─── Nessun conteggio in DB: inizializza da padroncino ────────────
         setRigheF([]);
-
+ 
         const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
         let ricaricheDB: Record<string, number> = {};
         try {
@@ -801,7 +892,7 @@ export default function DettaglioConteggio() {
             }
           }
         } catch { /* ignora */ }
-
+ 
         setRigheM(
           (pad.mezziAssegnati ?? []).map((m: any) => ({
             id: `mez-${m.id ?? m.mezzoId}`,
@@ -814,7 +905,7 @@ export default function DettaglioConteggio() {
             isManuale: false,
           }))
         );
-
+ 
         setRigheR(
           (pad.mezziAssegnati ?? [])
             .filter((m: any) => m.alimentazione === 'ELETTRICO')
@@ -828,12 +919,12 @@ export default function DettaglioConteggio() {
               isManuale: false,
             }))
         );
-
+ 
         setRigheV([]);
         setAccrediti([]);
         setFineMese([]);
       }
-
+ 
       // Acconti — sempre freschi dal DB (readonly)
       const cassaRighe: RigaCassaAcconto[] = (accontiRaw ?? []).map((a: any) => ({
         id: `acc-${a.id}`,
@@ -846,14 +937,14 @@ export default function DettaglioConteggio() {
         readonly: true,
       }));
       setCassaAcconti(cassaRighe);
-
+ 
     } catch (e: any) {
       setError(e.message ?? 'Errore caricamento');
     } finally {
       setLoading(false);
     }
   }, [id, mese]);
-
+ 
   useEffect(() => { loadData(); }, [loadData]);
 
   // ─── Elimina conteggio ────────────────────────────────────────────────────
@@ -879,6 +970,26 @@ export default function DettaglioConteggio() {
       alert('❌ Errore eliminazione: ' + e.message);
     } finally {
       setDeletingConteggio(false);
+    }
+  };
+
+// ─── CHIUDI MESE──────────────────────────────────────────────────────
+  const handleChiudiMese = async () => {
+    if (!conteggioId) {
+      alert('Salva prima il conteggio prima di chiuderlo.');
+      return;
+    }
+    if (!confirm(
+      `Chiudere il conteggio di ${formatMese(mese)} per ${padroncino?.ragioneSociale}?\n\n` +
+      `⚠️ Un conteggio CHIUSO non aggiornerà più automaticamente i mezzi assegnati.\n` +
+      `Potrai comunque modificarlo manualmente finché non lo CONFERMI.`
+    )) return;
+    try {
+      await conteggiApi.updateStato(conteggioId, 'CHIUSO');
+      setStatoConteggio('CHIUSO');
+      alert('✅ Mese chiuso correttamente.');
+    } catch (e: any) {
+      alert('❌ Errore chiusura: ' + e.message);
     }
   };
 
@@ -1144,6 +1255,13 @@ export default function DettaglioConteggio() {
           >
             {aggiornaRicariche ? '⏳' : '⚡'} Aggiorna Ricariche
           </button>
+
+          {conteggioId && statoConteggio === 'BOZZA' && (
+            <button className="btn-outline btn-sm" onClick={handleChiudiMese}>
+              🔒 Chiudi Mese
+            </button>
+          )}
+
           <button
             className="btn-primary btn-sm"
             onClick={handleSalva}
@@ -1167,10 +1285,15 @@ export default function DettaglioConteggio() {
         </div>
       </div>
 
-      {isReadonly && (
-        <div className="dc-readonly-banner">
-          🔒 Conteggio {statoConteggio === 'CONFERMATO' ? 'CONFERMATO' : 'CHIUSO'} — sola lettura.
-          Nessuna modifica verrà accettata.
+      {statoConteggio === 'CHIUSO' && (
+        <div className="dc-readonly-banner dc-banner-chiuso">
+          🔒 Mese CHIUSO — le righe non si aggiornano più automaticamente.
+          Puoi ancora modificare manualmente e salvare.
+        </div>
+      )}
+      {statoConteggio === 'CONFERMATO' && (
+        <div className="dc-readonly-banner dc-banner-confermato">
+          ✅ Conteggio CONFERMATO — sola lettura assoluta.
         </div>
       )}
 
