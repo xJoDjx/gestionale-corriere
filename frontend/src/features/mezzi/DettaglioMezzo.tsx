@@ -182,6 +182,7 @@ export default function DettaglioMezzo() {
         telaio: form.telaio ?? undefined,
         colore: form.colore ?? undefined,
         kmAttuali: form.kmAttuali ?? undefined,
+        kmAttualiAl: form.kmAttualiAl ? form.kmAttualiAl.split('T')[0] : undefined,
         kmLimite: form.kmLimite ?? undefined,
         rataNoleggio: form.rataNoleggio ?? undefined,
         canoneNoleggio: form.canoneNoleggio ?? undefined,
@@ -516,6 +517,12 @@ export default function DettaglioMezzo() {
                     onChange={(e) => set('kmAttuali', e.target.value ? parseInt(e.target.value) : null)} />
                 </div>
                 <div className="dm-field">
+                  <label>Aggiornati al</label>
+                  <input className="dm-input" type="date"
+                    value={form.kmAttualiAl ? form.kmAttualiAl.split('T')[0] : ''}
+                    onChange={(e) => set('kmAttualiAl', e.target.value || null)} />
+                </div>
+                <div className="dm-field">
                   <label>KM Limite</label>
                   <input className="dm-input" type="number" value={form.kmLimite ?? ''}
                     onChange={(e) => set('kmLimite', e.target.value ? parseInt(e.target.value) : null)} />
@@ -534,6 +541,11 @@ export default function DettaglioMezzo() {
                     <span>Limite: {mezzo.kmLimite.toLocaleString('it-IT')}</span>
                     <span>Rimasti: {((mezzo.kmLimite ?? 0) - (mezzo.kmAttuali ?? 0)).toLocaleString('it-IT')}</span>
                   </div>
+                  {mezzo.kmAttualiAl && (
+                    <div className="fm-km-date" style={{ marginTop: 6 }}>
+                      Aggiornati al {new Date(mezzo.kmAttualiAl).toLocaleDateString('it-IT')}
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

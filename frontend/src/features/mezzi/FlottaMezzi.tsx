@@ -58,6 +58,20 @@ export default function FlottaMezzi() {
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [filtroCategoria, setFiltroCategoria] = useState('TUTTI');
+
+  type SortField = 'targa' | 'marca' | 'tipo' | 'stato' | 'padroncino' | 'scadenzaAssicurazione' | 'scadenzaRevisione' | 'rataNoleggio' | 'kmAttuali' | 'kmPct';
+  const [sortField, setSortField] = useState<SortField>('targa');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+  const sortIcon = (field: SortField) => sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ' ↕';
   const [nuovoOpen, setNuovoOpen] = useState(false);
   const [importando, setImportando] = useState(false);
   const [importResult, setImportResult] = useState<{ creati: number; saltati: number; errori: string[] } | null>(null);
@@ -130,6 +144,40 @@ export default function FlottaMezzi() {
     }).length,
     [mezzi]
   );
+
+  // ─── Ordinamento ────────────────────────────────────
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va: any, vb: any;
+      switch (sortField) {
+        case 'targa': va = a.targa; vb = b.targa; break;
+        case 'marca': va = (a.marca + ' ' + a.modello); vb = (b.marca + ' ' + b.modello); break;
+        case 'tipo': va = a.tipo || ''; vb = b.tipo || ''; break;
+        case 'stato': va = a.stato; vb = b.stato; break;
+        case 'padroncino':
+          va = a.assegnazioni?.find((x) => !x.dataFine)?.padroncino.ragioneSociale ?? '';
+          vb = b.assegnazioni?.find((x) => !x.dataFine)?.padroncino.ragioneSociale ?? '';
+          break;
+        case 'scadenzaAssicurazione':
+          va = a.scadenzaAssicurazione ? new Date(a.scadenzaAssicurazione).getTime() : Infinity;
+          vb = b.scadenzaAssicurazione ? new Date(b.scadenzaAssicurazione).getTime() : Infinity;
+          break;
+        case 'scadenzaRevisione':
+          va = a.scadenzaRevisione ? new Date(a.scadenzaRevisione).getTime() : Infinity;
+          vb = b.scadenzaRevisione ? new Date(b.scadenzaRevisione).getTime() : Infinity;
+          break;
+        case 'rataNoleggio': va = a.rataNoleggio ?? -Infinity; vb = b.rataNoleggio ?? -Infinity; break;
+        case 'kmAttuali': va = a.kmAttuali ?? -Infinity; vb = b.kmAttuali ?? -Infinity; break;
+        case 'kmPct': va = kmPercent(a.kmAttuali, a.kmLimite); vb = kmPercent(b.kmAttuali, b.kmLimite); break;
+        default: va = ''; vb = '';
+      }
+      if (typeof va === 'string') {
+        const cmp = va.localeCompare(vb, 'it');
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return sortOrder === 'asc' ? va - vb : vb - va;
+    });
+  }, [filtered, sortField, sortOrder]);
 
   // ─── Crea mezzo ─────────────────────────────────────
   const handleCreate = async (form: NuovoMezzo) => {
@@ -319,16 +367,16 @@ export default function FlottaMezzi() {
         <table className="fm-table">
           <thead>
             <tr>
-              <th>TARGA ↕</th>
-              <th>MARCA/MODELLO ↕</th>
-              <th>TIPO</th>
-              <th>STATO</th>
-              <th>PADRONCINO</th>
-              <th>SCAD. ASS.</th>
-              <th>SCAD. REV.</th>
-              <th>RATA</th>
-              <th>KM ATTUALI</th>
-              <th>UTILIZZO KM</th>
+              <th className="fm-th-sort" onClick={() => handleSort('targa')}>TARGA{sortIcon('targa')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('marca')}>MARCA/MODELLO{sortIcon('marca')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('tipo')}>TIPO{sortIcon('tipo')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('stato')}>STATO{sortIcon('stato')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('padroncino')}>PADRONCINO{sortIcon('padroncino')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('scadenzaAssicurazione')}>SCAD. ASS.{sortIcon('scadenzaAssicurazione')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('scadenzaRevisione')}>SCAD. REV.{sortIcon('scadenzaRevisione')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('rataNoleggio')}>RATA{sortIcon('rataNoleggio')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('kmAttuali')}>KM ATTUALI{sortIcon('kmAttuali')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('kmPct')}>UTILIZZO KM{sortIcon('kmPct')}</th>
               <th></th>
             </tr>
           </thead>
@@ -338,7 +386,7 @@ export default function FlottaMezzi() {
                 <td colSpan={11} className="fm-empty-row">Nessun mezzo trovato</td>
               </tr>
             )}
-            {filtered.map((m) => {
+            {sorted.map((m) => {
               const padroncino = m.assegnazioni?.find((a) => !a.dataFine)?.padroncino;
               const assicInfo = scadenzaLabel(m.scadenzaAssicurazione);
               const revInfo = scadenzaLabel(m.scadenzaRevisione);

@@ -170,6 +170,8 @@
   color: #64748b;
   white-space: nowrap;
 }
+.fm-th-sort { cursor: pointer; user-select: none; }
+.fm-th-sort:hover { color: #3843c7; }
 .fm-row { border-bottom: 1px solid #ecf0f7; }
 .fm-row:last-child { border-bottom: none; }
 .fm-row:hover { background: #f8fafc; }

@@ -133,7 +133,9 @@ enum TipoMezzo {
   FURGONE
   AUTOCARRO
   AUTO
+  AUTOVETTURA
   MOTOCICLO
+  SEMIRIMORCHIO
 }
 
 enum Alimentazione {
