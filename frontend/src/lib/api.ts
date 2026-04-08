@@ -50,6 +50,7 @@ export interface Mezzo {
   rataNoleggio: number | null;
   canoneNoleggio: number | null;
   kmAttuali: number | null;
+  kmAttualiAl: string | null;
   kmLimite: number | null;
   scadenzaAssicurazione: string | null;
   scadenzaRevisione: string | null;
@@ -101,6 +102,7 @@ export interface CreateMezzoPayload {
   rataNoleggio?: number;
   canoneNoleggio?: number;
   kmAttuali?: number;
+  kmAttualiAl?: string;
   kmLimite?: number;
   scadenzaAssicurazione?: string;
   scadenzaRevisione?: string;
@@ -143,6 +145,18 @@ export const mezziApi = {
     api.post(`/mezzi/${mezzoId}/assegnazioni`, data),
   chiudiAssegnazione: (assegnazioneId: string) =>
     api.put(`/mezzi/assegnazioni/${assegnazioneId}/chiudi`, {}),
+  importaExcel: (file: File): Promise<{ creati: number; saltati: number; errori: string[] }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return fetch(`${API_BASE}/mezzi/importa-excel`, { method: 'POST', body: formData })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }));
+          throw new Error(err.message || 'Errore importazione');
+        }
+        return res.json();
+      });
+  },
 };
 
 // ─── PALMARI TYPES ────────────────────────────────────

@@ -14,6 +14,7 @@ interface Acconto {
   data: string;
   descrizione: string | null;
   mese: string | null;
+  addebitatoIn: { mese: string; ragioneSociale: string } | null;
 }
 
 interface NuovoAccontoForm {
@@ -47,6 +48,14 @@ function fmt(d: string) {
   return new Date(d).toLocaleDateString('it-IT');
 }
 
+const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                 'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+function formatMeseLabel(mese: string): string {
+  const [year, month] = mese.split('-');
+  return `${MESI_IT[parseInt(month, 10) - 1]} ${year}`;
+}
+
 // Determina se un acconto è una restituzione dal campo descrizione (compatibilità)
 function isTipoRestituzione(a: any): boolean {
   return a.tipo === 'RESTITUZIONE' || (a.descrizione && String(a.descrizione).startsWith('[RESTITUZIONE]'));
@@ -65,6 +74,7 @@ function normalizeAcconto(raw: any): Acconto {
     data: typeof raw.data === 'string' ? raw.data.split('T')[0] : new Date(raw.data).toISOString().split('T')[0],
     descrizione: raw.descrizione ?? null,
     mese: raw.mese ?? null,
+    addebitatoIn: raw.addebitatoIn ?? null,
   };
 }
 
@@ -418,6 +428,7 @@ export default function Acconti() {
                 <th>DESCRIZIONE</th>
                 <th>DATA</th>
                 <th>MESE</th>
+                <th>ADDEBITATO IN</th>
                 <th style={{ textAlign: 'right' }}>IMPORTO</th>
                 <th></th>
               </tr>
@@ -448,6 +459,15 @@ export default function Acconti() {
                   <td>
                     {a.mese && <span className="acc-mese-badge">{a.mese}</span>}
                   </td>
+                  <td>
+                    {a.addebitatoIn ? (
+                      <span className="acc-addebitato-badge">
+                        Addebitato a <strong>{a.addebitatoIn.ragioneSociale}</strong> nei conteggi di {formatMeseLabel(a.addebitatoIn.mese)}
+                      </span>
+                    ) : (
+                      <span className="acc-na">—</span>
+                    )}
+                  </td>
                   <td style={{ textAlign: 'right' }}>
                     <span className={a.tipo === 'RESTITUZIONE' ? 'acc-importo-neg' : 'acc-importo'}>
                       {a.tipo === 'RESTITUZIONE' ? '−' : '+'}{eur(a.importo)} €
@@ -463,7 +483,7 @@ export default function Acconti() {
             </tbody>
             <tfoot>
               <tr className="acc-foot">
-                <td colSpan={7}><strong>TOTALE ({filtered.length} movimenti) — Netto</strong></td>
+                <td colSpan={8}><strong>TOTALE ({filtered.length} movimenti) — Netto</strong></td>
                 <td style={{ textAlign: 'right' }}>
                   <strong className={stats.netto >= 0 ? 'acc-importo' : 'acc-importo-neg'}>
                     {stats.netto >= 0 ? '+' : '−'}{eur(stats.netto)} €

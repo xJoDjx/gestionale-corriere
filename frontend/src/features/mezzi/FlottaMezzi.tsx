@@ -1,5 +1,5 @@
 // src/features/mezzi/FlottaMezzi.tsx — API reali, dettaglio mezzo con routing
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mezziApi, padronciniApi } from '../../lib/api';
 import type { Mezzo, MezziStats, Padroncino } from '../../lib/api';
@@ -58,7 +58,24 @@ export default function FlottaMezzi() {
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [filtroCategoria, setFiltroCategoria] = useState('TUTTI');
+
+  type SortField = 'targa' | 'marca' | 'tipo' | 'stato' | 'padroncino' | 'scadenzaAssicurazione' | 'scadenzaRevisione' | 'rataNoleggio' | 'kmAttuali' | 'kmPct';
+  const [sortField, setSortField] = useState<SortField>('targa');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+  const sortIcon = (field: SortField) => sortField === field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ' ↕';
   const [nuovoOpen, setNuovoOpen] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState<{ creati: number; saltati: number; errori: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch dati ─────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -79,6 +96,22 @@ export default function FlottaMezzi() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const handleImportaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const result = await mezziApi.importaExcel(file);
+      setImportResult(result);
+      await loadData();
+    } catch (err: any) {
+      alert('Errore importazione: ' + (err.message ?? 'Errore sconosciuto'));
+    } finally {
+      setImportando(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   // ─── Filtri ──────────────────────────────────────────
   const STATI = ['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'IN_REVISIONE', 'FUORI_SERVIZIO', 'VENDUTO'];
@@ -112,6 +145,40 @@ export default function FlottaMezzi() {
     [mezzi]
   );
 
+  // ─── Ordinamento ────────────────────────────────────
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va: any, vb: any;
+      switch (sortField) {
+        case 'targa': va = a.targa; vb = b.targa; break;
+        case 'marca': va = (a.marca + ' ' + a.modello); vb = (b.marca + ' ' + b.modello); break;
+        case 'tipo': va = a.tipo || ''; vb = b.tipo || ''; break;
+        case 'stato': va = a.stato; vb = b.stato; break;
+        case 'padroncino':
+          va = a.assegnazioni?.find((x) => !x.dataFine)?.padroncino.ragioneSociale ?? '';
+          vb = b.assegnazioni?.find((x) => !x.dataFine)?.padroncino.ragioneSociale ?? '';
+          break;
+        case 'scadenzaAssicurazione':
+          va = a.scadenzaAssicurazione ? new Date(a.scadenzaAssicurazione).getTime() : Infinity;
+          vb = b.scadenzaAssicurazione ? new Date(b.scadenzaAssicurazione).getTime() : Infinity;
+          break;
+        case 'scadenzaRevisione':
+          va = a.scadenzaRevisione ? new Date(a.scadenzaRevisione).getTime() : Infinity;
+          vb = b.scadenzaRevisione ? new Date(b.scadenzaRevisione).getTime() : Infinity;
+          break;
+        case 'rataNoleggio': va = a.rataNoleggio ?? -Infinity; vb = b.rataNoleggio ?? -Infinity; break;
+        case 'kmAttuali': va = a.kmAttuali ?? -Infinity; vb = b.kmAttuali ?? -Infinity; break;
+        case 'kmPct': va = kmPercent(a.kmAttuali, a.kmLimite); vb = kmPercent(b.kmAttuali, b.kmLimite); break;
+        default: va = ''; vb = '';
+      }
+      if (typeof va === 'string') {
+        const cmp = va.localeCompare(vb, 'it');
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return sortOrder === 'asc' ? va - vb : vb - va;
+    });
+  }, [filtered, sortField, sortOrder]);
+
   // ─── Crea mezzo ─────────────────────────────────────
   const handleCreate = async (form: NuovoMezzo) => {
     try {
@@ -123,6 +190,7 @@ export default function FlottaMezzi() {
         alimentazione: form.alimentazione,
         categoria: form.categoria,
         kmAttuali: form.kmAttuali ? parseInt(form.kmAttuali) : undefined,
+        kmAttualiAl: form.kmAttualiAl || undefined,
         kmLimite: form.kmLimite ? parseInt(form.kmLimite) : undefined,
         rataNoleggio: form.rataNoleggio ? parseFloat(form.rataNoleggio) : undefined,
         canoneNoleggio: form.canoneNoleggio ? parseFloat(form.canoneNoleggio) : undefined,
@@ -277,8 +345,19 @@ export default function FlottaMezzi() {
           <button className="btn-outline" onClick={() => {}}>
             + Auto Aziendale
           </button>
-          <button className="btn-outline" onClick={() => {}}>
-            📥 Importa Excel
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={handleImportaExcel}
+          />
+          <button
+            className="btn-outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importando}
+          >
+            {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
           </button>
         </div>
       </div>
@@ -288,16 +367,16 @@ export default function FlottaMezzi() {
         <table className="fm-table">
           <thead>
             <tr>
-              <th>TARGA ↕</th>
-              <th>MARCA/MODELLO ↕</th>
-              <th>TIPO</th>
-              <th>STATO</th>
-              <th>PADRONCINO</th>
-              <th>SCAD. ASS.</th>
-              <th>SCAD. REV.</th>
-              <th>RATA</th>
-              <th>KM ATTUALI</th>
-              <th>UTILIZZO KM</th>
+              <th className="fm-th-sort" onClick={() => handleSort('targa')}>TARGA{sortIcon('targa')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('marca')}>MARCA/MODELLO{sortIcon('marca')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('tipo')}>TIPO{sortIcon('tipo')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('stato')}>STATO{sortIcon('stato')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('padroncino')}>PADRONCINO{sortIcon('padroncino')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('scadenzaAssicurazione')}>SCAD. ASS.{sortIcon('scadenzaAssicurazione')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('scadenzaRevisione')}>SCAD. REV.{sortIcon('scadenzaRevisione')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('rataNoleggio')}>RATA{sortIcon('rataNoleggio')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('kmAttuali')}>KM ATTUALI{sortIcon('kmAttuali')}</th>
+              <th className="fm-th-sort" onClick={() => handleSort('kmPct')}>UTILIZZO KM{sortIcon('kmPct')}</th>
               <th></th>
             </tr>
           </thead>
@@ -307,7 +386,7 @@ export default function FlottaMezzi() {
                 <td colSpan={11} className="fm-empty-row">Nessun mezzo trovato</td>
               </tr>
             )}
-            {filtered.map((m) => {
+            {sorted.map((m) => {
               const padroncino = m.assegnazioni?.find((a) => !a.dataFine)?.padroncino;
               const assicInfo = scadenzaLabel(m.scadenzaAssicurazione);
               const revInfo = scadenzaLabel(m.scadenzaRevisione);
@@ -364,9 +443,14 @@ export default function FlottaMezzi() {
                     {m.rataNoleggio ? fmtEur(m.rataNoleggio) : <span className="fm-empty">—</span>}
                   </td>
                   <td>
-                    {m.kmAttuali != null
-                      ? m.kmAttuali.toLocaleString('it-IT')
-                      : <span className="fm-empty">—</span>}
+                    {m.kmAttuali != null ? (
+                      <div>
+                        <span>{m.kmAttuali.toLocaleString('it-IT')}</span>
+                        {m.kmAttualiAl && (
+                          <div className="fm-km-date">al {new Date(m.kmAttualiAl).toLocaleDateString('it-IT')}</div>
+                        )}
+                      </div>
+                    ) : <span className="fm-empty">—</span>}
                   </td>
                   <td>
                     {m.kmLimite ? (
@@ -405,6 +489,43 @@ export default function FlottaMezzi() {
       </div>
 
       <NuovoMezzoModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />
+
+      {/* ── MODAL RISULTATI IMPORT ── */}
+      {importResult && (
+        <div className="pd-modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="fm-import-result-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fm-import-result-header">
+              <h3>📥 Risultati Importazione Excel</h3>
+              <button className="pd-modal-close" onClick={() => setImportResult(null)}>✕</button>
+            </div>
+            <div className="fm-import-result-body">
+              <div className="fm-import-stat fm-import-stat-ok">
+                <span className="fm-import-stat-val">{importResult.creati}</span>
+                <span className="fm-import-stat-label">Mezzi creati</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-skip">
+                <span className="fm-import-stat-val">{importResult.saltati}</span>
+                <span className="fm-import-stat-label">Saltati (già esistenti)</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-err">
+                <span className="fm-import-stat-val">{importResult.errori.length}</span>
+                <span className="fm-import-stat-label">Errori</span>
+              </div>
+            </div>
+            {importResult.errori.length > 0 && (
+              <div className="fm-import-errors">
+                <p className="fm-import-errors-title">Dettaglio errori:</p>
+                <ul>
+                  {importResult.errori.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="fm-import-result-footer">
+              <button className="btn-primary btn-sm" onClick={() => setImportResult(null)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

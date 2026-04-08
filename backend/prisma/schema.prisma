@@ -105,8 +105,9 @@ model Mezzo {
   fineNoleggio   DateTime? @map("fine_noleggio")
 
   // Km
-  kmAttuali Int? @map("km_attuali")
-  kmLimite  Int? @map("km_limite")
+  kmAttuali   Int?      @map("km_attuali")
+  kmAttualiAl DateTime? @map("km_attuali_al")
+  kmLimite    Int?      @map("km_limite")
 
   // Scadenze
   scadenzaAssicurazione DateTime? @map("scadenza_assicurazione")
@@ -132,15 +133,19 @@ enum TipoMezzo {
   FURGONE
   AUTOCARRO
   AUTO
+  AUTOVETTURA
   MOTOCICLO
+  SEMIRIMORCHIO
 }
 
 enum Alimentazione {
   GASOLIO
+  DIESEL
   ELETTRICO
   GASOLIO_MHEV
   BENZINA
   IBRIDO
+  METANO
 }
 
 enum CategoriaMezzo {

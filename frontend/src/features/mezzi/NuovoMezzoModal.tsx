@@ -21,6 +21,7 @@ export interface NuovoMezzo {
   colore: string;
   // KM
   kmAttuali: string;
+  kmAttualiAl: string;
   kmLimite: string;
   // Possesso
   tipoPossesso: 'PROPRIETA' | 'NOLEGGIO';
@@ -46,7 +47,7 @@ export interface NuovoMezzo {
 const EMPTY: NuovoMezzo = {
   targa: '', marca: '', modello: '', tipo: 'FURGONE', alimentazione: 'GASOLIO',
   categoria: 'DISTRIBUZIONE', annoImmatricolazione: '', telaio: '', colore: '',
-  kmAttuali: '', kmLimite: '',
+  kmAttuali: '', kmAttualiAl: '', kmLimite: '',
   tipoPossesso: 'NOLEGGIO',
   societaNoleggio: '', pIvaLocatore: '', telefonoLocatore: '', emailLocatore: '',
   riferimentoContratto: '',
@@ -159,11 +160,12 @@ export default function NuovoMezzoModal({ open, onClose, onSave }: Props) {
           <label className="form-label">Alimentazione</label>
           <select className="form-select" value={form.alimentazione} onChange={(e) => set('alimentazione', e.target.value)}>
             <option value="GASOLIO">Gasolio</option>
+            <option value="DIESEL">Diesel</option>
+            <option value="GASOLIO_MHEV">Gasolio+MHEV</option>
             <option value="ELETTRICO">Elettrico</option>
-            <option value="GASOLIO_MHEV">Gasolio MHEV</option>
             <option value="BENZINA">Benzina</option>
             <option value="IBRIDO">Ibrido</option>
-            <option value="GPL">GPL</option>
+            <option value="METANO">Metano</option>
           </select>
         </div>
 
@@ -341,6 +343,13 @@ export default function NuovoMezzoModal({ open, onClose, onSave }: Props) {
           <label className="form-label">KM Attuali</label>
           <input className="form-input" type="number" value={form.kmAttuali}
             onChange={(e) => set('kmAttuali', e.target.value)} placeholder="0" />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Aggiornato al</label>
+          <input className="form-input" type="date" value={form.kmAttualiAl}
+            onChange={(e) => set('kmAttualiAl', e.target.value)} />
+          <span className="field-hint">Data dell'ultimo aggiornamento km</span>
         </div>
 
         <div className="form-field">
