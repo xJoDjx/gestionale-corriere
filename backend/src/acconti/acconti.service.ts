@@ -47,22 +47,29 @@ export class AccontiService {
           include: { padroncino: { select: { id: true, ragioneSociale: true } } },
         });
 
-        // Controlla se l'acconto è stato addebitato in un conteggio mensile
-        const rigaConteggio = await this.prisma.conteggiRiga.findFirst({
-          where: {
-            riferimentoTipo: 'acconto',
-            riferimentoId: a.id,
-            conteggioMensile: { deletedAt: null },
-          },
-          include: {
-            conteggioMensile: {
-              select: {
-                mese: true,
-                padroncino: { select: { ragioneSociale: true } },
-              },
+        // Controlla se esiste un ConteggioMensile per il padroncino + mese dell'acconto.
+        // Gli acconti appaiono nel DettaglioConteggio come sezione read-only caricata
+        // dall'API, non come ConteggiRiga, quindi basta verificare l'esistenza del conteggio.
+        let addebitatoIn: { mese: string; ragioneSociale: string } | null = null;
+        if (assegnazione?.padroncino && a.mese) {
+          const conteggio = await this.prisma.conteggioMensile.findFirst({
+            where: {
+              padroncinoId: assegnazione.padroncino.id,
+              mese: a.mese,
+              deletedAt: null,
             },
-          },
-        });
+            select: {
+              mese: true,
+              padroncino: { select: { ragioneSociale: true } },
+            },
+          });
+          if (conteggio) {
+            addebitatoIn = {
+              mese: conteggio.mese,
+              ragioneSociale: conteggio.padroncino.ragioneSociale,
+            };
+          }
+        }
 
         return {
           ...a,
@@ -72,12 +79,7 @@ export class AccontiService {
           nomeAutista: [a.codiceAutista.nome, a.codiceAutista.cognome].filter(Boolean).join(' ') || 'N/D',
           ragioneSociale: assegnazione?.padroncino?.ragioneSociale ?? 'N/A',
           padroncinoId: assegnazione?.padroncino?.id ?? null,
-          addebitatoIn: rigaConteggio
-            ? {
-                mese: rigaConteggio.conteggioMensile.mese,
-                ragioneSociale: rigaConteggio.conteggioMensile.padroncino.ragioneSociale,
-              }
-            : null,
+          addebitatoIn,
         };
       }),
     );
