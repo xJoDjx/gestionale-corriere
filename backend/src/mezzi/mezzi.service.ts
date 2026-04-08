@@ -24,6 +24,7 @@ export class MezziService {
     const dateFields = [
       'scadenzaAssicurazione', 'scadenzaRevisione', 'scadenzaBollo',
       'scadenzaTagliando', 'scadenzaTachigrafo', 'inizioNoleggio', 'fineNoleggio',
+      'kmAttualiAl',
     ];
     for (const field of dateFields) {
       if (data[field] && typeof data[field] === 'string' && data[field].length === 10) {
@@ -241,6 +242,25 @@ export class MezziService {
         dateNF: 'yyyy-mm-dd',
       });
 
+      // Estrai la data di aggiornamento km dall'intestazione della colonna km
+      let kmAttualiAl: Date | null = null;
+      if (foglio.colKmAttuali !== null && rows[0]) {
+        const headerKm = String(rows[0][foglio.colKmAttuali] ?? '').trim();
+        // Prova vari formati: "km 10-2-2022", "23/01/2026", "2026-01-23"
+        const itMatch = headerKm.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+        const dmyShort = headerKm.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+        const isoMatch = headerKm.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (itMatch) {
+          kmAttualiAl = new Date(`${itMatch[3]}-${itMatch[2].padStart(2,'0')}-${itMatch[1].padStart(2,'0')}T00:00:00.000Z`);
+        } else if (dmyShort) {
+          const y = parseInt(dmyShort[3]) + 2000;
+          kmAttualiAl = new Date(`${y}-${dmyShort[2].padStart(2,'0')}-${dmyShort[1].padStart(2,'0')}T00:00:00.000Z`);
+        } else if (isoMatch) {
+          kmAttualiAl = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
+        }
+        if (kmAttualiAl && isNaN(kmAttualiAl.getTime())) kmAttualiAl = null;
+      }
+
       // Salta la riga header (riga 0) e righe vuote
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
@@ -325,6 +345,7 @@ export class MezziService {
             scadenzaBollo: foglio.colScadBollo !== null ? parseDate(row[foglio.colScadBollo]) : null,
             kmLimite: foglio.colKmLimite !== null ? roundOrNull(parseNum(row[foglio.colKmLimite])) : null,
             kmAttuali: foglio.colKmAttuali !== null ? roundOrNull(parseNum(row[foglio.colKmAttuali])) : null,
+            kmAttualiAl,
             annoImmatricolazione,
             note: foglio.colNote !== null && row[foglio.colNote] ? String(row[foglio.colNote]).trim() : null,
           };
@@ -351,6 +372,7 @@ export class MezziService {
     if (raw.includes('MHEV') || raw.includes('MILD')) return 'GASOLIO_MHEV';
     if (raw.includes('BENZINA') || raw.includes('BENZ')) return 'BENZINA';
     if (raw.includes('METANO') || raw.includes('GNL') || raw.includes('GPL')) return 'METANO';
+    if (raw === 'DIESEL') return 'DIESEL';
     return 'GASOLIO'; // default (copre anche 'GASOLIO' esplicito)
   }
 

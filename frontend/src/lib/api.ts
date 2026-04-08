@@ -50,6 +50,7 @@ export interface Mezzo {
   rataNoleggio: number | null;
   canoneNoleggio: number | null;
   kmAttuali: number | null;
+  kmAttualiAl: string | null;
   kmLimite: number | null;
   scadenzaAssicurazione: string | null;
   scadenzaRevisione: string | null;
@@ -101,6 +102,7 @@ export interface CreateMezzoPayload {
   rataNoleggio?: number;
   canoneNoleggio?: number;
   kmAttuali?: number;
+  kmAttualiAl?: string;
   kmLimite?: number;
   scadenzaAssicurazione?: string;
   scadenzaRevisione?: string;

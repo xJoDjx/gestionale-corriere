@@ -42,6 +42,7 @@ export class CreateMezzoDto {
 
   // ── Km ──────────────────────────────────────────────
   @IsInt() @IsOptional() @Type(() => Number) kmAttuali?: number;
+  @IsDateString() @IsOptional() kmAttualiAl?: string;
   @IsInt() @IsOptional() @Type(() => Number) kmLimite?: number;
 
   // ── Scadenze ────────────────────────────────────────

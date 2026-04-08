@@ -142,6 +142,7 @@ export default function FlottaMezzi() {
         alimentazione: form.alimentazione,
         categoria: form.categoria,
         kmAttuali: form.kmAttuali ? parseInt(form.kmAttuali) : undefined,
+        kmAttualiAl: form.kmAttualiAl || undefined,
         kmLimite: form.kmLimite ? parseInt(form.kmLimite) : undefined,
         rataNoleggio: form.rataNoleggio ? parseFloat(form.rataNoleggio) : undefined,
         canoneNoleggio: form.canoneNoleggio ? parseFloat(form.canoneNoleggio) : undefined,
@@ -394,9 +395,14 @@ export default function FlottaMezzi() {
                     {m.rataNoleggio ? fmtEur(m.rataNoleggio) : <span className="fm-empty">—</span>}
                   </td>
                   <td>
-                    {m.kmAttuali != null
-                      ? m.kmAttuali.toLocaleString('it-IT')
-                      : <span className="fm-empty">—</span>}
+                    {m.kmAttuali != null ? (
+                      <div>
+                        <span>{m.kmAttuali.toLocaleString('it-IT')}</span>
+                        {m.kmAttualiAl && (
+                          <div className="fm-km-date">al {new Date(m.kmAttualiAl).toLocaleDateString('it-IT')}</div>
+                        )}
+                      </div>
+                    ) : <span className="fm-empty">—</span>}
                   </td>
                   <td>
                     {m.kmLimite ? (
