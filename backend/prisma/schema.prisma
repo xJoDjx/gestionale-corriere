@@ -141,6 +141,7 @@ enum Alimentazione {
   GASOLIO_MHEV
   BENZINA
   IBRIDO
+  METANO
 }
 
 enum CategoriaMezzo {

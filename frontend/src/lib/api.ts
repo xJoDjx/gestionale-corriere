@@ -143,6 +143,18 @@ export const mezziApi = {
     api.post(`/mezzi/${mezzoId}/assegnazioni`, data),
   chiudiAssegnazione: (assegnazioneId: string) =>
     api.put(`/mezzi/assegnazioni/${assegnazioneId}/chiudi`, {}),
+  importaExcel: (file: File): Promise<{ creati: number; saltati: number; errori: string[] }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return fetch(`${API_BASE}/mezzi/importa-excel`, { method: 'POST', body: formData })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }));
+          throw new Error(err.message || 'Errore importazione');
+        }
+        return res.json();
+      });
+  },
 };
 
 // ─── PALMARI TYPES ────────────────────────────────────

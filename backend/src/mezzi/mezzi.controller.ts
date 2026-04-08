@@ -1,6 +1,9 @@
 import {
   Controller, Get, Post, Put, Delete, Param, Query, Body,
+  UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { MezziService } from './mezzi.service';
 import { CreateMezzoDto, UpdateMezzoDto, QueryMezziDto, CreateAssegnazioneMezzoDto } from './mezzi.dto';
 
@@ -26,6 +29,17 @@ export class MezziController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
+  }
+
+  @Post('importa-excel')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  async importaExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File obbligatorio');
+    const ext = file.originalname.toLowerCase();
+    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+      throw new BadRequestException('Formato file non supportato. Usa .xlsx o .xls');
+    }
+    return this.service.importaExcel(file.buffer);
   }
 
   @Post()

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMezzoDto, UpdateMezzoDto, QueryMezziDto, CreateAssegnazioneMezzoDto } from './mezzi.dto';
@@ -145,6 +146,214 @@ export class MezziService {
     });
     if (!mezzo) throw new NotFoundException('Mezzo non trovato');
     return mezzo;
+  }
+
+  // ─── IMPORTA EXCEL ──────────────────────────────────
+  async importaExcel(buffer: Buffer) {
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+
+    const risultati: { creati: number; saltati: number; errori: string[] } = {
+      creati: 0,
+      saltati: 0,
+      errori: [],
+    };
+
+    // Fogli da importare e loro configurazione
+    const FOGLI: Array<{
+      nome: string;
+      stato: string;
+      tipoPossesso: string;
+      colTarga: number;
+      colModello: number;
+      colTipo: number;
+      colAlimentazione: number;
+      colScadAssicurazione: number;
+      colScadRevisione: number;
+      colScadBollo: number | null;
+      colProprietario: number;
+      colInizioContratto: number;
+      colFineContratto: number;
+      colCanone: number;
+      colRata: number;
+      colKmLimite: number | null;
+      colImmatric: number | null;
+      colNote: number | null;
+    }> = [
+      {
+        nome: 'PARCO VEICOLI MEDISUD SRL',
+        stato: 'DISPONIBILE',
+        tipoPossesso: 'PROPRIETA',
+        colTarga: 2,
+        colModello: 4,
+        colTipo: 3,
+        colAlimentazione: 9,
+        colScadAssicurazione: 10,
+        colScadRevisione: 12,
+        colScadBollo: 11,
+        colProprietario: 15,
+        colInizioContratto: 16,
+        colFineContratto: 17,
+        colCanone: 18,
+        colRata: 22,
+        colKmLimite: null,
+        colImmatric: 6,
+        colNote: 23,
+      },
+      {
+        nome: 'NOLEGGIO LUNGO TERMINE',
+        stato: 'DISPONIBILE',
+        tipoPossesso: 'NOLEGGIO',
+        colTarga: 2,
+        colModello: 4,
+        colTipo: 3,
+        colAlimentazione: 6,
+        colScadAssicurazione: 7,
+        colScadRevisione: 8,
+        colScadBollo: null,
+        colProprietario: 9,
+        colInizioContratto: 10,
+        colFineContratto: 11,
+        colCanone: 12,
+        colRata: 14,
+        colKmLimite: 15,
+        colImmatric: null,
+        colNote: null,
+      },
+    ];
+
+    for (const foglio of FOGLI) {
+      const ws = wb.Sheets[foglio.nome];
+      if (!ws) continue;
+
+      // Leggi come array di array (raw), con date come oggetti
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+        header: 1,
+        defval: null,
+        raw: false,
+        dateNF: 'yyyy-mm-dd',
+      });
+
+      // Salta la riga header (riga 0) e righe vuote
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const targaRaw = row[foglio.colTarga];
+        if (!targaRaw || String(targaRaw).trim() === '' || String(targaRaw).trim() === 'TARGA') continue;
+
+        const targa = String(targaRaw).trim().toUpperCase().replace(/\s+/g, '');
+        if (targa.length < 5) continue; // Salta righe che non sembrano targhe
+
+        try {
+          // Controlla se esiste già
+          const exists = await this.prisma.mezzo.findFirst({
+            where: { targa, deletedAt: null },
+          });
+          if (exists) {
+            risultati.saltati++;
+            continue;
+          }
+
+          // Estrai marca e modello dal campo MODELLO (es. "IVECO 35C14N" → IVECO + 35C14N)
+          const modelloRaw = String(row[foglio.colModello] ?? '').trim();
+          const [marcaStr, ...modelloParts] = modelloRaw.split(/\s+/);
+          const marca = marcaStr || 'N/D';
+          const modello = modelloParts.length > 0 ? modelloParts.join(' ') : marcaStr;
+
+          // Mappa alimentazione
+          const alimentazioneRaw = String(row[foglio.colAlimentazione] ?? '').trim().toUpperCase();
+          const alimentazione = this.mapAlimentazione(alimentazioneRaw);
+
+          // Mappa tipo mezzo
+          const tipoRaw = String(row[foglio.colTipo] ?? '').trim().toUpperCase();
+          const tipo = this.mapTipoMezzo(tipoRaw);
+
+          // Date helper
+          const parseDate = (val: any): Date | null => {
+            if (!val) return null;
+            if (val instanceof Date) return val;
+            const s = String(val).trim();
+            if (!s || s === 'null') return null;
+            // Formato italiano dd/mm/yyyy
+            const itMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+            if (itMatch) return new Date(`${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}T00:00:00.000Z`);
+            // Formato yyyy-mm-dd
+            const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? null : d;
+          };
+
+          // Anno immatricolazione
+          let annoImmatricolazione: number | null = null;
+          if (foglio.colImmatric !== null) {
+            const immatRaw = row[foglio.colImmatric];
+            const immatDate = parseDate(immatRaw);
+            if (immatDate) annoImmatricolazione = immatDate.getFullYear();
+          }
+
+          // Importo helper
+          const parseNum = (val: any): number | null => {
+            if (val === null || val === undefined || val === '') return null;
+            const n = parseFloat(String(val).replace(',', '.').replace(/[^\d.-]/g, ''));
+            return isNaN(n) ? null : n;
+          };
+
+          const societaNoleggio = row[foglio.colProprietario]
+            ? String(row[foglio.colProprietario]).trim()
+            : null;
+
+          const data: any = {
+            targa,
+            marca,
+            modello,
+            tipo,
+            alimentazione,
+            stato: foglio.stato,
+            tipoPossesso: foglio.tipoPossesso,
+            societaNoleggio,
+            inizioNoleggio: parseDate(row[foglio.colInizioContratto]),
+            fineNoleggio: parseDate(row[foglio.colFineContratto]),
+            canoneNoleggio: parseNum(row[foglio.colCanone]),
+            rataNoleggio: parseNum(row[foglio.colRata]),
+            scadenzaAssicurazione: parseDate(row[foglio.colScadAssicurazione]),
+            scadenzaRevisione: parseDate(row[foglio.colScadRevisione]),
+            scadenzaBollo: foglio.colScadBollo !== null ? parseDate(row[foglio.colScadBollo]) : null,
+            kmLimite: foglio.colKmLimite !== null ? (parseNum(row[foglio.colKmLimite]) !== null ? Math.round(parseNum(row[foglio.colKmLimite])!) : null) : null,
+            annoImmatricolazione,
+            note: foglio.colNote !== null && row[foglio.colNote] ? String(row[foglio.colNote]).trim() : null,
+          };
+
+          // Rimuovi null per non sovrascrivere default Prisma
+          for (const key of Object.keys(data)) {
+            if (data[key] === null) delete data[key];
+          }
+
+          await this.prisma.mezzo.create({ data });
+          risultati.creati++;
+        } catch (err: any) {
+          risultati.errori.push(`Targa ${targa}: ${err.message}`);
+        }
+      }
+    }
+
+    return risultati;
+  }
+
+  private mapAlimentazione(raw: string): string {
+    if (raw.includes('METANO') || raw.includes('GAS')) return 'METANO';
+    if (raw.includes('ELETTR')) return 'ELETTRICO';
+    if (raw.includes('IBRIDO') || raw.includes('HYBRID')) return 'IBRIDO';
+    if (raw.includes('MHEV') || raw.includes('MILD')) return 'GASOLIO_MHEV';
+    if (raw.includes('BENZINA') || raw.includes('BENZ')) return 'BENZINA';
+    return 'GASOLIO'; // default
+  }
+
+  private mapTipoMezzo(raw: string): string {
+    if (raw.includes('AUTOCARRO') || raw.includes('CAMION')) return 'AUTOCARRO';
+    if (raw.includes('AUTO') && !raw.includes('AUTOCARRO')) return 'AUTO';
+    if (raw.includes('MOTO') || raw.includes('SCOOTER')) return 'MOTOCICLO';
+    return 'FURGONE'; // default
   }
 
   // ─── CREATE ─────────────────────────────────────────

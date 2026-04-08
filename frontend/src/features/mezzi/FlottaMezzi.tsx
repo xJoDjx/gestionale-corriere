@@ -1,5 +1,5 @@
 // src/features/mezzi/FlottaMezzi.tsx — API reali, dettaglio mezzo con routing
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mezziApi, padronciniApi } from '../../lib/api';
 import type { Mezzo, MezziStats, Padroncino } from '../../lib/api';
@@ -59,6 +59,9 @@ export default function FlottaMezzi() {
   const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [filtroCategoria, setFiltroCategoria] = useState('TUTTI');
   const [nuovoOpen, setNuovoOpen] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState<{ creati: number; saltati: number; errori: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Fetch dati ─────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -79,6 +82,22 @@ export default function FlottaMezzi() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const handleImportaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const result = await mezziApi.importaExcel(file);
+      setImportResult(result);
+      await loadData();
+    } catch (err: any) {
+      alert('Errore importazione: ' + (err.message ?? 'Errore sconosciuto'));
+    } finally {
+      setImportando(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   // ─── Filtri ──────────────────────────────────────────
   const STATI = ['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'IN_REVISIONE', 'FUORI_SERVIZIO', 'VENDUTO'];
@@ -277,8 +296,19 @@ export default function FlottaMezzi() {
           <button className="btn-outline" onClick={() => {}}>
             + Auto Aziendale
           </button>
-          <button className="btn-outline" onClick={() => {}}>
-            📥 Importa Excel
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={handleImportaExcel}
+          />
+          <button
+            className="btn-outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importando}
+          >
+            {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
           </button>
         </div>
       </div>
@@ -405,6 +435,43 @@ export default function FlottaMezzi() {
       </div>
 
       <NuovoMezzoModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />
+
+      {/* ── MODAL RISULTATI IMPORT ── */}
+      {importResult && (
+        <div className="pd-modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="fm-import-result-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fm-import-result-header">
+              <h3>📥 Risultati Importazione Excel</h3>
+              <button className="pd-modal-close" onClick={() => setImportResult(null)}>✕</button>
+            </div>
+            <div className="fm-import-result-body">
+              <div className="fm-import-stat fm-import-stat-ok">
+                <span className="fm-import-stat-val">{importResult.creati}</span>
+                <span className="fm-import-stat-label">Mezzi creati</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-skip">
+                <span className="fm-import-stat-val">{importResult.saltati}</span>
+                <span className="fm-import-stat-label">Saltati (già esistenti)</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-err">
+                <span className="fm-import-stat-val">{importResult.errori.length}</span>
+                <span className="fm-import-stat-label">Errori</span>
+              </div>
+            </div>
+            {importResult.errori.length > 0 && (
+              <div className="fm-import-errors">
+                <p className="fm-import-errors-title">Dettaglio errori:</p>
+                <ul>
+                  {importResult.errori.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="fm-import-result-footer">
+              <button className="btn-primary btn-sm" onClick={() => setImportResult(null)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
