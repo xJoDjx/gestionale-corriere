@@ -47,6 +47,23 @@ export class AccontiService {
           include: { padroncino: { select: { id: true, ragioneSociale: true } } },
         });
 
+        // Controlla se l'acconto è stato addebitato in un conteggio mensile
+        const rigaConteggio = await this.prisma.conteggiRiga.findFirst({
+          where: {
+            riferimentoTipo: 'acconto',
+            riferimentoId: a.id,
+            conteggioMensile: { deletedAt: null },
+          },
+          include: {
+            conteggioMensile: {
+              select: {
+                mese: true,
+                padroncino: { select: { ragioneSociale: true } },
+              },
+            },
+          },
+        });
+
         return {
           ...a,
           importo: Number(a.importo),
@@ -55,6 +72,12 @@ export class AccontiService {
           nomeAutista: [a.codiceAutista.nome, a.codiceAutista.cognome].filter(Boolean).join(' ') || 'N/D',
           ragioneSociale: assegnazione?.padroncino?.ragioneSociale ?? 'N/A',
           padroncinoId: assegnazione?.padroncino?.id ?? null,
+          addebitatoIn: rigaConteggio
+            ? {
+                mese: rigaConteggio.conteggioMensile.mese,
+                ragioneSociale: rigaConteggio.conteggioMensile.padroncino.ragioneSociale,
+              }
+            : null,
         };
       }),
     );
