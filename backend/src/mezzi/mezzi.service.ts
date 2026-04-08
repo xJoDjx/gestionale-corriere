@@ -341,12 +341,12 @@ export class MezziService {
   }
 
   private mapAlimentazione(raw: string): string {
-    if (raw.includes('METANO') || raw.includes('GAS')) return 'METANO';
     if (raw.includes('ELETTR')) return 'ELETTRICO';
     if (raw.includes('IBRIDO') || raw.includes('HYBRID')) return 'IBRIDO';
     if (raw.includes('MHEV') || raw.includes('MILD')) return 'GASOLIO_MHEV';
     if (raw.includes('BENZINA') || raw.includes('BENZ')) return 'BENZINA';
-    return 'GASOLIO'; // default
+    if (raw.includes('METANO') || raw.includes('GNL') || raw.includes('GPL')) return 'METANO';
+    return 'GASOLIO'; // default (copre anche 'GASOLIO' esplicito)
   }
 
   private mapTipoMezzo(raw: string): string {
