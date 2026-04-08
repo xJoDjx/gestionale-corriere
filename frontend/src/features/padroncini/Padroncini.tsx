@@ -126,10 +126,8 @@ function ModificaPadroncinoModal({
         pec: form.pec || undefined,
         iban: form.iban || undefined,
         scadenzaDurc: form.scadenzaDurc || undefined,
-        dvrEsente: form.dvrEsente,
         note: form.note || undefined,
-        attivo: form.attivo,
-      } as any);
+      });
       onClose();
     } catch (e: any) {
       alert('Errore: ' + e.message);
@@ -1030,6 +1028,16 @@ function PadroncinoDetail({
     await handleRefresh();
   };
 
+  const handleElimina = async () => {
+    if (!window.confirm(`Eliminare definitivamente "${p.ragioneSociale}"?\nQuesta operazione non può essere annullata.`)) return;
+    try {
+      await padronciniApi.delete(p.id);
+      onRefresh();
+    } catch (e: any) {
+      alert('Errore eliminazione: ' + e.message);
+    }
+  };
+
   const durc = scadenzaInfo(p.scadenzaDurc);
   const durcSt = durcStatus(p.scadenzaDurc);
   const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
@@ -1064,6 +1072,7 @@ function PadroncinoDetail({
         </div>
         <div className="pd-detail-actions">
           <button className="btn-outline btn-sm" onClick={() => setShowModifica(true)}>✏️ Modifica</button>
+          <button className="btn-danger btn-sm" onClick={handleElimina}>🗑 Elimina</button>
         </div>
       </div>
 
@@ -1157,9 +1166,8 @@ export default function PadronciniPage() {
         pec: form.pec || undefined,
         iban: form.iban || undefined,
         scadenzaDurc: form.scadenzaDurc || undefined,
-        dvrEsente: (form as any).dvrEsente,
         note: form.note || undefined,
-      } as any);
+      });
       await load();
       setSelected(nuovo.id);
     } catch (e: any) {
