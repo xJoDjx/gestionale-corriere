@@ -159,13 +159,18 @@ export class MezziService {
     };
 
     // Fogli da importare e loro configurazione
+    // NOTA colonne:
+    //   col 3 = TIPO nel file ma è la MARCA del veicolo (IVECO, FORD, VW…)
+    //   col 4 = MODELLO
+    //   sheet0 col 24 = km attuali (intestazione = data snapshot, es. "km 10-2-2022")
+    //   sheet1 col 16 = km attuali (intestazione = data snapshot, es. "23/01/2026")
     const FOGLI: Array<{
       nome: string;
       stato: string;
       tipoPossesso: string;
       colTarga: number;
+      colMarca: number;
       colModello: number;
-      colTipo: number;
       colAlimentazione: number;
       colScadAssicurazione: number;
       colScadRevisione: number;
@@ -176,6 +181,7 @@ export class MezziService {
       colCanone: number;
       colRata: number;
       colKmLimite: number | null;
+      colKmAttuali: number | null;
       colImmatric: number | null;
       colNote: number | null;
     }> = [
@@ -184,8 +190,8 @@ export class MezziService {
         stato: 'DISPONIBILE',
         tipoPossesso: 'PROPRIETA',
         colTarga: 2,
+        colMarca: 3,      // "TIPO" nel file = MARCA (IVECO, FORD…)
         colModello: 4,
-        colTipo: 3,
         colAlimentazione: 9,
         colScadAssicurazione: 10,
         colScadRevisione: 12,
@@ -196,6 +202,7 @@ export class MezziService {
         colCanone: 18,
         colRata: 22,
         colKmLimite: null,
+        colKmAttuali: 24, // intestazione = data snapshot km
         colImmatric: 6,
         colNote: 23,
       },
@@ -204,8 +211,8 @@ export class MezziService {
         stato: 'DISPONIBILE',
         tipoPossesso: 'NOLEGGIO',
         colTarga: 2,
+        colMarca: 3,      // "TIPO" nel file = MARCA
         colModello: 4,
-        colTipo: 3,
         colAlimentazione: 6,
         colScadAssicurazione: 7,
         colScadRevisione: 8,
@@ -216,6 +223,7 @@ export class MezziService {
         colCanone: 12,
         colRata: 14,
         colKmLimite: 15,
+        colKmAttuali: 16, // intestazione = data snapshot km (es. 23/01/2026)
         colImmatric: null,
         colNote: null,
       },
@@ -254,19 +262,14 @@ export class MezziService {
             continue;
           }
 
-          // Estrai marca e modello dal campo MODELLO (es. "IVECO 35C14N" → IVECO + 35C14N)
-          const modelloRaw = String(row[foglio.colModello] ?? '').trim();
-          const [marcaStr, ...modelloParts] = modelloRaw.split(/\s+/);
-          const marca = marcaStr || 'N/D';
-          const modello = modelloParts.length > 0 ? modelloParts.join(' ') : marcaStr;
+          // Marca: dalla colonna "TIPO" del file (che è la marca, es. IVECO, FORD…)
+          const marca = String(row[foglio.colMarca] ?? '').trim() || 'N/D';
+          // Modello: dalla colonna MODELLO
+          const modello = String(row[foglio.colModello] ?? '').trim() || marca;
 
           // Mappa alimentazione
           const alimentazioneRaw = String(row[foglio.colAlimentazione] ?? '').trim().toUpperCase();
           const alimentazione = this.mapAlimentazione(alimentazioneRaw);
-
-          // Mappa tipo mezzo
-          const tipoRaw = String(row[foglio.colTipo] ?? '').trim().toUpperCase();
-          const tipo = this.mapTipoMezzo(tipoRaw);
 
           // Date helper
           const parseDate = (val: any): Date | null => {
@@ -303,11 +306,12 @@ export class MezziService {
             ? String(row[foglio.colProprietario]).trim()
             : null;
 
+          const roundOrNull = (v: number | null) => v !== null ? Math.round(v) : null;
+
           const data: any = {
             targa,
             marca,
             modello,
-            tipo,
             alimentazione,
             stato: foglio.stato,
             tipoPossesso: foglio.tipoPossesso,
@@ -319,7 +323,8 @@ export class MezziService {
             scadenzaAssicurazione: parseDate(row[foglio.colScadAssicurazione]),
             scadenzaRevisione: parseDate(row[foglio.colScadRevisione]),
             scadenzaBollo: foglio.colScadBollo !== null ? parseDate(row[foglio.colScadBollo]) : null,
-            kmLimite: foglio.colKmLimite !== null ? (parseNum(row[foglio.colKmLimite]) !== null ? Math.round(parseNum(row[foglio.colKmLimite])!) : null) : null,
+            kmLimite: foglio.colKmLimite !== null ? roundOrNull(parseNum(row[foglio.colKmLimite])) : null,
+            kmAttuali: foglio.colKmAttuali !== null ? roundOrNull(parseNum(row[foglio.colKmAttuali])) : null,
             annoImmatricolazione,
             note: foglio.colNote !== null && row[foglio.colNote] ? String(row[foglio.colNote]).trim() : null,
           };
@@ -349,12 +354,6 @@ export class MezziService {
     return 'GASOLIO'; // default (copre anche 'GASOLIO' esplicito)
   }
 
-  private mapTipoMezzo(raw: string): string {
-    if (raw.includes('AUTOCARRO') || raw.includes('CAMION')) return 'AUTOCARRO';
-    if (raw.includes('AUTO') && !raw.includes('AUTOCARRO')) return 'AUTO';
-    if (raw.includes('MOTO') || raw.includes('SCOOTER')) return 'MOTOCICLO';
-    return 'FURGONE'; // default
-  }
 
   // ─── CREATE ─────────────────────────────────────────
   async create(dto: CreateMezzoDto, userId: string) {
