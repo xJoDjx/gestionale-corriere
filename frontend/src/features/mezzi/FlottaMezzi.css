@@ -175,9 +175,9 @@
 .fm-row { border-bottom: 1px solid #ecf0f7; }
 .fm-row:last-child { border-bottom: none; }
 .fm-row:hover { background: #f8fafc; }
-.fm-table td { padding: 10px 12px; vertical-align: middle; }
+.fm-table td { padding: 6px 12px; vertical-align: middle; }
 
-.fm-targa-cell { display: flex; flex-direction: column; gap: 3px; }
+.fm-targa-cell { display: flex; align-items: center; gap: 5px;white-space: nowrap; }
 .fm-targa { font-weight: 700; font-size: 13px; color: #0f172a; }
 .fm-cat-tag {
   display: inline-flex;

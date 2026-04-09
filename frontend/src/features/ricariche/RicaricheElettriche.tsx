@@ -97,7 +97,7 @@ export default function RicaricheElettriche() {
   // tariffe
   const [fatturaImporto, setFatturaImporto] = useState('');
   const [fatturaKwh, setFatturaKwh]         = useState('');
-  const [costoEsterno, setCostoEsterno]     = useState('0.870');
+  const [costoEsterno, setCostoEsterno]     = useState('0.840');
   const [magDefault, setMagDefault]         = useState('20');
 
   // DB state
@@ -151,7 +151,7 @@ export default function RicaricheElettriche() {
       if (res.tariffe) {
         setFatturaImporto(res.tariffe.fatturaImporto ? String(res.tariffe.fatturaImporto) : '');
         setFatturaKwh(res.tariffe.fatturaKwh ? String(res.tariffe.fatturaKwh) : '');
-        setCostoEsterno(res.tariffe.costoEsternoKwh ? String(res.tariffe.costoEsternoKwh) : '0.870');
+        setCostoEsterno(res.tariffe.costoEsternoKwh ? String(res.tariffe.costoEsternoKwh) : '0.840');
       }
     } catch (e: any) { setError(e.message ?? 'Errore caricamento'); }
     finally { setLoading(false); }
@@ -284,7 +284,7 @@ export default function RicaricheElettriche() {
     try {
       await api.delete(`/ricariche/${mese}`);
       setSessioni([]); setTariffe(null);
-      setFatturaImporto(''); setFatturaKwh(''); setCostoEsterno('0.870');
+      setFatturaImporto(''); setFatturaKwh(''); setCostoEsterno('0.840');
       await caricaMesi();
     } catch (e: any) {
       alert('Errore eliminazione: ' + e.message);
@@ -405,7 +405,7 @@ export default function RicaricheElettriche() {
             </div>
             <div className="ric-config-field">
               <label>€/kWh esterno</label>
-              <input className="ric-input" type="number" step="0.001" placeholder="0.870"
+              <input className="ric-input" type="number" step="0.001" placeholder="0.840"
                 value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
             </div>
             <div className="ric-config-field" style={{ justifyContent: 'flex-end' }}>
@@ -480,7 +480,7 @@ export default function RicaricheElettriche() {
                   <div className="ric-config-sub">🔌 Ricariche Esterne</div>
                   <div className="ric-config-field">
                     <label>Costo kWh esterno (€)</label>
-                    <input className="ric-input" type="number" step="0.001" placeholder="0.870"
+                    <input className="ric-input" type="number" step="0.001" placeholder="0.840"
                       value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
                   </div>
                 </div>
