@@ -12,6 +12,19 @@ const fmt = (d: string | null | undefined) =>
 const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
 
+// ─── SORT HEADER ──────────────────────────────────────
+type SortDir = 'asc' | 'desc';
+function SortTh({
+  label, col, sortKey, sortDir, onSort,
+}: { label: string; col: string; sortKey: string; sortDir: SortDir; onSort: (c: string) => void }) {
+  const active = sortKey === col;
+  return (
+    <th onClick={() => onSort(col)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+      {label} {active ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}
+    </th>
+  );
+}
+
 export default function CodiciAutisti() {
   const navigate = useNavigate();
 
@@ -22,6 +35,13 @@ export default function CodiciAutisti() {
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<'TUTTI' | 'DISPONIBILE' | 'ASSEGNATO' | 'DISMESSO'>('TUTTI');
   const [nuovoOpen, setNuovoOpen] = useState(false);
+  const [sortKey, setSortKey] = useState('codice');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (col: string) => {
+    if (sortKey === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(col); setSortDir('asc'); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,7 +63,7 @@ export default function CodiciAutisti() {
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
-    return autisti.filter((c) => {
+    const list = autisti.filter((c) => {
       const attiva = c.assegnazioni?.find((a) => !a.dataFine);
       const s = search.toLowerCase();
       const matchSearch =
@@ -57,7 +77,28 @@ export default function CodiciAutisti() {
       if (filtro === 'DISMESSO')    return matchSearch && !c.attivo;
       return matchSearch;
     });
-  }, [autisti, search, filtro]);
+
+    list.sort((a, b) => {
+      const attA = a.assegnazioni?.find((x) => !x.dataFine);
+      const attB = b.assegnazioni?.find((x) => !x.dataFine);
+      const statoA = !a.attivo ? 'DISMESSO' : attA ? 'ASSEGNATO' : 'DISPONIBILE';
+      const statoB = !b.attivo ? 'DISMESSO' : attB ? 'ASSEGNATO' : 'DISPONIBILE';
+      let va: any, vb: any;
+      switch (sortKey) {
+        case 'codice':       va = a.codice; vb = b.codice; break;
+        case 'stato':        va = statoA; vb = statoB; break;
+        case 'padroncino':   va = attA?.ragioneSociale ?? ''; vb = attB?.ragioneSociale ?? ''; break;
+        case 'tariffaFissa': va = a.tariffaFissa ?? -1; vb = b.tariffaFissa ?? -1; break;
+        case 'tariffaRitiro': va = a.tariffaRitiro ?? -1; vb = b.tariffaRitiro ?? -1; break;
+        case 'target':       va = a.target ?? -1; vb = b.target ?? -1; break;
+        default:             va = ''; vb = '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [autisti, search, filtro, sortKey, sortDir]);
 
   const handleCreate = async (form: NuovoCodiceAutista) => {
     try {
@@ -171,12 +212,12 @@ export default function CodiciAutisti() {
         <table className="ca-table">
           <thead>
             <tr>
-              <th>CODICE ↕</th>
-              <th>STATO</th>
-              <th>PADRONCINO ↕</th>
-              <th>TARIFFA FISSA ↕</th>
-              <th>TARIFFA RITIRO</th>
-              <th>TARGET ↕</th>
+              <SortTh label="CODICE"         col="codice"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="STATO"          col="stato"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="PADRONCINO"     col="padroncino"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARIFFA FISSA"  col="tariffaFissa"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARIFFA RITIRO" col="tariffaRitiro" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARGET"         col="target"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th>NOTE</th>
               <th></th>
             </tr>

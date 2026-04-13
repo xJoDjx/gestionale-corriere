@@ -5,6 +5,7 @@ import FlottaMezzi from './features/mezzi/FlottaMezzi';
 import DettaglioMezzo from './features/mezzi/DettaglioMezzo';
 import ConteggiMensili from './features/conteggi/ConteggiMensili';
 import PadronciniPage from './features/padroncini/Padroncini';
+import DettaglioPadroncino from './features/padroncini/DettaglioPadroncino';
 import PalmariPage from './features/palmari/Palmari';
 import DettaglioPalmare from './features/palmari/DettaglioPalmare';
 import CodiciAutistiPage from './features/codici-autista/CodiciAutisti';
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/conteggi" element={<ConteggiPage />} />
           <Route path="/conteggi/:id" element={<DettaglioConteggio />} />
           <Route path="/padroncini" element={<PadronciniPage />} />
+          <Route path="/padroncini/:id" element={<DettaglioPadroncino />} />
           <Route path="/palmari" element={<PalmariPage />} />
           <Route path="/palmari/:id" element={<DettaglioPalmare />} />
           <Route path="/codici-autista" element={<CodiciAutistiPage />} />

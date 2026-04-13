@@ -5,6 +5,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, padronciniApi } from '../../lib/api';
 import type { Padroncino } from '../../lib/api';
 import { conteggiApi } from '../../lib/conteggi.api';
+import { generaPdfConteggio } from './generaPdfConteggio';
 import './DettaglioConteggio.css';
 
 // ─── TIPI ──────────────────────────────────────────────────────────────────────
@@ -1270,7 +1271,39 @@ export default function DettaglioConteggio() {
           >
             {saving ? '⏳ Salvando...' : '💾 Salva'}
           </button>
-          <button className="btn-primary btn-sm">📄 Genera PDF</button>
+          <button
+            className="btn-primary btn-sm"
+            onClick={() => {
+              if (!padroncino) return;
+              try {
+              generaPdfConteggio({
+                padroncino: {
+                  ragioneSociale: padroncino.ragioneSociale,
+                  partitaIva:    padroncino.partitaIva,
+                  indirizzo:     padroncino.indirizzo,
+                  iban:          padroncino.iban,
+                },
+                mese,
+                statoConteggio,
+                giorniMese,
+                numeroPalmari,
+                tariffaPalmareGiornaliera,
+                righeF: righeF.map((r) => ({ descrizione: r.descrizione, valore: r.valore, nota: r.nota })),
+                righeM: righeM.map((r) => ({ targa: r.targa, valoreRataNoIva: r.valoreRataNoIva, percIva: r.percIva, alimentazione: r.alimentazione, note: r.note })),
+                righeR: righeR.map((r) => ({ targa: r.targa, costoRicarica: r.costoRicarica, percIva: r.percIva, note: r.note })),
+                righeV: righeV.map((r) => ({ descrizione: r.descrizione, valoreNoIva: r.valoreNoIva, percIva: r.percIva, note: r.note })),
+                accrediti:    accrediti.map((r) => ({ descrizione: r.descrizione, valore: r.valore, nota: r.nota })),
+                fineMese:     fineMese.map((r) => ({ descrizione: r.descrizione, valore: r.valore, nota: r.nota })),
+                cassaAcconti: cassaAcconti.map((r) => ({ codice: r.codice, descrizione: r.descrizione, data: r.data, valore: r.valore, nota: r.nota })),
+              });
+              } catch (err: any) {
+                console.error('Errore PDF:', err);
+                alert('Errore generazione PDF: ' + (err?.message ?? err));
+              }
+            }}
+          >
+            📄 Genera PDF
+          </button>
 
           {/* Mostra il tasto elimina SOLO se abbiamo un ID (ovvero se il record esiste nel DB) */}
           {conteggioId && (

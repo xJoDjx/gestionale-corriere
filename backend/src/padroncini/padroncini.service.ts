@@ -255,6 +255,10 @@ export class PadronciniService {
       userId, entityType: 'assegnazione_mezzo', entityId: nuova.id, azione: 'ASSEGNA',
       dataDopo: { targa: nuova.mezzo.targa, padroncinoId, ragioneSociale: padroncino.ragioneSociale, dataInizio } as any,
     });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'ASSEGNA',
+      dataDopo: { tipo: 'mezzo', targa: nuova.mezzo.targa, dataInizio } as any,
+    });
     return nuova;
   }
 
@@ -281,6 +285,10 @@ export class PadronciniService {
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId, azione: 'CHIUDI_ASSEGNAZIONE',
       dataDopo: { targa: ass.mezzo.targa, ragioneSociale: ass.padroncino.ragioneSociale } as any,
+    });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: { tipo: 'mezzo', targa: ass.mezzo.targa } as any,
     });
     return { deleted: true };
   }
@@ -311,6 +319,10 @@ export class PadronciniService {
       userId, entityType: 'assegnazione_palmare', entityId: nuova.id, azione: 'ASSEGNA',
       dataDopo: { codicePalmare: nuova.palmare.codice, padroncinoId, ragioneSociale: padroncino.ragioneSociale, dataInizio } as any,
     });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'ASSEGNA',
+      dataDopo: { tipo: 'palmare', codicePalmare: nuova.palmare.codice, dataInizio } as any,
+    });
     return nuova;
   }
 
@@ -337,6 +349,10 @@ export class PadronciniService {
     await this.audit.log({
       userId, entityType: 'assegnazione_palmare', entityId: assegnazioneId, azione: 'CHIUDI_ASSEGNAZIONE',
       dataDopo: { codicePalmare: ass.palmare.codice, ragioneSociale: ass.padroncino.ragioneSociale } as any,
+    });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: { tipo: 'palmare', codicePalmare: ass.palmare.codice } as any,
     });
     return { deleted: true };
   }
@@ -375,6 +391,10 @@ export class PadronciniService {
       userId, entityType: 'assegnazione_codice_autista', entityId: nuova.id, azione: 'ASSEGNA',
       dataDopo: { codiceAutista: nuova.codiceAutista.codice, padroncinoId, ragioneSociale: padroncino.ragioneSociale, dataInizio } as any,
     });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'ASSEGNA',
+      dataDopo: { tipo: 'codice_autista', codiceAutista: nuova.codiceAutista.codice, dataInizio } as any,
+    });
     return nuova;
   }
 
@@ -393,6 +413,10 @@ export class PadronciniService {
     await this.audit.log({
       userId, entityType: 'assegnazione_codice_autista', entityId: assegnazioneId, azione: 'CHIUDI_ASSEGNAZIONE',
       dataDopo: { codiceAutista: ass.codiceAutista.codice, ragioneSociale: ass.padroncino.ragioneSociale } as any,
+    });
+    await this.audit.log({
+      userId, entityType: 'padroncino', entityId: padroncinoId, azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: { tipo: 'codice_autista', codiceAutista: ass.codiceAutista.codice } as any,
     });
     return { deleted: true };
   }

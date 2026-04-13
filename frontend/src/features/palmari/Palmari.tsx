@@ -20,6 +20,19 @@ const STATO_META: Record<string, { label: string; cls: string }> = {
   DISMESSO:    { label: 'Dismesso',    cls: 'badge-gray' },
 };
 
+// ─── SORT HEADER ──────────────────────────────────────
+type SortDir = 'asc' | 'desc';
+function SortTh({
+  label, col, sortKey, sortDir, onSort,
+}: { label: string; col: string; sortKey: string; sortDir: SortDir; onSort: (c: string) => void }) {
+  const active = sortKey === col;
+  return (
+    <th onClick={() => onSort(col)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+      {label} {active ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}
+    </th>
+  );
+}
+
 // ─── PAGINA ────────────────────────────────────────────
 export default function Palmari() {
   const navigate = useNavigate();
@@ -31,6 +44,13 @@ export default function Palmari() {
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [nuovoOpen, setNuovoOpen] = useState(false);
+  const [sortKey, setSortKey] = useState('codice');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (col: string) => {
+    if (sortKey === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(col); setSortDir('asc'); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,7 +72,7 @@ export default function Palmari() {
   useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
-    return palmari.filter((p) => {
+    const list = palmari.filter((p) => {
       const attiva = p.assegnazioni?.find((a) => !a.dataFine);
       const s = search.toLowerCase();
       const matchSearch =
@@ -64,7 +84,26 @@ export default function Palmari() {
       const matchStato = filtroStato === 'TUTTI' || p.stato === filtroStato;
       return matchSearch && matchStato;
     });
-  }, [palmari, search, filtroStato]);
+
+    list.sort((a, b) => {
+      const attA = a.assegnazioni?.find((x) => !x.dataFine);
+      const attB = b.assegnazioni?.find((x) => !x.dataFine);
+      let va: any, vb: any;
+      switch (sortKey) {
+        case 'codice':    va = a.codice; vb = b.codice; break;
+        case 'stato':     va = a.stato;  vb = b.stato;  break;
+        case 'padroncino': va = attA?.ragioneSociale ?? ''; vb = attB?.ragioneSociale ?? ''; break;
+        case 'tariffa':   va = a.tariffaMensile ?? -1; vb = b.tariffaMensile ?? -1; break;
+        case 'dataAss':   va = attA?.dataInizio ?? ''; vb = attB?.dataInizio ?? ''; break;
+        case 'fine':      va = attA?.dataFine ?? ''; vb = attB?.dataFine ?? ''; break;
+        default:          va = ''; vb = '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [palmari, search, filtroStato, sortKey, sortDir]);
 
   const handleCreate = async (form: NuovoPalmare) => {
     try {
@@ -179,12 +218,12 @@ export default function Palmari() {
         <table className="palm-table">
           <thead>
             <tr>
-              <th>SERIALE / MODELLO ↕</th>
-              <th>STATO</th>
-              <th>PADRONCINO ↕</th>
-              <th>TARIFFA</th>
-              <th>DATA ASSEGNAZIONE</th>
-              <th>FINE</th>
+              <SortTh label="SERIALE / MODELLO" col="codice"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="STATO"              col="stato"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="PADRONCINO"         col="padroncino" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARIFFA"            col="tariffa"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="DATA ASSEGNAZIONE"  col="dataAss"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="FINE"               col="fine"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th></th>
             </tr>
           </thead>

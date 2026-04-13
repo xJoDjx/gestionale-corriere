@@ -117,8 +117,10 @@
 }
 .pd-detail-header {
   padding: 16px 20px; border-bottom: 1px solid var(--border);
-  display: flex; justify-content: space-between; align-items: flex-start;
+  display: flex; flex-direction: column; gap: 12px;
 }
+.pd-back-btn { align-self: flex-start; font-size: 13px; }
+.pd-detail-header-row { display: flex; justify-content: space-between; align-items: flex-start; }
 .pd-detail-title-row { display: flex; flex-direction: column; gap: 6px; }
 .pd-detail-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin: 0; }
 .pd-detail-codice { font-size: 11px; color: var(--text-muted); }

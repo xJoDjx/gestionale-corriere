@@ -3,5 +3,9 @@
 6) possibilità di modificare la % di maggiorazione direttamente dalla pagina ricarica , deve essere piu dinamica
 
 
+BACK
+npm run start:dev
 
 
+FRONT
+npm run dev

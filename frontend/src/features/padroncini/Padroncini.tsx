@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
   Padroncino, NuovoPadroncino,
@@ -990,19 +991,24 @@ function TabInfo({ p }: { p: Padroncino }) {
 }
 
 // ─── DETTAGLIO PADRONCINO ─────────────────────────────
-function PadroncinoDetail({
+export function PadroncinoDetail({
   p: initialP,
-  tab,
-  setTab,
+  tab: tabProp,
+  setTab: setTabProp,
   onRefresh,
+  onBack,
 }: {
   p: Padroncino;
-  tab: string;
-  setTab: (t: any) => void;
+  tab?: string;
+  setTab?: (t: any) => void;
   onRefresh: () => void;
+  onBack?: () => void;
 }) {
   const [p, setP] = useState(initialP);
   const [showModifica, setShowModifica] = useState(false);
+  const [tabInternal, setTabInternal] = useState('info');
+  const tab = tabProp ?? tabInternal;
+  const setTab = setTabProp ?? setTabInternal;
 
   const fetchDetail = useCallback(async () => {
     try {
@@ -1054,25 +1060,30 @@ function PadroncinoDetail({
   return (
     <div className="pd-detail-panel">
       <div className="pd-detail-header">
-        <div className="pd-detail-title-row">
-          <div>
-            <h2 className="pd-detail-title">{p.ragioneSociale}</h2>
-            {p.codice && <span className="pd-detail-codice">Cod. {p.codice}</span>}
+        {onBack && (
+          <button className="btn-outline btn-sm pd-back-btn" onClick={onBack}>← Torna alla lista</button>
+        )}
+        <div className="pd-detail-header-row">
+          <div className="pd-detail-title-row">
+            <div>
+              <h2 className="pd-detail-title">{p.ragioneSociale}</h2>
+              {p.codice && <span className="pd-detail-codice">Cod. {p.codice}</span>}
+            </div>
+            <div className="pd-detail-badges">
+              <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
+                {p.attivo ? 'ATTIVO' : 'DISMESSO'}
+              </span>
+              <span className={`pd-doc-badge ${durcSt.cls}`}>DURC: {durcSt.label}</span>
+              <span className={`pd-doc-badge ${dvrSt.cls}`}>DVR: {dvrSt.label}</span>
+              {p.fatturatoMese != null && (
+                <span className="pd-detail-fatt">Fatt. {fmtEur(p.fatturatoMese)}</span>
+              )}
+            </div>
           </div>
-          <div className="pd-detail-badges">
-            <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
-              {p.attivo ? 'ATTIVO' : 'DISMESSO'}
-            </span>
-            <span className={`pd-doc-badge ${durcSt.cls}`}>DURC: {durcSt.label}</span>
-            <span className={`pd-doc-badge ${dvrSt.cls}`}>DVR: {dvrSt.label}</span>
-            {p.fatturatoMese != null && (
-              <span className="pd-detail-fatt">Fatt. {fmtEur(p.fatturatoMese)}</span>
-            )}
+          <div className="pd-detail-actions">
+            <button className="btn-outline btn-sm" onClick={() => setShowModifica(true)}>✏️ Modifica</button>
+            <button className="btn-danger btn-sm" onClick={handleElimina}>🗑 Elimina</button>
           </div>
-        </div>
-        <div className="pd-detail-actions">
-          <button className="btn-outline btn-sm" onClick={() => setShowModifica(true)}>✏️ Modifica</button>
-          <button className="btn-danger btn-sm" onClick={handleElimina}>🗑 Elimina</button>
         </div>
       </div>
 
@@ -1111,13 +1122,12 @@ function PadroncinoDetail({
 
 // ─── PAGINA PRINCIPALE ────────────────────────────────
 export default function PadronciniPage() {
+  const navigate = useNavigate();
   const [padroncini, setPadroncini] = useState<Padroncino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('TUTTI');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [tab, setTab] = useState('info');
   const [showNuovo, setShowNuovo] = useState(false);
   const [stats, setStats] = useState<any>(null);
 
@@ -1152,8 +1162,6 @@ export default function PadronciniPage() {
     });
   }, [padroncini, search, filtro]);
 
-  const selectedP = padroncini.find((p) => p.id === selected) ?? null;
-
   const handleCreate = async (form: NuovoPadroncino) => {
     try {
       const nuovo = await padronciniApi.create({
@@ -1169,7 +1177,7 @@ export default function PadronciniPage() {
         note: form.note || undefined,
       });
       await load();
-      setSelected(nuovo.id);
+      navigate(`/padroncini/${nuovo.id}`);
     } catch (e: any) {
       alert('Errore: ' + e.message);
     }
@@ -1251,8 +1259,8 @@ export default function PadronciniPage() {
               const durcSt = durcStatus(p.scadenzaDurc);
               const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
               return (
-                <tr key={p.id} className={`pd-row ${selected === p.id ? 'pd-row-selected' : ''}`}
-                  onClick={() => { setSelected(p.id); setTab('info'); }}>
+                <tr key={p.id} className="pd-row"
+                  onClick={() => navigate(`/padroncini/${p.id}`)}>
                   <td>
                     <span className="pd-ragsoc">{p.ragioneSociale}</span>
                     {p.partitaIva && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>PI: {p.partitaIva}</div>}
@@ -1281,7 +1289,7 @@ export default function PadronciniPage() {
                   </td>
                   <td>
                     <button className="btn-primary btn-sm"
-                      onClick={(e) => { e.stopPropagation(); setSelected(p.id); setTab('info'); }}>
+                      onClick={(e) => { e.stopPropagation(); navigate(`/padroncini/${p.id}`); }}>
                       Dettagli
                     </button>
                   </td>
@@ -1292,10 +1300,6 @@ export default function PadronciniPage() {
         </table>
         <div className="pd-table-footer">{filtered.length} di {padroncini.length} padroncini</div>
       </div>
-
-      {selectedP && (
-        <PadroncinoDetail p={selectedP} tab={tab} setTab={setTab} onRefresh={load} />
-      )}
 
       <NuovoPadroncinoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleCreate} />
     </div>
