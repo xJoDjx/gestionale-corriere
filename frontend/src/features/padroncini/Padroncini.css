@@ -25,6 +25,11 @@
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 14px 18px;
   display: flex; flex-direction: column; gap: 3px;
+  position: relative;
+}
+.pd-page-stat-icon {
+  position: absolute; top: 14px; right: 18px;
+  font-size: 20px; opacity: 0.45;
 }
 .pd-page-stat-val { font-size: 28px; font-weight: 700; color: var(--text-primary); }
 .pd-page-stat-val-red { color: var(--danger); }
@@ -100,9 +105,10 @@
 .pd-doc-absent  { background: rgba(100,116,139,.08); color: #94a3b8; }
 .pd-doc-esente  { background: rgba(99,102,241,.1);  color: #6366f1; }
 
+.pd-codice-row { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
 .pd-count { font-weight: 700; font-size: 14px; }
 .pd-count-blue { color: var(--primary); }
-.pd-fatturato { font-weight: 600; color: var(--text-secondary); font-size: 12px; }
+.pd-fatturato { font-weight: 600; color: var(--text-secondary); font-size: 13px; text-align: right; }
 .pd-table-footer {
   padding: 8px 14px; font-size: 11px; color: var(--text-muted);
   text-align: right; border-top: 1px solid var(--border);
@@ -152,6 +158,28 @@
 .btn-danger:hover { background: var(--danger, #dc2626); color: #fff; }
 .btn-sm { padding: 5px 12px !important; font-size: 12px !important; }
 
+/* ── Financial Cards ── */
+.pd-fin-cards {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; padding: 16px 24px;
+}
+.pd-fin-card {
+  padding: 14px 18px; border: 1px solid var(--border);
+  border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px;
+}
+.pd-fin-card-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text-muted);
+}
+.pd-fin-card-val {
+  font-size: 22px; font-weight: 700; font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+}
+.pd-fin-card-val.blue   { color: var(--primary); }
+.pd-fin-card-val.orange { color: #ea580c; }
+.pd-fin-card-val.green  { color: #16a34a; }
+.pd-fin-card-sub { font-size: 11px; color: var(--text-muted); }
+
 /* ── Tabs ── */
 .pd-tabs {
   display: flex; border-bottom: 1px solid var(--border);
@@ -162,9 +190,14 @@
   padding: 10px 16px; font-size: 13px; font-weight: 600;
   color: var(--text-muted); cursor: pointer; transition: all .15s;
   font-family: var(--font-sans); margin-bottom: -1px;
+  display: flex; align-items: center; gap: 6px;
 }
 .pd-tab:hover { color: var(--text-primary); }
 .pd-tab-active { color: var(--primary); border-bottom-color: var(--primary); }
+.pd-tab-count {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 10px; padding: 1px 6px; font-size: 10px; font-weight: 700; color: var(--text-muted);
+}
 
 .pd-tab-body { padding: 20px; }
 .pd-tab-actions { display: flex; gap: 8px; margin-bottom: 14px; }
@@ -174,7 +207,10 @@
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
 }
 .pd-section-full { grid-column: 1 / -1; }
-.pd-section { display: flex; flex-direction: column; gap: 10px; }
+.pd-section {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 20px; border: 1px solid var(--border); border-radius: var(--radius-md);
+}
 .pd-section h4 {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .08em; color: var(--text-muted);

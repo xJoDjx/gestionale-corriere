@@ -61,4 +61,23 @@ export const conteggiApi = {
     api.delete(`/conteggi/righe/${rigaId}`),
   remove: (id: string) =>
     api.delete(`/conteggi/${id}`),
+
+  applicaFatturaProforma: (file: File, mese: string) => {
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('mese', mese);
+    return fetch(`${API_BASE}/conteggi/applica-fattura-proforma`, { method: 'POST', body: fd })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: res.statusText }));
+          throw new Error(err.message || 'Errore importazione');
+        }
+        return res.json() as Promise<{
+          processati: number;
+          saltati: number;
+          risultati: { fornitore: string; padroncino?: string; totale: number; azione: string }[];
+        }>;
+      });
+  },
 };

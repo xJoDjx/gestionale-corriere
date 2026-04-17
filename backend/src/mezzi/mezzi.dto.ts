@@ -2,6 +2,7 @@ import {
   IsString, IsOptional, IsEnum, IsInt, IsNumber, IsDateString, IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PartialType } from '@nestjs/swagger';
 import { TipoMezzo, Alimentazione, CategoriaMezzo, StatoMezzo } from '@prisma/client';
 
 export class CreateMezzoDto {
@@ -55,11 +56,14 @@ export class CreateMezzoDto {
   // ── Contatori / extra ───────────────────────────────
   @IsNumber() @IsOptional() @Type(() => Number) maggiorazioneRicarica?: number;
 
+  // ── Utilizzatore (chi usa il mezzo senza assegnazione formale) ──
+  @IsString() @IsOptional() utilizzatore?: string;
+
   // ── Note ────────────────────────────────────────────
   @IsString() @IsOptional() note?: string;
 }
 
-export class UpdateMezzoDto extends CreateMezzoDto {}
+export class UpdateMezzoDto extends PartialType(CreateMezzoDto) {}
 
 export class QueryMezziDto {
   @IsOptional() @IsString() search?: string;

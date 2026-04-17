@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateConteggioDto, UpdateConteggioStatoDto, CreateRigaDto, UpdateRigaDto } from './conteggi.dto';
 import { Segno } from '@prisma/client';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class ConteggiService {
@@ -13,7 +14,7 @@ export class ConteggiService {
 
   // ─── LIST ───────────────────────────────────────────
   async findAll(mese?: string, padroncinoId?: string) {
-    return this.prisma.conteggioMensile.findMany({
+    const conteggi = await this.prisma.conteggioMensile.findMany({
       where: {
         deletedAt: null,
         ...(mese && { mese }),
@@ -26,6 +27,11 @@ export class ConteggiService {
       },
       orderBy: [{ mese: 'desc' }, { padroncino: { ragioneSociale: 'asc' } }],
     });
+
+    return conteggi.map((c) => ({
+      ...c,
+      ...this.calcolaTotali(c.righe),
+    }));
   }
 
   // ─── DETAIL ─────────────────────────────────────────
@@ -41,24 +47,42 @@ export class ConteggiService {
     return conteggio;
   }
 
+  // ─── CALCOLO TOTALI (formula unica, coerente con UI) ───
+  // FATTURATO è salvato come imponibile → moltiplichiamo ×1.22
+  // ADDEBITI (NOLEGGIO, PALMARE, RICARICA, ADDEBITO) già con IVA
+  // COMPENSAZIONI (ACCREDITO, BONUS, FINE_MESE, ACCONTO) vanno sottratte
+  private calcolaTotali(righe: { tipo: string; importo: any }[]) {
+    const ADDEBITI = ['NOLEGGIO', 'PALMARE', 'RICARICA', 'ADDEBITO'];
+    const COMPENSAZIONI = ['ACCREDITO', 'BONUS', 'FINE_MESE', 'ACCONTO'];
+
+    const totFatturato = righe
+      .filter((r) => r.tipo === 'FATTURATO')
+      .reduce((s, r) => s + Number(r.importo), 0);
+    const totAddebiti = righe
+      .filter((r) => ADDEBITI.includes(r.tipo))
+      .reduce((s, r) => s + Number(r.importo), 0);
+    const totCompen = righe
+      .filter((r) => COMPENSAZIONI.includes(r.tipo))
+      .reduce((s, r) => s + Number(r.importo), 0);
+
+    const totalePositivo = righe
+      .filter((r) => (r as any).segno === 'POSITIVO')
+      .reduce((s, r) => s + Number(r.importo), 0);
+    const totaleNegativo = righe
+      .filter((r) => (r as any).segno === 'NEGATIVO')
+      .reduce((s, r) => s + Number(r.importo), 0);
+
+    return {
+      totalePositivo,
+      totaleNegativo,
+      netto: Math.round((totFatturato * 1.22 - totAddebiti - totCompen) * 100) / 100,
+    };
+  }
+
   // ─── DETTAGLIO CON TOTALI ───────────────────────────
   async findOneWithTotals(id: string) {
     const conteggio = await this.findOne(id);
-
-    const totalePositivo = conteggio.righe
-      .filter((r) => r.segno === 'POSITIVO')
-      .reduce((sum, r) => sum + Number(r.importo), 0);
-
-    const totaleNegativo = conteggio.righe
-      .filter((r) => r.segno === 'NEGATIVO')
-      .reduce((sum, r) => sum + Number(r.importo), 0);
-
-    return {
-      ...conteggio,
-      totalePositivo,
-      totaleNegativo,
-      netto: totalePositivo - totaleNegativo,
-    };
+    return { ...conteggio, ...this.calcolaTotali(conteggio.righe) };
   }
 
   // ─── CREATE + AUTO-GENERATION ───────────────────────
@@ -133,12 +157,13 @@ export class ConteggiService {
     padroncinoId: string,
     mese: string,
   ) {
-    const inizioMese = new Date(`${mese}-01`);
-    const fineMese = new Date(inizioMese.getFullYear(), inizioMese.getMonth() + 1, 0);
+    const [_year, _month] = mese.split('-').map(Number);
+    const inizioMese = new Date(Date.UTC(_year, _month - 1, 1));
+    const fineMese   = new Date(Date.UTC(_year, _month, 0, 23, 59, 59, 999));
     let ordine = 0;
 
     // 1. MEZZI ASSEGNATI → costi noleggio
-    const assegnazioniMezzi = await this.prisma.assegnazioneMezzo.findMany({
+    let assegnazioniMezzi = await this.prisma.assegnazioneMezzo.findMany({
       where: {
         padroncinoId,
         deletedAt: null,
@@ -149,6 +174,15 @@ export class ConteggiService {
         mezzo: { select: { id: true, targa: true, marca: true, modello: true, rataNoleggio: true } },
       },
     });
+    // Fallback: se nessuna assegnazione copre il mese, usa le assegnazioni attualmente attive
+    if (assegnazioniMezzi.length === 0) {
+      assegnazioniMezzi = await this.prisma.assegnazioneMezzo.findMany({
+        where: { padroncinoId, deletedAt: null, dataFine: null },
+        include: {
+          mezzo: { select: { id: true, targa: true, marca: true, modello: true, rataNoleggio: true } },
+        },
+      });
+    }
 
     for (const ass of assegnazioniMezzi) {
       if (ass.mezzo.rataNoleggio && Number(ass.mezzo.rataNoleggio) > 0) {
@@ -169,7 +203,7 @@ export class ConteggiService {
     }
 
     // 2. PALMARI ASSEGNATI → costi tariffa
-    const assegnazioniPalmari = await this.prisma.assegnazionePalmare.findMany({
+    let assegnazioniPalmari = await this.prisma.assegnazionePalmare.findMany({
       where: {
         padroncinoId,
         deletedAt: null,
@@ -180,6 +214,14 @@ export class ConteggiService {
         palmare: { select: { id: true, codice: true, tariffaMensile: true } },
       },
     });
+    if (assegnazioniPalmari.length === 0) {
+      assegnazioniPalmari = await this.prisma.assegnazionePalmare.findMany({
+        where: { padroncinoId, deletedAt: null, dataFine: null },
+        include: {
+          palmare: { select: { id: true, codice: true, tariffaMensile: true } },
+        },
+      });
+    }
 
     for (const ass of assegnazioniPalmari) {
       if (ass.palmare.tariffaMensile && Number(ass.palmare.tariffaMensile) > 0) {
@@ -200,7 +242,7 @@ export class ConteggiService {
     }
 
     // 3. ACCONTI del mese → addebiti
-    const codiciAutista = await this.prisma.assegnazioneCodiceAutista.findMany({
+    let codiciAutista = await this.prisma.assegnazioneCodiceAutista.findMany({
       where: {
         padroncinoId,
         deletedAt: null,
@@ -209,6 +251,12 @@ export class ConteggiService {
       },
       select: { codiceAutistaId: true },
     });
+    if (codiciAutista.length === 0) {
+      codiciAutista = await this.prisma.assegnazioneCodiceAutista.findMany({
+        where: { padroncinoId, deletedAt: null, dataFine: null },
+        select: { codiceAutistaId: true },
+      });
+    }
 
     const codiciIds = codiciAutista.map((a) => a.codiceAutistaId);
 
@@ -246,15 +294,22 @@ export class ConteggiService {
     }
 
     // 4. RICARICHE ELETTRICHE del mese
+    // Cerca per padroncinoId diretto O per mezzoId dei mezzi assegnati (fallback se padroncinoId è null)
+    const mezziIds = assegnazioniMezzi.map((a) => a.mezzo.id);
     const ricariche = await this.prisma.ricaricaElettrica.findMany({
       where: {
         deletedAt: null,
-        padroncinoId,
         mese,
+        OR: [
+          { padroncinoId },
+          ...(mezziIds.length > 0 ? [{ mezzoId: { in: mezziIds } }] : []),
+        ],
       },
     });
+    // Deduplicazione per id (evita doppioni se sia padroncinoId che mezzoId corrispondono)
+    const ricaricheUniche = [...new Map(ricariche.map((r) => [r.id, r])).values()];
 
-    for (const ric of ricariche) {
+    for (const ric of ricaricheUniche) {
       await this.prisma.conteggiRiga.create({
         data: {
           conteggioMensileId: conteggioId,
@@ -403,6 +458,220 @@ export class ConteggiService {
     });
 
     return this.findOneWithTotals(conteggioId);
+  }
+
+  // ─── IMPORTA FATTURA PROFORMA EXCEL ─────────────────
+  async importaFatturaProforma(file: Express.Multer.File) {
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+
+    const totali: Record<string, number> = {};
+    for (const row of rows) {
+      const fornitore = String(row['Fornitore'] ?? '').trim();
+      const importo = Number(row['Importo Totale'] ?? 0);
+      if (!fornitore || isNaN(importo)) continue;
+      totali[fornitore] = (totali[fornitore] ?? 0) + importo;
+    }
+
+    return Object.entries(totali).map(([fornitore, totale]) => ({
+      fornitore,
+      totale: Math.round(totale * 100) / 100,
+    }));
+  }
+
+  // ─── APPLICA FATTURA PROFORMA — BULK SU TUTTI I PADRONCINI ──────────────
+  private normalizzaNome(nome: string): string {
+    return nome.replace(/\s*\([^)]*\)\s*/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+  }
+
+  async applicaFatturaProforma(file: Express.Multer.File, mese: string, userId: string) {
+    // Colonne (0-based): A=0 B=1 C=2 F=5 G=6 P=15 Q=16 AB=27 AD=29 AE=30
+    const COL = { A: 0, B: 1, C: 2, F: 5, G: 6, P: 15, Q: 16, AB: 27, AD: 29, AE: 30 };
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer', cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    // header:1 → ogni riga è un array indicizzato per colonna
+    const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: 0 });
+
+    const estraiCodice = (val: any): string | null => {
+      const matches = String(val ?? '').match(/\(([^)]+)\)/g);
+      if (!matches) return null;
+      return matches[matches.length - 1].slice(1, -1).trim() || null;
+    };
+    const toNum = (v: any) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+
+    /** Converte il valore di colonna C in stringa "DD/MM/YYYY".
+     *  Gestisce: Date JS (quando cellDates:true), serial numerico Excel, stringa già formattata. */
+    const estraiData = (v: any): string | undefined => {
+      if (!v || v === 0) return undefined;
+      if (v instanceof Date) {
+        const d = v.getDate().toString().padStart(2, '0');
+        const m = (v.getMonth() + 1).toString().padStart(2, '0');
+        const y = v.getFullYear();
+        return `${d}/${m}/${y}`;
+      }
+      if (typeof v === 'number') {
+        // Excel date serial (giorni dal 1/1/1900, con il bug del 1900 leap year)
+        const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) {
+          const dd = d.getUTCDate().toString().padStart(2, '0');
+          const mm = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+          const yy = d.getUTCFullYear();
+          return `${dd}/${mm}/${yy}`;
+        }
+      }
+      if (typeof v === 'string' && v.trim()) return v.trim();
+      return undefined;
+    };
+
+    // Strutture di aggregazione
+    type StatRow = {
+      data?: string;
+      fatturato: number; consegneAffidate: number; consegneFatte: number;
+      ritiriAffidati: number; ritiriFatti: number;
+      consegneAffidateShop: number; consegneFatteShop: number;
+    };
+    const emptyTot = (): StatRow => ({
+      fatturato: 0, consegneAffidate: 0, consegneFatte: 0,
+      ritiriAffidati: 0, ritiriFatti: 0, consegneAffidateShop: 0, consegneFatteShop: 0,
+    });
+
+    // Per padroncino → { totFatturato, byCode: Map<codice, {tot, righe}> }
+    const perFornitore = new Map<string, { totFatturato: number; byCode: Map<string, { tot: StatRow; righe: StatRow[] }> }>();
+
+    for (const row of rawRows) {
+      const fornitore = String(row[COL.A] ?? '').trim();
+      if (!fornitore) continue;
+      const fatturato = toNum(row[COL.AB]);
+      if (typeof row[COL.AB] !== 'number' && fatturato === 0 && typeof row[COL.A] === 'string' && isNaN(Number(row[COL.A]))) {
+        // Probabilmente riga header — skip se col AB non è un numero
+        if (typeof row[COL.AB] === 'string') continue;
+      }
+
+      if (!perFornitore.has(fornitore)) {
+        perFornitore.set(fornitore, { totFatturato: 0, byCode: new Map() });
+      }
+      const entry = perFornitore.get(fornitore)!;
+      entry.totFatturato += fatturato;
+
+      const codice = estraiCodice(row[COL.B]);
+      if (codice) {
+        const rigaDati: StatRow = {
+          data:                 estraiData(row[COL.C]),
+          fatturato,
+          consegneAffidate:     toNum(row[COL.G]),
+          consegneFatte:        toNum(row[COL.F]),
+          ritiriAffidati:       toNum(row[COL.Q]),
+          ritiriFatti:          toNum(row[COL.P]),
+          consegneAffidateShop: toNum(row[COL.AE]),
+          consegneFatteShop:    toNum(row[COL.AD]),
+        };
+        if (!entry.byCode.has(codice)) {
+          entry.byCode.set(codice, { tot: emptyTot(), righe: [] });
+        }
+        const c = entry.byCode.get(codice)!;
+        c.righe.push(rigaDati);
+        for (const k of Object.keys(rigaDati) as (keyof StatRow)[]) {
+          if (k !== 'data') c.tot[k] += rigaDati[k] as number;
+        }
+      }
+    }
+
+    // Costruisce il JSON di distribuzione per un fornitore
+    const buildDistribuzione = (entry: { totFatturato: number; byCode: Map<string, { tot: StatRow; righe: StatRow[] }> }) => {
+      const codici = Array.from(entry.byCode.values()).map((e, i) => ({
+        codice: Array.from(entry.byCode.keys())[i],
+        ...e.tot,
+        righe: e.righe,
+      }));
+      const riepilogo = codici.reduce<StatRow>((s, c) => {
+        for (const k of Object.keys(s) as (keyof StatRow)[]) {
+          if (k !== 'data') (s as any)[k] += (c as any)[k];
+        }
+        return s;
+      }, emptyTot());
+      return { riepilogo, codici };
+    };
+
+    // 2. Carica tutti i padroncini attivi
+    const padroncini = await this.prisma.padroncino.findMany({
+      where: { deletedAt: null, attivo: true },
+      select: { id: true, ragioneSociale: true },
+    });
+
+    const risultati: { fornitore: string; padroncino?: string; totale: number; azione: string }[] = [];
+
+    for (const [fornitore, entry] of perFornitore.entries()) {
+      const totale = Math.round(entry.totFatturato * 100) / 100;
+      const nomeNorm = this.normalizzaNome(fornitore);
+      const padroncino = padroncini.find((p) => this.normalizzaNome(p.ragioneSociale) === nomeNorm);
+
+      if (!padroncino) {
+        risultati.push({ fornitore, totale, azione: 'non_trovato' });
+        continue;
+      }
+
+      // 3. Cerca o crea conteggio del mese
+      let conteggioId: string;
+      const conteggioEsistente = await this.prisma.conteggioMensile.findFirst({
+        where: { padroncinoId: padroncino.id, mese, deletedAt: null },
+        select: { id: true, stato: true },
+      });
+
+      if (conteggioEsistente) {
+        if (conteggioEsistente.stato === 'CONFERMATO') {
+          risultati.push({ fornitore, padroncino: padroncino.ragioneSociale, totale, azione: 'saltato_confermato' });
+          continue;
+        }
+        conteggioId = conteggioEsistente.id;
+      } else {
+        const nuovoConteggio = await this.create({ padroncinoId: padroncino.id, mese }, userId);
+        conteggioId = nuovoConteggio.id;
+      }
+
+      // 4. Aggiorna riga FATTURATO
+      const rigaEsistente = await this.prisma.conteggiRiga.findFirst({
+        where: { conteggioMensileId: conteggioId, tipo: 'FATTURATO' },
+        orderBy: { ordine: 'asc' },
+      });
+
+      if (rigaEsistente) {
+        await this.prisma.conteggiRiga.update({
+          where: { id: rigaEsistente.id },
+          data: { importo: totale, modificaManuale: true, note: 'Importato da Fattura Proforma' },
+        });
+        risultati.push({ fornitore, padroncino: padroncino.ragioneSociale, totale, azione: 'aggiornato' });
+      } else {
+        await this.prisma.conteggiRiga.create({
+          data: {
+            conteggioMensileId: conteggioId,
+            tipo: 'FATTURATO',
+            descrizione: 'Fatturato distribuzione',
+            importo: totale,
+            segno: 'POSITIVO',
+            categoria: 'fatturato',
+            ordine: 0,
+            modificaManuale: true,
+            note: 'Importato da Fattura Proforma',
+          },
+        });
+        risultati.push({ fornitore, padroncino: padroncino.ragioneSociale, totale, azione: 'creato' });
+      }
+
+      // 5. Salva JSON di distribuzione per codice autista
+      if (entry.byCode.size > 0) {
+        await this.prisma.conteggioMensile.update({
+          where: { id: conteggioId },
+          data: { distribuzioneJson: buildDistribuzione(entry) as any },
+        });
+      }
+    }
+
+    const processati = risultati.filter((r) => r.azione === 'creato' || r.azione === 'aggiornato').length;
+    const saltati = risultati.filter((r) => r.azione === 'non_trovato' || r.azione === 'saltato_confermato').length;
+
+    return { processati, saltati, risultati };
   }
 
   // ─── SOFT DELETE ────────────────────────────────────

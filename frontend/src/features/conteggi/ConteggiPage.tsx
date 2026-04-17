@@ -1,6 +1,6 @@
 // src/features/conteggi/ConteggiPage.tsx
 // Lista padroncini attivi nel mese — dati reali dal backend
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { padronciniApi } from '../../lib/api';
 import type { Padroncino } from '../../lib/api';
@@ -68,15 +68,29 @@ interface RigaPadroncino {
   checklist: Record<string, boolean>;
 }
 
+const MESE_KEY = 'conteggi_mese_selezionato';
+
 export default function ConteggiPage() {
   const navigate = useNavigate();
-  const [mese, setMese] = useState(getCurrentMonth);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Legge il mese da sessionStorage (persiste nella navigazione interna, si azzera chiudendo il tab)
+  const [mese, setMeseState] = useState<string>(() => {
+    return sessionStorage.getItem(MESE_KEY) || getCurrentMonth();
+  });
+
+  const setMese = (newMese: string) => {
+    sessionStorage.setItem(MESE_KEY, newMese);
+    setMeseState(newMese);
+  };
+
   const [search, setSearch] = useState('');
   const [filtroStato, setFiltroStato] = useState('TUTTI');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [righe, setRighe] = useState<RigaPadroncino[]>([]);
   const [generando, setGenerando] = useState(false);
+  const [applicando, setApplicando] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -117,6 +131,28 @@ export default function ConteggiPage() {
     }
   };
 
+  const handleApplicaFattura = async (file: File) => {
+    setApplicando(true);
+    try {
+      const result = await conteggiApi.applicaFatturaProforma(file, mese);
+      const nonTrovati = result.risultati
+        .filter((r) => r.azione === 'non_trovato')
+        .map((r) => `• ${r.fornitore}`)
+        .join('\n');
+      let msg = `✅ Fattura Proforma applicata per ${formatMese(mese)}\n\n`
+        + `Processati: ${result.processati}\n`
+        + `Saltati: ${result.saltati}`;
+      if (nonTrovati) msg += `\n\nFornitore non trovato:\n${nonTrovati}`;
+      alert(msg);
+      await loadData();
+    } catch (e: any) {
+      alert('Errore importazione: ' + (e.message ?? 'Errore sconosciuto'));
+    } finally {
+      setApplicando(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const filtered = useMemo(() => {
     return righe.filter(({ padroncino: p, conteggio: c }) => {
       const matchSearch = p.ragioneSociale.toLowerCase().includes(search.toLowerCase());
@@ -143,6 +179,16 @@ export default function ConteggiPage() {
 
   return (
     <div className="cp-page">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleApplicaFattura(file);
+        }}
+      />
       <div className="cp-header">
         <div className="cp-header-left">
           <h1>📋 Conteggi Mensili</h1>
@@ -150,6 +196,14 @@ export default function ConteggiPage() {
         </div>
         <div className="cp-header-right">
           <input type="month" value={mese} onChange={(e) => setMese(e.target.value)} className="cp-month-input" />
+          <button
+            className="btn-outline"
+            onClick={() => !applicando && fileInputRef.current?.click()}
+            disabled={applicando}
+            title="Carica il file Fattura Proforma e aggiorna automaticamente il fatturato di tutti i padroncini presenti"
+          >
+            {applicando ? '⏳ Importando...' : '📂 Importa Fattura Proforma'}
+          </button>
           <button className="btn-primary" onClick={handleGeneraBulk} disabled={generando}>
             {generando ? '⏳ Generando...' : '⚡ Genera Bulk'}
           </button>

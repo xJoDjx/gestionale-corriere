@@ -3,7 +3,7 @@ import {
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import { PadronciniService } from './padroncini.service';
 import { CreatePadroncinoDto, UpdatePadroncinoDto, QueryPadronciniDto } from './padroncini.dto';
@@ -30,6 +30,17 @@ export class PadronciniController {
   @Get('scadenze')
   getScadenze(@Query('giorni') giorni?: string) {
     return this.service.getScadenze(giorni ? parseInt(giorni) : 30);
+  }
+
+  @Post('importa-excel')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  async importaExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File obbligatorio');
+    const ext = file.originalname.toLowerCase();
+    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+      throw new BadRequestException('Formato non supportato. Usa .xlsx o .xls');
+    }
+    return this.service.importaExcel(file.buffer);
   }
 
   @Get(':id')
@@ -101,6 +112,12 @@ export class PadronciniController {
     @Param('assegnazioneId') assegnazioneId: string,
   ) {
     return this.service.rimuoviCodice(padroncinoId, assegnazioneId, 'system');
+  }
+
+  // ─── STORICO CONTEGGI ──────────────────────────────────────────
+  @Get(':id/storico-conteggi')
+  getStoricoConteggi(@Param('id') id: string) {
+    return this.service.getStoricoConteggi(id);
   }
 
   // ─── DOCUMENTI ─────────────────────────────────────────────────

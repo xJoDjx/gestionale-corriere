@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreatePalmareDto, UpdatePalmareDto, CreateAssegnazionePalmareDto } from './palmari.dto';
@@ -103,6 +104,104 @@ export class PalmariService {
         dataFine: a.dataFine,
       })),
     };
+  }
+
+  // ─── IMPORTA EXCEL ──────────────────────────────────
+  // Colonne (0-indexed): A=padroncino, B=modello, C=seriale/imei, D=codice, E=tariffa, F=dataAssegnazione
+  async importaExcel(buffer: Buffer) {
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const risultati: { creati: number; saltati: number; errori: string[] } = {
+      creati: 0, saltati: 0, errori: [],
+    };
+
+    const parseNum = (val: any): number | null => {
+      if (val === null || val === undefined || val === '') return null;
+      const n = parseFloat(String(val).replace(',', '.').replace(/[^\d.-]/g, ''));
+      return isNaN(n) ? null : n;
+    };
+
+    const parseDate = (val: any): Date | null => {
+      if (!val) return null;
+      if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+      const s = String(val).trim();
+      if (!s || s === 'null') return null;
+      const itMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+      if (itMatch) return new Date(`${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}T00:00:00.000Z`);
+      const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) continue;
+
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+        header: 1, defval: null, raw: false, dateNF: 'yyyy-mm-dd',
+      });
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        // Col C (2) = Seriale → codice (chiave univoca)
+        // Col D (3) = Codice Associato
+        const codiceRaw = row[2]; // col C
+        if (!codiceRaw || String(codiceRaw).trim() === '') continue;
+
+        const codice = String(codiceRaw).trim().toUpperCase();
+
+        try {
+          const exists = await this.prisma.palmare.findFirst({
+            where: { codice, deletedAt: null },
+          });
+          if (exists) { risultati.saltati++; continue; }
+
+          const modello          = row[1] ? String(row[1]).trim() || null : null;
+          const codiceAssociato  = row[3] ? String(row[3]).trim() || null : null; // col D
+          const tariffaMensile   = parseNum(row[4]);
+          const dataAssegnazione = parseDate(row[5]);
+          const padroncinoRaw    = row[0] ? String(row[0]).trim() : null;
+
+          const palmare = await this.prisma.palmare.create({
+            data: {
+              codice,
+              ...(modello && { modello }),
+              ...(codiceAssociato && { codiceAssociato }),
+              ...(tariffaMensile !== null && { tariffaMensile }),
+            },
+          });
+          risultati.creati++;
+
+          if (padroncinoRaw) {
+            try {
+              const padroncino = await this.prisma.padroncino.findFirst({
+                where: { ragioneSociale: { contains: padroncinoRaw, mode: 'insensitive' }, deletedAt: null },
+              });
+              if (padroncino) {
+                // Se data mancante usa oggi
+                const dataInizio = dataAssegnazione ?? new Date();
+                await this.prisma.assegnazionePalmare.create({
+                  data: { palmareId: palmare.id, padroncinoId: padroncino.id, dataInizio },
+                });
+                await this.prisma.palmare.update({
+                  where: { id: palmare.id }, data: { stato: 'ASSEGNATO' },
+                });
+              } else {
+                risultati.errori.push(`Codice ${codice}: padroncino "${padroncinoRaw}" non trovato`);
+              }
+            } catch (assErr: any) {
+              risultati.errori.push(`Codice ${codice}: errore assegnazione - ${assErr.message}`);
+            }
+          }
+        } catch (err: any) {
+          risultati.errori.push(`Codice ${codice}: ${err.message}`);
+        }
+      }
+    }
+
+    return risultati;
   }
 
   async create(dto: CreatePalmareDto, userId: string) {

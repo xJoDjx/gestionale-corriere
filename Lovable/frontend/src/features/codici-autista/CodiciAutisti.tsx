@@ -1,0 +1,402 @@
+// src/features/codici-autista/CodiciAutisti.tsx — API reali, con navigazione dettaglio
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { codiciAutistaApi } from '../../lib/api';
+import type { CodiceAutista, CodiciAutistaStats } from '../../lib/api';
+import NuovoCodiceAutistaModal, { NuovoCodiceAutista } from './NuovoCodiceAutistaModal';
+import './CodiciAutisti.css';
+
+const fmt = (d: string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString('it-IT') : '—';
+
+const fmtEur = (n: number | null | undefined) =>
+  n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
+
+// ─── SORT HEADER ──────────────────────────────────────
+type SortDir = 'asc' | 'desc';
+function SortTh({
+  label, col, sortKey, sortDir, onSort,
+}: { label: string; col: string; sortKey: string; sortDir: SortDir; onSort: (c: string) => void }) {
+  const active = sortKey === col;
+  return (
+    <th onClick={() => onSort(col)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+      {label} {active ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}
+    </th>
+  );
+}
+
+export default function CodiciAutisti() {
+  const navigate = useNavigate();
+
+  const [autisti, setAutisti] = useState<CodiceAutista[]>([]);
+  const [stats, setStats] = useState<CodiciAutistaStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filtro, setFiltro] = useState<'TUTTI' | 'DISPONIBILE' | 'ASSEGNATO' | 'DISMESSO'>('TUTTI');
+  const [nuovoOpen, setNuovoOpen] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState<{ creati: number; saltati: number; errori: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [sortKey, setSortKey] = useState('codice');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (col: string) => {
+    if (sortKey === col) setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(col); setSortDir('asc'); }
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [listResp, statsResp] = await Promise.all([
+        codiciAutistaApi.list({ limit: '200' }),
+        codiciAutistaApi.stats(),
+      ]);
+      setAutisti(listResp.data);
+      setStats(statsResp);
+    } catch (e: any) {
+      setError(e.message || 'Errore caricamento dati');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    const list = autisti.filter((c) => {
+      const attiva = c.assegnazioni?.find((a) => !a.dataFine);
+      const s = search.toLowerCase();
+      const matchSearch =
+        c.codice.toLowerCase().includes(s) ||
+        (c.nome ?? '').toLowerCase().includes(s) ||
+        (c.cognome ?? '').toLowerCase().includes(s) ||
+        (attiva?.ragioneSociale ?? '').toLowerCase().includes(s);
+
+      if (filtro === 'DISPONIBILE') return matchSearch && !attiva && c.attivo;
+      if (filtro === 'ASSEGNATO')   return matchSearch && !!attiva && c.attivo;
+      if (filtro === 'DISMESSO')    return matchSearch && !c.attivo;
+      return matchSearch;
+    });
+
+    list.sort((a, b) => {
+      const attA = a.assegnazioni?.find((x) => !x.dataFine);
+      const attB = b.assegnazioni?.find((x) => !x.dataFine);
+      const statoA = !a.attivo ? 'DISMESSO' : attA ? 'ASSEGNATO' : 'DISPONIBILE';
+      const statoB = !b.attivo ? 'DISMESSO' : attB ? 'ASSEGNATO' : 'DISPONIBILE';
+      let va: any, vb: any;
+      switch (sortKey) {
+        case 'codice':       va = a.codice; vb = b.codice; break;
+        case 'stato':        va = statoA; vb = statoB; break;
+        case 'padroncino':   va = attA?.ragioneSociale ?? ''; vb = attB?.ragioneSociale ?? ''; break;
+        case 'tariffaFissa': va = a.tariffaFissa ?? -1; vb = b.tariffaFissa ?? -1; break;
+        case 'tariffaRitiro': va = a.tariffaRitiro ?? -1; vb = b.tariffaRitiro ?? -1; break;
+        case 'target':       va = a.target ?? -1; vb = b.target ?? -1; break;
+        default:             va = ''; vb = '';
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [autisti, search, filtro, sortKey, sortDir]);
+
+  const handleCreate = async (form: NuovoCodiceAutista) => {
+    try {
+      await codiciAutistaApi.create({
+        codice: form.codice,
+        nome: form.nome || undefined,
+        cognome: form.cognome || undefined,
+        note: form.note || undefined,
+        tariffaFissa:  form.tariffaFissa  ? parseFloat(form.tariffaFissa)  : undefined,
+        tariffaRitiro: form.tariffaRitiro ? parseFloat(form.tariffaRitiro) : undefined,
+        target:        form.target        ? parseInt(form.target)          : undefined,
+        bonusMalus:    form.bonusMalus || undefined,
+        zone:          form.zone || undefined,
+      });
+      await load();
+    } catch (e: any) {
+      alert('Errore creazione codice autista: ' + e.message);
+    }
+  };
+
+  const handleImportaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const result = await codiciAutistaApi.importaExcel(file);
+      setImportResult(result);
+      await load();
+    } catch (err: any) {
+      alert('Errore importazione: ' + (err.message ?? 'Errore sconosciuto'));
+    } finally {
+      setImportando(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Eliminare questo codice autista?')) return;
+    try {
+      await codiciAutistaApi.delete(id);
+      await load();
+    } catch (e: any) {
+      alert('Errore: ' + e.message);
+    }
+  };
+
+  if (loading) return (
+    <div className="ca-page">
+      <div className="ca-loading"><div className="ca-spinner" /><span>Caricamento...</span></div>
+    </div>
+  );
+  if (error) return (
+    <div className="ca-page">
+      <div className="ca-error">⚠️ {error} <button className="btn-primary btn-sm" onClick={load}>Riprova</button></div>
+    </div>
+  );
+
+  return (
+    <div className="ca-page">
+      {/* ── HEADER ── */}
+      <div className="ca-header">
+        <h1>Cod. Autisti</h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={handleImportaExcel}
+          />
+          <button
+            className="btn-outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importando}
+          >
+            {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
+          </button>
+          <button className="btn-primary" onClick={() => setNuovoOpen(true)}>+ Nuovo</button>
+        </div>
+      </div>
+
+      {/* ── STATS ── */}
+      <div className="ca-stats-row">
+        <div className="ca-stat-card">
+          <div className="ca-stat-icon">👤</div>
+          <div>
+            <div className="ca-stat-val">{stats?.totali ?? autisti.length}</div>
+            <div className="ca-stat-label">TOTALI</div>
+            <div className="ca-stat-sub">{stats?.assegnati ?? 0} assegnati</div>
+          </div>
+        </div>
+        <div className="ca-stat-card">
+          <div className="ca-stat-icon">👤</div>
+          <div>
+            <div className="ca-stat-val">{stats?.disponibili ?? 0}</div>
+            <div className="ca-stat-label">DISPONIBILI</div>
+            <div className="ca-stat-sub">pronti</div>
+          </div>
+          <div className="ca-stat-expand">⊞</div>
+        </div>
+        <div className="ca-stat-card">
+          <div>
+            <div className="ca-stat-val">{fmtEur(stats?.tariffaFissaMedia)}</div>
+            <div className="ca-stat-label">TARIFFA FISSA MEDIA</div>
+            <div className="ca-stat-sub">media</div>
+          </div>
+          <div className="ca-stat-expand">⊞</div>
+        </div>
+        <div className="ca-stat-card">
+          <div>
+            <div className="ca-stat-val">{fmtEur(stats?.tariffaRitiroMedia)}</div>
+            <div className="ca-stat-label">TARIFFA RITIRO MEDIA</div>
+            <div className="ca-stat-sub">per ritiro</div>
+          </div>
+          <div className="ca-stat-expand">⊞</div>
+        </div>
+      </div>
+
+      {/* ── TOOLBAR ── */}
+      <div className="ca-toolbar">
+        <div className="ca-search-wrap">
+          <span>🔍</span>
+          <input
+            className="ca-search"
+            placeholder="Cerca codice autista..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="ca-filters">
+          {(['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'DISMESSO'] as const).map((s) => (
+            <button
+              key={s}
+              className={`ca-filter-btn ${filtro === s ? 'ca-filter-active' : ''}`}
+              onClick={() => setFiltro(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── TABELLA ── */}
+      <div className="ca-table-wrap">
+        <table className="ca-table">
+          <thead>
+            <tr>
+              <SortTh label="CODICE"         col="codice"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="STATO"          col="stato"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="PADRONCINO"     col="padroncino"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARIFFA FISSA"  col="tariffaFissa"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARIFFA RITIRO" col="tariffaRitiro" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="TARGET"         col="target"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortTh label="BONUS/MALUS"    col="bonusMalus"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <th>NOTE</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={9} className="ca-empty-row">Nessun codice autista trovato</td>
+              </tr>
+            )}
+            {filtered.map((c) => {
+              const attiva = c.assegnazioni?.find((a) => !a.dataFine);
+              const stato = !c.attivo ? 'DISMESSO' : attiva ? 'ASSEGNATO' : 'DISPONIBILE';
+              const statoCls =
+                stato === 'ASSEGNATO'   ? 'ca-badge-assigned'  :
+                stato === 'DISPONIBILE' ? 'ca-badge-available' : 'ca-badge-dismesso';
+              return (
+                <tr key={c.id} className="ca-row">
+                  <td>
+                    <div className="ca-codice-cell">
+                      <span className="ca-codice">{c.codice}</span>
+                      {(c.nome || c.cognome) && (
+                        <span className="ca-nome-sub">
+                          {[c.nome, c.cognome].filter(Boolean).join(' ')}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`ca-badge ${statoCls}`}>{stato}</span>
+                  </td>
+                  <td>
+                    {attiva ? (
+                      <span className="ca-padroncino">{attiva.ragioneSociale}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.tariffaFissa != null ? (
+                      <span className="ca-tariffa">{fmtEur(c.tariffaFissa)}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.tariffaRitiro != null ? (
+                      <span className="ca-tariffa">{fmtEur(c.tariffaRitiro)}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.target != null ? (
+                      <span className="ca-target">{c.target}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.bonusMalus ? (
+                      <span className="ca-target">{c.bonusMalus}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {c.note ? (
+                      <span className="ca-note-cell">{c.note}</span>
+                    ) : (
+                      <span className="ca-empty">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="ca-row-actions">
+                      <button
+                        className="btn-primary btn-sm"
+                        onClick={() => navigate(`/codici-autista/${c.id}`)}
+                      >
+                        Dettagli
+                      </button>
+                      <button className="ca-doc-btn">📄</button>
+                      <button
+                        className="ca-del-btn"
+                        onClick={() => handleDelete(c.id)}
+                        title="Elimina"
+                      >✕</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="ca-table-footer">
+          {filtered.length} di {autisti.length} codici autisti
+        </div>
+      </div>
+
+      <NuovoCodiceAutistaModal
+        open={nuovoOpen}
+        onClose={() => setNuovoOpen(false)}
+        onSave={handleCreate}
+      />
+
+      {/* ── MODAL RISULTATI IMPORT ── */}
+      {importResult && (
+        <div className="pd-modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="fm-import-result-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fm-import-result-header">
+              <h3>📥 Risultati Importazione Excel</h3>
+              <button className="pd-modal-close" onClick={() => setImportResult(null)}>✕</button>
+            </div>
+            <div className="fm-import-result-body">
+              <div className="fm-import-stat fm-import-stat-ok">
+                <span className="fm-import-stat-val">{importResult.creati}</span>
+                <span className="fm-import-stat-label">Codici creati</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-skip">
+                <span className="fm-import-stat-val">{importResult.saltati}</span>
+                <span className="fm-import-stat-label">Saltati (già esistenti)</span>
+              </div>
+              <div className="fm-import-stat fm-import-stat-err">
+                <span className="fm-import-stat-val">{importResult.errori.length}</span>
+                <span className="fm-import-stat-label">Errori</span>
+              </div>
+            </div>
+            {importResult.errori.length > 0 && (
+              <div className="fm-import-errors">
+                <p className="fm-import-errors-title">Dettaglio errori:</p>
+                <ul>
+                  {importResult.errori.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              </div>
+            )}
+            <div className="fm-import-result-footer">
+              <button className="btn-primary btn-sm" onClick={() => setImportResult(null)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

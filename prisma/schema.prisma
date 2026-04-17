@@ -216,15 +216,16 @@ model Padroncino {
 // ============================================
 
 model Palmare {
-  id            String    @id @default(cuid())
-  codice        String    @unique
-  marca         String?
-  modello       String?
-  imei          String?
-  simNumero     String?   @map("sim_numero")
-  tariffaMensile Decimal? @map("tariffa_mensile") @db.Decimal(10, 2)
-  stato         StatoPalmare @default(DISPONIBILE)
-  note          String?
+  id              String       @id @default(cuid())
+  codice          String       @unique
+  codiceAssociato String?      @map("codice_associato")
+  marca           String?
+  modello         String?
+  imei            String?
+  simNumero       String?      @map("sim_numero")
+  tariffaMensile  Decimal?     @map("tariffa_mensile") @db.Decimal(10, 2)
+  stato           StatoPalmare @default(DISPONIBILE)
+  note            String?
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
@@ -269,15 +270,20 @@ model AssegnazionePalmare {
 // ============================================
 
 model CodiceAutista {
-  id        String    @id @default(cuid())
-  codice    String    @unique
-  nome      String?
-  cognome   String?
-  note      String?
-  attivo    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id            String    @id @default(cuid())
+  codice        String    @unique
+  nome          String?
+  cognome       String?
+  note          String?
+  attivo        Boolean   @default(true)
+  tariffaFissa  Decimal?  @map("tariffa_fissa") @db.Decimal(10, 2)
+  tariffaRitiro Decimal?  @map("tariffa_ritiro") @db.Decimal(10, 2)
+  target        Int?
+  bonusMalus    String?   @map("bonus_malus")
+  zone          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
   assegnazioni AssegnazioneCodiceAutista[]
   acconti      Acconto[]
@@ -335,14 +341,15 @@ model Acconto {
 // ============================================
 
 model ConteggioMensile {
-  id            String          @id @default(cuid())
-  padroncinoId  String          @map("padroncino_id")
-  mese          String          // "2026-03"
-  stato         StatoConteggio  @default(BOZZA)
-  note          String?
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  deletedAt     DateTime?       @map("deleted_at")
+  id                String          @id @default(cuid())
+  padroncinoId      String          @map("padroncino_id")
+  mese              String          // "2026-03"
+  stato             StatoConteggio  @default(BOZZA)
+  note              String?
+  distribuzioneJson Json?           @map("distribuzione_json")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  deletedAt         DateTime?       @map("deleted_at")
 
   padroncino Padroncino     @relation(fields: [padroncinoId], references: [id])
   righe      ConteggiRiga[]

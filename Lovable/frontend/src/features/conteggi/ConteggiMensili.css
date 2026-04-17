@@ -1,0 +1,485 @@
+/* ============================================
+   CONTEGGI MENSILI - STYLES
+   ============================================ */
+
+.conteggi-page {
+  padding: var(--space-lg);
+}
+
+/* ─── Header ───────────────────────────────── */
+.c-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-lg);
+}
+
+.c-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.c-mese-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.c-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.c-month-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.c-month-input:focus {
+  border-color: var(--primary);
+}
+
+/* ─── Stats ────────────────────────────────── */
+.c-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: var(--space-lg);
+}
+
+.c-stat {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.c-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.c-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.c-pos { color: var(--success); }
+.c-neg { color: var(--danger); }
+
+/* ─── Layout Master-Detail ─────────────────── */
+.c-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--space-md);
+  min-height: 500px;
+}
+
+/* ─── Lista Padroncini ─────────────────────── */
+.c-list {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.c-list-header {
+  display: grid;
+  grid-template-columns: 1fr 100px 70px;
+  padding: 10px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.c-list-item {
+  display: grid;
+  grid-template-columns: 1fr 100px 70px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.c-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.c-list-item:last-child {
+  border-bottom: none;
+}
+
+.c-list-active {
+  background: var(--primary-muted);
+  border-left: 3px solid var(--primary);
+}
+
+.c-list-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-list-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.c-list-righe {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.c-list-netto {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* ─── Dettaglio Conteggio ──────────────────── */
+.c-detail {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.c-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  color: var(--text-muted);
+  gap: 12px;
+}
+
+.c-empty-icon {
+  font-size: 40px;
+  opacity: 0.4;
+}
+
+.cd {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.cd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cd-header h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.cd-mese {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+/* ─── Stato Badge ──────────────────────────── */
+.cd-stato {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.stato-bozza {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.stato-chiuso {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--info);
+}
+
+.stato-confermato {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+/* ─── Tabella Excel-style ──────────────────── */
+.cd-table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+.cd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cd-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.cd-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cd-row:hover td {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.cd-row-editing td {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.cd-row-manual {
+  border-left: 2px solid var(--primary);
+}
+
+/* Category header */
+.cd-cat-header td {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cd-cat-label {
+  color: var(--text-secondary);
+}
+
+.cd-cat-total {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Cells */
+.cd-ordine {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+.cd-tipo {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+
+.cd-tipo-fatturato { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+.cd-tipo-noleggio { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.cd-tipo-palmare { background: rgba(59, 130, 246, 0.15); color: var(--info); }
+.cd-tipo-ricarica { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+.cd-tipo-acconto { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+.cd-tipo-bonus { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+.cd-tipo-altro { background: rgba(107, 114, 128, 0.15); color: var(--text-muted); }
+
+.cd-desc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cd-manual-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--primary-muted);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.cd-segno {
+  font-size: 16px;
+  font-weight: 700;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.cd-segno-pos {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+}
+
+.cd-segno-neg {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+}
+
+/* Importo */
+.cd-importo {
+  text-align: right;
+}
+
+.cd-importo-val {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.12s;
+}
+
+.cd-importo-val:hover {
+  background: var(--bg-hover);
+}
+
+.cd-importo-input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 2px solid var(--primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 6px;
+  text-align: right;
+  outline: none;
+}
+
+.cd-actions-cell {
+  text-align: center;
+}
+
+.cd-del-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.12s;
+}
+
+.cd-row:hover .cd-del-btn {
+  opacity: 1;
+}
+
+.cd-del-btn:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* Add riga */
+.cd-add-btn {
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: none;
+  border-top: 1px dashed var(--border);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.cd-add-btn:hover {
+  background: var(--primary-muted);
+}
+
+/* Totali */
+.cd-totals {
+  border-top: 2px solid var(--border);
+  padding: 16px 20px;
+}
+
+.cd-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.cd-total-row span:last-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.cd-total-netto {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ─── Responsive ───────────────────────────── */
+@media (max-width: 1000px) {
+  .c-layout {
+    grid-template-columns: 1fr;
+  }
+  .c-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

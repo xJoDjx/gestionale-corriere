@@ -24,6 +24,20 @@ export class RicaricheController {
     return this.service.riepilogoPadroncini(mese);
   }
 
+  /**
+   * Ricariche di un padroncino per un mese, ricercate via assegnazioni mezzo.
+   * Non dipende da padroncinoId nelle ricariche.
+   * GET /ricariche/by-padroncino?padroncinoId=X&mese=2026-03
+   */
+  @Get('by-padroncino')
+  findByPadroncino(
+    @Query('padroncinoId') padroncinoId: string,
+    @Query('mese') mese: string,
+  ) {
+    if (!padroncinoId || !mese) return { padroncinoId, mese, totale: 0, mezzi: [] };
+    return this.service.findByPadroncino(padroncinoId, mese);
+  }
+
   /** Importa sessioni CSV elaborate */
   @Post('importa')
   importa(@Body() dto: ImportRicaricheDto) {

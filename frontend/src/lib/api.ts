@@ -277,6 +277,10 @@ export interface Padroncino {
   conteggiCount: number;
   fatturatoMese?: number;
   bonifico?: number;
+  fatturatoTotale?: number;
+  addebitiTotali?: number;
+  daBonificare?: number;
+  mediaMensile?: number;
 }
 
 export interface PadronciniListResponse {

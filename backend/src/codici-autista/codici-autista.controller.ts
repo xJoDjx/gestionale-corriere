@@ -1,4 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, Req } from '@nestjs/common';
+import {
+  Controller, Get, Post, Put, Delete, Param, Body, Query, Req,
+  UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { CodiciAutistaService, CreateCodiceAutistaDto, UpdateCodiceAutistaDto } from './codici-autista.service';
 
 @Controller('codici-autista')
@@ -21,6 +26,17 @@ export class CodiciAutistaController {
   @Get('stats')
   getStats() {
     return this.service.getStats();
+  }
+
+  @Post('importa-excel')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  async importaExcel(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File obbligatorio');
+    const ext = file.originalname.toLowerCase();
+    if (!ext.endsWith('.xlsx') && !ext.endsWith('.xls')) {
+      throw new BadRequestException('Formato non supportato. Usa .xlsx o .xls');
+    }
+    return this.service.importaExcel(file.buffer);
   }
 
   @Get(':id')

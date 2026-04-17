@@ -289,6 +289,107 @@ export class RicaricheService {
   }
 
   /**
+   * Ricariche raggruppate per mezzo per un padroncino in un mese.
+   * Non dipende da padroncinoId nelle ricariche: usa le assegnazioni mezzo
+   * per trovare le ricariche tramite mezzoId o targa.
+   */
+  async findByPadroncino(padroncinoId: string, mese: string) {
+    console.log(`\n🔍 [findByPadroncino] START — padroncinoId=${padroncinoId} mese=${mese}`);
+
+    // Date UTC-safe: evita bug di timezone su server Italian (UTC+1/UTC+2)
+    const [year, month] = mese.split('-').map(Number);
+    const inizioMese = new Date(Date.UTC(year, month - 1, 1));
+    const fineMese   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    console.log(`   📅 inizioMese=${inizioMese.toISOString()} fineMese=${fineMese.toISOString()}`);
+
+    // 1. Mezzi assegnati a questo padroncino durante il mese (filtro rigoroso)
+    let assegnazioni = await this.prisma.assegnazioneMezzo.findMany({
+      where: {
+        padroncinoId,
+        deletedAt: null,
+        dataInizio: { lte: fineMese },
+        OR: [{ dataFine: null }, { dataFine: { gte: inizioMese } }],
+      },
+      include: { mezzo: { select: { id: true, targa: true } } },
+    });
+    console.log(`   🚚 Assegnazioni (filtro mese) trovate: ${assegnazioni.length}`);
+
+    // 1b. FALLBACK: se nessuna assegnazione copre il mese, usa quelle ATTUALMENTE ATTIVE
+    // Utile quando i dati storici (ricariche) sono di un mese precedente all'attivazione
+    // formale dell'assegnazione nel sistema.
+    if (assegnazioni.length === 0) {
+      assegnazioni = await this.prisma.assegnazioneMezzo.findMany({
+        where: {
+          padroncinoId,
+          deletedAt: null,
+          dataFine: null, // solo assegnazioni ancora aperte
+        },
+        include: { mezzo: { select: { id: true, targa: true } } },
+      });
+      console.log(`   ↪️  FALLBACK: usate ${assegnazioni.length} assegnazioni attualmente attive (nessuna copriva il mese)`);
+    }
+
+    assegnazioni.forEach((a) =>
+      console.log(`      - mezzoId=${a.mezzoId} targa=${a.mezzo?.targa} dal ${a.dataInizio.toISOString()} al ${a.dataFine?.toISOString() ?? 'in corso'}`)
+    );
+
+    // 2. Costruisci condizioni OR
+    const mezziIds = assegnazioni.map((a) => a.mezzoId);
+    const targheMezziNorm = assegnazioni
+      .map((a) => normalizeTarga(a.mezzo?.targa))
+      .filter(Boolean);
+    const targheMezziOrig = assegnazioni
+      .map((a) => (a.mezzo?.targa ?? '').toUpperCase().trim())
+      .filter(Boolean);
+    const tutteTarghe = [...new Set([...targheMezziNorm, ...targheMezziOrig])];
+    console.log(`   🔖 Targhe cercate: ${JSON.stringify(tutteTarghe)}`);
+
+    const orConditions: any[] = [{ padroncinoId }];
+    if (mezziIds.length > 0) orConditions.push({ mezzoId: { in: mezziIds } });
+    if (tutteTarghe.length > 0) orConditions.push({ targa: { in: tutteTarghe } });
+
+    // 3a. DEBUG: conta TUTTE le ricariche del mese (per capire se il filtro sbaglia)
+    const totalMese = await this.prisma.ricaricaElettrica.count({
+      where: { mese, deletedAt: null },
+    });
+    console.log(`   📊 Ricariche totali mese ${mese}: ${totalMese}`);
+
+    // Campione: cosa c'è nel DB per questo mese
+    const campione = await this.prisma.ricaricaElettrica.findMany({
+      where: { mese, deletedAt: null },
+      take: 5,
+      select: { id: true, targa: true, mezzoId: true, padroncinoId: true, importo: true },
+    });
+    console.log(`   🧪 Campione ricariche mese:`, JSON.stringify(campione));
+
+    // 3b. Ricariche filtrate
+    const ricariche = await this.prisma.ricaricaElettrica.findMany({
+      where: { mese, deletedAt: null, OR: orConditions },
+    });
+    console.log(`   ⚡ Ricariche match: ${ricariche.length}`);
+
+    // 4. Deduplicazione e raggruppamento
+    const seen = new Set<string>();
+    const unique = ricariche.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+
+    const grouped = new Map<string, number>();
+    for (const r of unique) {
+      const targa = normalizeTarga(r.targa ?? '') || 'N/A';
+      grouped.set(targa, (grouped.get(targa) ?? 0) + Number(r.importo));
+    }
+
+    const mezzi = Array.from(grouped.entries()).map(([targa, costo]) => ({ targa, costo }));
+    const totale = mezzi.reduce((s, m) => s + m.costo, 0);
+    console.log(`   ✅ RESULT: totale=${totale} mezzi=${JSON.stringify(mezzi)}\n`);
+
+    return { padroncinoId, mese, totale, mezzi };
+  }
+
+  /**
    * Elimina tutte le sessioni di un mese
    */
   async eliminaMese(mese: string) {

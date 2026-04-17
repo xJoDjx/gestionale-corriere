@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreatePadroncinoDto, UpdatePadroncinoDto, QueryPadronciniDto } from './padroncini.dto';
@@ -48,6 +49,25 @@ export class PadronciniService {
       this.prisma.padroncino.count({ where }),
     ]);
 
+    // Calcola fatturato totale (imponibile × 1.22) per ogni padroncino in un'unica query aggregata
+    const padIds = data.map((p) => p.id);
+    const fatturatoRows: Array<{ padroncinoId: string; totale: string }> =
+      padIds.length > 0
+        ? await this.prisma.$queryRaw`
+            SELECT cm.padroncino_id AS "padroncinoId",
+                   SUM(cr.importo)  AS "totale"
+            FROM   conteggi_righe cr
+            JOIN   conteggi_mensili cm ON cr.conteggio_mensile_id = cm.id
+            WHERE  cm.padroncino_id = ANY(${padIds}::text[])
+              AND  cr.tipo = 'FATTURATO'
+              AND  cm.deleted_at  IS NULL
+            GROUP  BY cm.padroncino_id`
+        : [];
+
+    const fattMap = new Map(
+      fatturatoRows.map((r) => [r.padroncinoId, Math.round(Number(r.totale) * 1.22 * 100) / 100]),
+    );
+
     return {
       data: data.map((p) => ({
         ...p,
@@ -70,6 +90,7 @@ export class PadronciniService {
           dataFine: null,
         })),
         conteggiCount: 0,
+        fatturatoTotale: fattMap.get(p.id) ?? null,
       })),
       total,
       page,
@@ -183,6 +204,75 @@ export class PadronciniService {
         dataFine: a.dataFine,
       })),
     };
+  }
+
+  // ─── IMPORTA EXCEL ──────────────────────────────────────────────
+  // Colonne (0-indexed): A=ragioneSociale, B=partitaIva, C=codiceFiscale,
+  //                      D=indirizzo, E=email, F=pec, G=iban
+  async importaExcel(buffer: Buffer) {
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const risultati: { creati: number; saltati: number; errori: string[] } = {
+      creati: 0, saltati: 0, errori: [],
+    };
+
+    const str = (val: any): string | null => {
+      if (val === null || val === undefined) return null;
+      const s = String(val).trim();
+      return s || null;
+    };
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) continue;
+
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+        header: 1, defval: null, raw: false,
+      });
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const ragioneSociale = str(row[0]); // col A
+        if (!ragioneSociale) continue;
+
+        try {
+          // Controlla duplicato per ragione sociale (case-insensitive)
+          const exists = await this.prisma.padroncino.findFirst({
+            where: { ragioneSociale: { equals: ragioneSociale, mode: 'insensitive' }, deletedAt: null },
+          });
+          if (exists) { risultati.saltati++; continue; }
+
+          const partitaIva    = str(row[1]); // col B
+          const codiceFiscale = str(row[2]); // col C
+          const indirizzo     = str(row[3]); // col D
+          const email         = str(row[4]); // col E
+          const pec           = str(row[5]); // col F
+          const iban          = str(row[6]); // col G
+
+          const p = await this.prisma.padroncino.create({
+            data: {
+              ragioneSociale,
+              ...(partitaIva    && { partitaIva }),
+              ...(codiceFiscale && { codiceFiscale }),
+              ...(indirizzo     && { indirizzo }),
+              ...(email         && { email }),
+              ...(pec           && { pec }),
+              ...(iban          && { iban }),
+            },
+          });
+          await this.audit.log({
+            userId: 'system', entityType: 'padroncino', entityId: p.id,
+            azione: 'CREATE', dataDopo: p as any,
+          });
+          risultati.creati++;
+        } catch (err: any) {
+          risultati.errori.push(`"${ragioneSociale}": ${err.message}`);
+        }
+      }
+    }
+
+    return risultati;
   }
 
   // ─── CRUD ────────────────────────────────────────────────────────
@@ -510,6 +600,54 @@ export class PadronciniService {
       scadenza: data.scadenza ?? null,
       createdAt: now.toISOString(),
     };
+  }
+
+  // ─── STORICO CONTEGGI ───────────────────────────────────────────
+  async getStoricoConteggi(padroncinoId: string) {
+    const padroncino = await this.prisma.padroncino.findFirst({
+      where: { id: padroncinoId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!padroncino) throw new NotFoundException('Padroncino non trovato');
+
+    const conteggi = await this.prisma.conteggioMensile.findMany({
+      where: { padroncinoId, deletedAt: null },
+      include: { righe: true },
+      orderBy: { mese: 'desc' },
+    });
+
+    const ADDEBITI = ['NOLEGGIO', 'PALMARE', 'RICARICA', 'ADDEBITO'];
+    const COMPENSAZIONI = ['ACCREDITO', 'BONUS', 'FINE_MESE', 'ACCONTO'];
+
+    return conteggi.map((c) => {
+      const fatturato = c.righe
+        .filter((r) => r.tipo === 'FATTURATO')
+        .reduce((s, r) => s + Number(r.importo), 0);
+      const addebiti = c.righe
+        .filter((r) => ADDEBITI.includes(r.tipo))
+        .reduce((s, r) => s + Number(r.importo), 0);
+      const compensazioni = c.righe
+        .filter((r) => COMPENSAZIONI.includes(r.tipo))
+        .reduce((s, r) => s + Number(r.importo), 0);
+      const netto = Math.round((fatturato * 1.22 - addebiti - compensazioni) * 100) / 100;
+
+      const dist = c.distribuzioneJson as any;
+      const riepilogo = dist?.riepilogo;
+      const nSpedizioni = riepilogo
+        ? (riepilogo.consegneFatte ?? 0) + (riepilogo.ritiriFatti ?? 0)
+        : null;
+
+      return {
+        id: c.id,
+        mese: c.mese,
+        stato: c.stato,
+        fatturato,
+        addebiti,
+        compensazioni,
+        netto,
+        nSpedizioni,
+      };
+    });
   }
 
   async removeDocumento(padroncinoId: string, documentoId: string, userId: string) {

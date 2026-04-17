@@ -1,15 +1,18 @@
 // src/features/codici-autista/DettaglioCodiceAutista.tsx
-// BUG 2 FIX: aggiunto form state + handleSave per consentire la modifica dei dati
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { codiciAutistaApi, padronciniApi } from '../../lib/api';
 import type { CodiceAutista, Padroncino } from '../../lib/api';
+import LogEntita from '../log/LogEntita';
+import '../mezzi/FlottaMezzi.css';
 
 const fmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
 
 const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
+
+type TabKey = 'info' | 'assegnazioni' | 'log';
 
 export default function DettaglioCodiceAutista() {
   const { id } = useParams<{ id: string }>();
@@ -19,11 +22,11 @@ export default function DettaglioCodiceAutista() {
   const [padroncini, setPadroncini] = useState<Padroncino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showAssegna, setShowAssegna] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [assegnaForm, setAssegnaForm] = useState({ padroncinoId: '', dataInizio: '' });
+  const [showAssegna, setShowAssegna] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ── FIX BUG 2: stato form per modifica ──────────────────
   const [form, setFormState] = useState<Partial<CodiceAutista>>({});
   const [dirty, setDirty] = useState(false);
 
@@ -41,7 +44,7 @@ export default function DettaglioCodiceAutista() {
         padronciniApi.list({ limit: '200' }),
       ]);
       setAutista(a);
-      setFormState(a); // ← popola il form con i dati correnti
+      setFormState(a);
       setDirty(false);
       setPadroncini(pResp.data);
     } catch (e: any) {
@@ -53,7 +56,6 @@ export default function DettaglioCodiceAutista() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── FIX BUG 2: salvataggio modifiche ──────────────────────
   const handleSave = async () => {
     if (!id) return;
     setSaving(true);
@@ -91,7 +93,7 @@ export default function DettaglioCodiceAutista() {
   };
 
   const handleChiudiAssegnazione = async (assegnazioneId: string) => {
-    if (!confirm('Chiudere l\'assegnazione corrente?')) return;
+    if (!window.confirm('Chiudere l\'assegnazione corrente?')) return;
     try {
       await codiciAutistaApi.chiudiAssegnazione(assegnazioneId);
       await load();
@@ -100,221 +102,255 @@ export default function DettaglioCodiceAutista() {
     }
   };
 
-  const handleToggleAttivo = async () => {
-    if (!id) return;
-    try {
-      await codiciAutistaApi.toggleAttivo(id);
-      await load();
-    } catch (e: any) {
-      alert('Errore: ' + e.message);
-    }
-  };
-
   if (loading) return (
-    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-      Caricamento autista...
+    <div className="fm-page">
+      <div className="fm-loading"><div className="fm-spinner" /><span>Caricamento autista...</span></div>
     </div>
   );
-  if (error) return (
-    <div style={{ padding: 32 }}>
-      <div style={{ color: '#dc2626', marginBottom: 16 }}>⚠️ {error}</div>
-      <button className="btn-primary" onClick={() => navigate('/codici-autista')}>← Torna ai Cod. Autisti</button>
+  if (error || !autista) return (
+    <div className="fm-page">
+      <div className="fm-error">
+        <span>⚠️ {error || 'Autista non trovato'}</span>
+        <button className="btn-outline" onClick={() => navigate('/codici-autista')}>← Torna ai Cod. Autisti</button>
+      </div>
     </div>
   );
-  if (!autista) return null;
 
   const attiva = autista.assegnazioni?.find((a) => !a.dataFine);
-  const storiche = autista.assegnazioni?.filter((a) => a.dataFine) ?? [];
-  const nomeCompleto = [autista.nome, autista.cognome].filter(Boolean).join(' ') || '—';
+  const nomeCompleto = [autista.nome, autista.cognome].filter(Boolean).join(' ');
+
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: 'info', label: 'Dati Autista' },
+    { key: 'assegnazioni', label: `Assegnazioni (${autista.assegnazioni?.length ?? 0})` },
+    { key: 'log', label: 'Log' },
+  ];
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => navigate('/codici-autista')}
-          style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-            color: 'var(--text-primary)', fontSize: 13,
-          }}
-        >← Cod. Autisti</button>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>🏷️ {autista.codice}</h1>
-        {nomeCompleto !== '—' && (
-          <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>{nomeCompleto}</span>
-        )}
-        <span
-          style={{
-            padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-            background: autista.attivo ? 'rgba(34,197,94,.12)' : 'rgba(100,116,139,.12)',
-            color: autista.attivo ? '#16a34a' : '#64748b',
-          }}
-        >
-          {autista.attivo ? 'ATTIVO' : 'DISATTIVO'}
-        </span>
-        <button
-          onClick={handleToggleAttivo}
-          style={{
-            padding: '6px 14px', fontSize: 12, fontWeight: 600,
-            background: autista.attivo ? '#fee2e2' : 'rgba(34,197,94,.12)',
-            color: autista.attivo ? '#dc2626' : '#16a34a',
-            border: autista.attivo ? '1px solid #fca5a5' : '1px solid #86efac',
-            borderRadius: 8, cursor: 'pointer',
-          }}
-        >
-          {autista.attivo ? 'Disattiva' : 'Attiva'}
-        </button>
-
-        {/* ── FIX BUG 2: pulsante Salva ── */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div className="fm-page">
+      {/* ── TOPBAR ── */}
+      <div className="dm-topbar">
+        <button className="btn-ghost-sm" onClick={() => navigate('/codici-autista')}>← Cod. Autisti</button>
+        <div className="dm-topbar-title">
+          <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800 }}>
+            🏷️ {autista.codice}
+          </h1>
+          {nomeCompleto && (
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {nomeCompleto}
+            </span>
+          )}
+          <span className={`fm-badge ${autista.attivo ? 'fm-badge-green' : 'fm-badge-gray'}`}>
+            {autista.attivo ? 'ATTIVO' : 'DISATTIVO'}
+          </span>
+          {attiva && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              → {attiva.ragioneSociale}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
           {dirty && (
-            <button
-              className="btn-primary"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ fontSize: 13 }}
-            >
+            <button className="btn-primary" disabled={saving} onClick={handleSave}>
               {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
             </button>
           )}
-          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>✓ Salvato</span>}
+          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>✓ Salvato</span>}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* ── TABS ── */}
+      <div className="dm-tabs-bar">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`dm-tab ${activeTab === t.key ? 'dm-tab-active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-        {/* ── FIX BUG 2: Dati anagrafici EDITABILI ── */}
-        <div className="detail-card">
-          <h3 className="detail-card-title">📋 Dati Autista</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Codice</label>
-              <input
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, boxSizing: 'border-box', cursor: 'not-allowed' }}
-                value={autista.codice}
-                readOnly
-                title="Il codice non può essere modificato"
-              />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Nome</label>
-                <input
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                  value={form.nome ?? ''}
-                  onChange={(e) => set('nome', e.target.value || null)}
-                  placeholder="—"
+      {/* ── TAB INFO ── */}
+      {activeTab === 'info' && (
+        <div className="dm-layout">
+          <div className="dm-col-left">
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>👤</span> Dati Anagrafici</div>
+              <div className="dm-section-row">
+                <div className="dm-field">
+                  <label>Codice</label>
+                  <input
+                    className="dm-input"
+                    style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+                    value={autista.codice}
+                    readOnly
+                    disabled
+                  />
+                </div>
+              </div>
+              <div className="dm-section-row">
+                <div className="dm-field">
+                  <label>Nome</label>
+                  <input
+                    className="dm-input"
+                    value={form.nome ?? ''}
+                    onChange={(e) => set('nome', e.target.value || null)}
+                    placeholder="—"
+                  />
+                </div>
+                <div className="dm-field">
+                  <label>Cognome</label>
+                  <input
+                    className="dm-input"
+                    value={form.cognome ?? ''}
+                    onChange={(e) => set('cognome', e.target.value || null)}
+                    placeholder="—"
+                  />
+                </div>
+              </div>
+              <div className="dm-field dm-field-full">
+                <label>Note</label>
+                <textarea
+                  className="dm-textarea"
+                  rows={3}
+                  value={form.note ?? ''}
+                  onChange={(e) => set('note', e.target.value || null)}
+                  placeholder="Note aggiuntive…"
                 />
               </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Cognome</label>
-                <input
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                  value={form.cognome ?? ''}
-                  onChange={(e) => set('cognome', e.target.value || null)}
-                  placeholder="—"
-                />
-              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa fissa (€)</label>
+          </div>
+
+          <div className="dm-col-right">
+            {/* Tariffe */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>💶</span> Tariffe</div>
+              <div className="dm-field dm-field-full">
+                <label>Tariffa Fissa (€)</label>
                 <input
-                  type="number" step="0.01"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  className="dm-input"
+                  type="number"
+                  step="0.01"
+                  style={{ color: 'var(--primary)', fontWeight: 700 }}
                   value={form.tariffaFissa ?? ''}
                   onChange={(e) => set('tariffaFissa', e.target.value ? parseFloat(e.target.value) : null)}
                 />
               </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa ritiro (€)</label>
+              <div className="dm-field dm-field-full">
+                <label>Tariffa Ritiro (€)</label>
                 <input
-                  type="number" step="0.01"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  className="dm-input"
+                  type="number"
+                  step="0.01"
+                  style={{ color: 'var(--primary)', fontWeight: 700 }}
                   value={form.tariffaRitiro ?? ''}
                   onChange={(e) => set('tariffaRitiro', e.target.value ? parseFloat(e.target.value) : null)}
                 />
               </div>
+              <div className="dm-field dm-field-full">
+                <label>Target</label>
+                <input
+                  className="dm-input"
+                  type="number"
+                  step="1"
+                  value={form.target ?? ''}
+                  onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
+                />
+              </div>
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Target</label>
-              <input
-                type="number" step="1"
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                value={form.target ?? ''}
-                onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
-                placeholder="—"
-              />
+
+            {/* Assegnazione corrente */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>🤝</span> Assegnazione Corrente</div>
+              {attiva ? (
+                <div className="dm-assegn-row dm-assegn-attiva">
+                  <div>
+                    <span className="dm-assegn-nome">{attiva.ragioneSociale}</span>
+                    <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>
+                  </div>
+                  <div className="dm-assegn-date">dal {fmt(attiva.dataInizio)}</div>
+                  <button
+                    className="btn-outline btn-sm"
+                    style={{ color: '#dc2626', borderColor: '#dc2626', marginTop: 8 }}
+                    onClick={() => handleChiudiAssegnazione(attiva.id)}
+                  >
+                    🔓 Chiudi assegnazione
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nessun padroncino assegnato</span>
+                  <button className="btn-primary btn-sm" onClick={() => { setShowAssegna(true); setActiveTab('assegnazioni'); }}>
+                    🔗 Assegna Padroncino
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Note</label>
-              <textarea
-                rows={2}
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
-                value={form.note ?? ''}
-                onChange={(e) => set('note', e.target.value || null)}
-                placeholder="Note aggiuntive…"
-              />
+
+            {/* Info creazione */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>📋</span> Info Record</div>
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 0', color: 'var(--text-secondary)' }}>Creato il</td>
+                    <td style={{ padding: '4px 0', textAlign: 'right' }}>{fmt(autista.createdAt)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Creato il {fmt(autista.createdAt)}
+
+            <div className="dm-actions-card">
+              <button className="btn-outline" onClick={() => navigate('/codici-autista')}>← Annulla</button>
+              <button className="btn-primary" disabled={!dirty || saving} onClick={handleSave}>
+                {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* ── Assegnazione attiva ── */}
-        <div className="detail-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 className="detail-card-title" style={{ margin: 0 }}>👤 Padroncino Assegnato</h3>
+      {/* ── TAB ASSEGNAZIONI ── */}
+      {activeTab === 'assegnazioni' && (
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              Storico Assegnazioni
+            </h3>
             {!attiva && (
-              <button className="btn-primary btn-sm" onClick={() => setShowAssegna((v) => !v)}>+ Assegna</button>
+              <button className="btn-primary btn-sm" onClick={() => setShowAssegna((v) => !v)}>
+                🔗 Nuova Assegnazione
+              </button>
             )}
           </div>
 
-          {attiva ? (
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)', marginBottom: 8 }}>
-                {attiva.ragioneSociale}
-              </div>
-              <table className="detail-table">
-                <tbody>
-                  <tr><td>Data inizio</td><td>{fmt(attiva.dataInizio)}</td></tr>
-                  <tr><td>Fine prevista</td><td>{attiva.dataFine ? fmt(attiva.dataFine) : 'In corso'}</td></tr>
-                </tbody>
-              </table>
-              <button
-                className="btn-sm"
-                style={{ marginTop: 12, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}
-                onClick={() => handleChiudiAssegnazione(attiva.id)}
-              >Chiudi assegnazione</button>
-            </div>
-          ) : (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Nessun padroncino assegnato</div>
-          )}
-
+          {/* Form nuova assegnazione */}
           {showAssegna && !attiva && (
-            <div style={{ marginTop: 16, padding: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Padroncino</label>
-                <select
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}
-                  value={assegnaForm.padroncinoId}
-                  onChange={(e) => setAssegnaForm((f) => ({ ...f, padroncinoId: e.target.value }))}
-                >
-                  <option value="">Seleziona padroncino...</option>
-                  {padroncini.filter(p => p.attivo).map((p) => (
-                    <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Data inizio</label>
-                <input
-                  type="date"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}
-                  value={assegnaForm.dataInizio}
-                  onChange={(e) => setAssegnaForm((f) => ({ ...f, dataInizio: e.target.value }))}
-                />
+            <div style={{ marginBottom: 20, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Padroncino</label>
+                  <select
+                    className="dm-select"
+                    value={assegnaForm.padroncinoId}
+                    onChange={(e) => setAssegnaForm((f) => ({ ...f, padroncinoId: e.target.value }))}
+                  >
+                    <option value="">Seleziona padroncino...</option>
+                    {padroncini.filter((p) => p.attivo).map((p) => (
+                      <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Data inizio</label>
+                  <input
+                    type="date"
+                    className="dm-input"
+                    value={assegnaForm.dataInizio}
+                    onChange={(e) => setAssegnaForm((f) => ({ ...f, dataInizio: e.target.value }))}
+                  />
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn-primary btn-sm" onClick={handleAssegna} disabled={saving}>
@@ -324,33 +360,49 @@ export default function DettaglioCodiceAutista() {
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── Storico assegnazioni ── */}
-        {storiche.length > 0 && (
-          <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
-            <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
-            <table className="detail-table">
-              <thead>
-                <tr>
-                  <th>Padroncino</th>
-                  <th>Data inizio</th>
-                  <th>Data fine</th>
-                </tr>
-              </thead>
-              <tbody>
-                {storiche.map((a) => (
-                  <tr key={a.id}>
-                    <td>{a.ragioneSociale}</td>
-                    <td>{fmt(a.dataInizio)}</td>
-                    <td>{fmt(a.dataFine)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          {!autista.assegnazioni || autista.assegnazioni.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              Nessuna assegnazione registrata
+            </div>
+          ) : (
+            <div className="dm-assegnazioni-list">
+              {autista.assegnazioni.map((a) => (
+                <div key={a.id} className={`dm-assegn-row ${!a.dataFine ? 'dm-assegn-attiva' : ''}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+                    <div>
+                      <span className="dm-assegn-nome">{a.ragioneSociale}</span>
+                      {!a.dataFine && <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>}
+                    </div>
+                    {!a.dataFine && (
+                      <button
+                        className="btn-outline btn-sm"
+                        style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                        onClick={() => handleChiudiAssegnazione(a.id)}
+                      >
+                        🔓 Chiudi
+                      </button>
+                    )}
+                  </div>
+                  <div className="dm-assegn-date">
+                    {fmt(a.dataInizio)} → {a.dataFine ? fmt(a.dataFine) : 'in corso'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB LOG ── */}
+      {activeTab === 'log' && id && (
+        <div style={{ padding: '20px 24px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
+            Log modifiche autista
+          </h3>
+          <LogEntita entityType="codice_autista" entityId={id} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,176 @@
+/* ============================================
+   NUOVO MEZZO MODAL — stili aggiuntivi
+   Da appendere/importare in Modal.css o in un file separato
+   ============================================ */
+
+/* ─── Selettore Tipo Possesso ─────────────── */
+.possesso-selector {
+  display: flex;
+  gap: 12px;
+}
+
+.possesso-option {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--bg-tertiary);
+}
+
+.possesso-option:hover {
+  border-color: var(--primary);
+  background: var(--primary-muted);
+}
+
+.possesso-active {
+  border-color: var(--primary) !important;
+  background: var(--primary-muted) !important;
+}
+
+.possesso-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.possesso-option > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.possesso-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.possesso-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.possesso-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all .15s;
+}
+
+.possesso-radio-active {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: inset 0 0 0 3px var(--bg-tertiary);
+}
+
+/* ─── Box info rate ───────────────────────── */
+.rate-info-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 4px;
+}
+
+.rate-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+}
+
+.rate-info-noi {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.rate-info-pda {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.rate-info-margine {
+  border: 1px solid var(--border);
+}
+
+.rate-margine-pos {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.rate-margine-neg {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.rate-info-sep {
+  font-size: 20px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.rate-info-icon { font-size: 18px; }
+
+.rate-info-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+
+.rate-info-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.rate-info-margine-val {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+.rate-margine-pos .rate-info-margine-val { color: var(--success); }
+.rate-margine-neg .rate-info-margine-val { color: var(--danger); }
+
+/* ─── Input colorati per le rate ─────────── */
+.form-input-rata-noi {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+.form-input-rata-noi:focus {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+
+.form-input-canone-pda {
+  border-color: rgba(34, 197, 94, 0.4) !important;
+}
+.form-input-canone-pda:focus {
+  border-color: var(--success) !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12) !important;
+}
+
+/* ─── Hint sotto i campi ──────────────────── */
+.field-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: -2px;
+}

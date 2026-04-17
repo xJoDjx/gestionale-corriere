@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -10,6 +11,8 @@ export interface CreateCodiceAutistaDto {
   tariffaFissa?: number;
   tariffaRitiro?: number;
   target?: number;
+  bonusMalus?: string;
+  zone?: string;
 }
 
 export interface UpdateCodiceAutistaDto {
@@ -19,6 +22,8 @@ export interface UpdateCodiceAutistaDto {
   tariffaFissa?: number;
   tariffaRitiro?: number;
   target?: number;
+  bonusMalus?: string;
+  zone?: string;
   attivo?: boolean;
 }
 
@@ -119,7 +124,116 @@ export class CodiciAutistaService {
       },
     });
     if (!ca) throw new NotFoundException('Codice autista non trovato');
-    return ca;
+    return {
+      ...ca,
+      assegnazioni: ca.assegnazioni.map((a) => ({
+        id: a.id,
+        padroncinoId: a.padroncinoId,
+        ragioneSociale: a.padroncino.ragioneSociale,
+        dataInizio: a.dataInizio,
+        dataFine: a.dataFine,
+      })),
+    };
+  }
+
+  // ─── IMPORTA EXCEL ──────────────────────────────────
+  // Colonne (0-indexed): A=padroncino, B=dataAssegnazione, C=codice, D=tariffaFissa,
+  //                      E=target, F=bonusMalus(skip), G=tariffaRitiro, H=note, I=zone(skip)
+  async importaExcel(buffer: Buffer) {
+    const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const risultati: { creati: number; saltati: number; errori: string[] } = {
+      creati: 0, saltati: 0, errori: [],
+    };
+
+    const parseNum = (val: any): number | null => {
+      if (val === null || val === undefined || val === '') return null;
+      const n = parseFloat(String(val).replace(',', '.').replace(/[^\d.-]/g, ''));
+      return isNaN(n) ? null : n;
+    };
+
+    const parseDate = (val: any): Date | null => {
+      if (!val) return null;
+      if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+      const s = String(val).trim();
+      if (!s || s === 'null') return null;
+      const itMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+      if (itMatch) return new Date(`${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}T00:00:00.000Z`);
+      const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    for (const sheetName of wb.SheetNames) {
+      const ws = wb.Sheets[sheetName];
+      if (!ws) continue;
+
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, {
+        header: 1, defval: null, raw: false, dateNF: 'yyyy-mm-dd',
+      });
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        const codiceRaw = row[2]; // col C
+        if (!codiceRaw || String(codiceRaw).trim() === '') continue;
+
+        const codice = String(codiceRaw).trim().toUpperCase();
+
+        try {
+          const exists = await this.prisma.codiceAutista.findFirst({
+            where: { codice, deletedAt: null },
+          });
+          if (exists) { risultati.saltati++; continue; }
+
+          const padroncinoRaw   = row[0] ? String(row[0]).trim() : null;
+          const dataAssegnazione = parseDate(row[1]);
+          const tariffaFissa    = parseNum(row[3]);
+          const target          = row[4] !== null && row[4] !== undefined && row[4] !== '' ? parseInt(String(row[4])) : null;
+          const bonusMalus      = row[5] ? String(row[5]).trim() || null : null; // col F (testo)
+          const tariffaRitiro   = parseNum(row[6]);
+          const note            = row[7] ? String(row[7]).trim() || null : null;
+          const zone            = row[8] ? String(row[8]).trim() || null : null; // col I
+
+          const ca = await this.prisma.codiceAutista.create({
+            data: {
+              codice,
+              ...(tariffaFissa !== null && { tariffaFissa }),
+              ...(tariffaRitiro !== null && { tariffaRitiro }),
+              ...(target !== null && !isNaN(target) && { target }),
+              ...(bonusMalus !== null && { bonusMalus }),
+              ...(zone && { zone }),
+              ...(note && { note }),
+            },
+          });
+          risultati.creati++;
+
+          if (padroncinoRaw) {
+            try {
+              const padroncino = await this.prisma.padroncino.findFirst({
+                where: { ragioneSociale: { contains: padroncinoRaw, mode: 'insensitive' }, deletedAt: null },
+              });
+              if (padroncino) {
+                // Se data mancante usa oggi
+                const dataInizio = dataAssegnazione ?? new Date();
+                await this.prisma.assegnazioneCodiceAutista.create({
+                  data: { codiceAutistaId: ca.id, padroncinoId: padroncino.id, dataInizio },
+                });
+              } else {
+                risultati.errori.push(`Codice ${codice}: padroncino "${padroncinoRaw}" non trovato`);
+              }
+            } catch (assErr: any) {
+              risultati.errori.push(`Codice ${codice}: errore assegnazione - ${assErr.message}`);
+            }
+          }
+        } catch (err: any) {
+          risultati.errori.push(`Codice ${codice}: ${err.message}`);
+        }
+      }
+    }
+
+    return risultati;
   }
 
   async create(data: CreateCodiceAutistaDto, userId: string) {
@@ -185,7 +299,13 @@ export class CodiciAutistaService {
 
     await this.audit.log({
       userId, entityType: 'codice_autista', entityId: codiceAutistaId,
-      azione: 'ASSEGNA', dataDopo: nuova as any,
+      azione: 'ASSEGNA', dataDopo: {
+        id: nuova.id,
+        padroncinoId: nuova.padroncinoId,
+        ragioneSociale: nuova.padroncino.ragioneSociale,
+        dataInizio: nuova.dataInizio,
+        dataFine: nuova.dataFine,
+      } as any,
     });
     return nuova;
   }
@@ -193,13 +313,27 @@ export class CodiciAutistaService {
   async chiudiAssegnazione(assegnazioneId: string, userId: string) {
     const assegnazione = await this.prisma.assegnazioneCodiceAutista.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
+      include: { padroncino: { select: { id: true, ragioneSociale: true } } },
     });
     if (!assegnazione) throw new NotFoundException('Assegnazione non trovata');
 
-    return this.prisma.assegnazioneCodiceAutista.update({
+    const updated = await this.prisma.assegnazioneCodiceAutista.update({
       where: { id: assegnazioneId },
       data: { dataFine: new Date() },
     });
+
+    await this.audit.log({
+      userId, entityType: 'codice_autista', entityId: assegnazione.codiceAutistaId,
+      azione: 'CHIUDI_ASSEGNAZIONE', dataDopo: {
+        id: assegnazione.id,
+        padroncinoId: assegnazione.padroncinoId,
+        ragioneSociale: assegnazione.padroncino.ragioneSociale,
+        dataInizio: assegnazione.dataInizio,
+        dataFine: updated.dataFine,
+      } as any,
+    });
+
+    return updated;
   }
 
   async findPadroncinoAttivo(codiceAutistaId: string) {

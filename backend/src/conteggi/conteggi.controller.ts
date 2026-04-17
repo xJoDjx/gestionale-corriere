@@ -1,6 +1,9 @@
 import {
   Controller, Get, Post, Put, Delete, Param, Query, Body,
+  UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ConteggiService } from './conteggi.service';
 import {
   CreateConteggioDto, UpdateConteggioStatoDto, CreateRigaDto, UpdateRigaDto,
@@ -30,6 +33,24 @@ export class ConteggiController {
     return this.service.generaBulk(data.mese, 'system');
   }
 
+  @Post('importa-fattura-proforma')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  importaFatturaProforma(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File mancante');
+    return this.service.importaFatturaProforma(file);
+  }
+
+  @Post('applica-fattura-proforma')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  applicaFatturaProforma(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('mese') mese: string,
+  ) {
+    if (!file) throw new BadRequestException('File mancante');
+    if (!mese) throw new BadRequestException('Parametro mese mancante');
+    return this.service.applicaFatturaProforma(file, mese, 'system');
+  }
+
   @Put(':id/stato')
   updateStato(@Param('id') id: string, @Body() dto: UpdateConteggioStatoDto) {
     return this.service.updateStato(id, dto, 'system');
@@ -39,6 +60,7 @@ export class ConteggiController {
   rigeneraRigheAuto(@Param('id') id: string) {
     return this.service.rigeneraRigheAuto(id, 'system');
   }
+
 
   @Delete(':id')
   remove(@Param('id') id: string) {

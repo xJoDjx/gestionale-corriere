@@ -1,11 +1,12 @@
 // src/features/conteggi/DettaglioConteggio.tsx
 // Dettaglio conteggio padroncino — dati reali + tab Compensazioni
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, padronciniApi } from '../../lib/api';
 import type { Padroncino } from '../../lib/api';
 import { conteggiApi } from '../../lib/conteggi.api';
 import { generaPdfConteggio } from './generaPdfConteggio';
+import * as XLSX from 'xlsx';
 import './DettaglioConteggio.css';
 
 // ─── TIPI ──────────────────────────────────────────────────────────────────────
@@ -236,17 +237,78 @@ function TabRiepilogo({ padroncino, mese, totFatturato, totAddebitiConIva, totCo
 }
 
 // ─── TAB FATTURATO ──────────────────────────────────────────────────────────────
-function TabFatturato({ righe, onChange, onAdd, onDelete }: {
+function TabFatturato({ righe, onChange, onAdd, onDelete, onImportXls }: {
   righe: RigaFatturato[];
   onChange: (id: string, f: keyof RigaFatturato, v: any) => void;
-  onAdd: () => void; onDelete: (id: string) => void;
+  onAdd: () => void;
+  onDelete: (id: string) => void;
+  onImportXls: (nuove: { descrizione: string; valore: number; nota: string }[]) => void;
 }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      const nuove: { descrizione: string; valore: number; nota: string }[] = [];
+
+      for (const row of rows) {
+        if (!row || row.length < 2) continue;
+        // Cerca una cella testuale e una numerica nella stessa riga
+        const descCell = row.find((c) => typeof c === 'string' && c.trim().length > 1);
+        const valCell  = row.find((c) => typeof c === 'number' && c > 0);
+        if (descCell && valCell) {
+          nuove.push({
+            descrizione: String(descCell).trim(),
+            valore: Math.round(valCell * 100) / 100,
+            nota: '',
+          });
+        }
+      }
+
+      if (nuove.length === 0) {
+        alert('Nessuna riga valida trovata nel file.\nAssicurati che il foglio abbia colonne: Descrizione | Importo');
+      } else {
+        onImportXls(nuove);
+      }
+    } catch (err: any) {
+      alert('Errore lettura file: ' + (err.message ?? 'Formato non supportato'));
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   const totImponibile = righe.reduce((s, r) => s + (r.valore ?? 0), 0);
   return (
     <div className="dc-tab-content">
       <div className="dc-section-header">
         <h3>💶 Fatturato Distribuzione</h3>
-        <button className="dc-btn-add-row" onClick={onAdd}>+ Aggiungi riga</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+          <button
+            className="btn-outline btn-sm"
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+            title="Carica un file XLS/CSV con le righe della fattura proforma"
+          >
+            {importing ? '⏳' : '📥'} Importa da XLS
+          </button>
+          <button className="dc-btn-add-row" onClick={onAdd}>+ Aggiungi riga</button>
+        </div>
       </div>
       <ExcelTable headers={['#','Descrizione','Valore (€)','Nota','']}>
         {righe.length === 0 ? (
@@ -759,8 +821,8 @@ export default function DettaglioConteggio() {
  
           let ricaricheDB: Record<string, number> = {};
           try {
-            const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
-            const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
+            // Usa endpoint dedicato che cerca per assegnazioni mezzo (non dipende da padroncinoId su ricariche)
+            const entryPad = await api.get<any>(`/ricariche/by-padroncino?padroncinoId=${id}&mese=${mese}`);
             if (entryPad?.mezzi) {
               for (const d of entryPad.mezzi) {
                 ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
@@ -885,15 +947,14 @@ export default function DettaglioConteggio() {
         const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
         let ricaricheDB: Record<string, number> = {};
         try {
-          const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
-          const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
+          const entryPad = await api.get<any>(`/ricariche/by-padroncino?padroncinoId=${id}&mese=${mese}`);
           if (entryPad?.mezzi) {
             for (const d of entryPad.mezzi) {
               ricaricheDB[normTarga(d.targa)] = Number(d.costo ?? 0);
             }
           }
         } catch { /* ignora */ }
- 
+
         setRigheM(
           (pad.mezziAssegnati ?? []).map((m: any) => ({
             id: `mez-${m.id ?? m.mezzoId}`,
@@ -1143,35 +1204,39 @@ export default function DettaglioConteggio() {
     setAggiornaRicariche(true);
     const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
     try {
-      const riepRic = await api.get<any[]>(`/ricariche/riepilogo-padroncini?mese=${mese}`);
-      const entryPad = riepRic.find((r: any) => r.padroncinoId === id);
-      if (!entryPad?.mezzi?.length) {          // ← mezzi (non dettaglio)
-        alert('Nessuna ricarica trovata per questo padroncino nel mese selezionato.');
+      // Endpoint dedicato: cerca ricariche per assegnazioni mezzo, non dipende da padroncinoId su ricariche
+      const url = `/ricariche/by-padroncino?padroncinoId=${id}&mese=${mese}`;
+      console.log('[AggiornaRicariche] GET', url);
+      const entryPad = await api.get<any>(url);
+      console.log('[AggiornaRicariche] response:', entryPad);
+      if (!entryPad?.mezzi?.length) {
+        alert(`Nessuna ricarica trovata per questo padroncino (${id}) nel mese ${mese}.\n\nControlla la console del backend per i dettagli.`);
         return;
       }
       const nuoviCosti: Record<string, number> = {};
-      for (const d of entryPad.mezzi) {        // ← mezzi
-        nuoviCosti[normTarga(d.targa)] = Number(Number(d.costo ?? 0).toFixed(2)); // ← costo
+      for (const d of entryPad.mezzi) {
+        nuoviCosti[normTarga(d.targa)] = Number(Number(d.costo ?? 0).toFixed(2));
       }
       setRigheR((prev) => prev.map((r) => ({
         ...r,
-        costoRicarica: nuoviCosti[normTarga(r.targa)] ?? r.costoRicarica,  // ← norm
+        costoRicarica: nuoviCosti[normTarga(r.targa)] ?? r.costoRicarica,
       })));
       const targheEsistenti = new Set(righeR.map((r) => normTarga(r.targa)));
-      const nuove: RigaRicarica[] = entryPad.mezzi              // ← mezzi
+      const nuove: RigaRicarica[] = entryPad.mezzi
         .filter((d: any) => !targheEsistenti.has(normTarga(d.targa)))
         .map((d: any) => ({
           id: newId(),
           mezzoId: null,
           targa: d.targa,
-          costoRicarica: Number(Number(d.costo ?? 0).toFixed(2)), // ← costo
+          costoRicarica: Number(Number(d.costo ?? 0).toFixed(2)),
           percIva: 5,
           note: 'Aggiunto da ricariche',
           isManuale: true,
         }));
       if (nuove.length) setRigheR((prev) => [...prev, ...nuove]);
     } catch (e: any) {
-      alert('Errore aggiornamento ricariche: ' + e.message);
+      console.error('[AggiornaRicariche] ERROR:', e);
+      alert('Errore aggiornamento ricariche:\n' + (e?.message ?? 'Errore sconosciuto') + '\n\n(vedi console per dettagli)');
     } finally {
       setAggiornaRicariche(false);
     }
@@ -1218,7 +1283,7 @@ export default function DettaglioConteggio() {
   if (error || !padroncino) return (
     <div className="dc-page dc-page-loading">
       ❌ {error ?? 'Padroncino non trovato'}
-      <button onClick={() => navigate('/conteggi')} style={{ marginLeft: 12 }}>← Torna</button>
+      <button onClick={() => navigate(-1 as any)} style={{ marginLeft: 12 }}>← Torna</button>
     </div>
   );
 
@@ -1227,7 +1292,7 @@ export default function DettaglioConteggio() {
       {/* Header */}
       <div className="dc-header">
         <div className="dc-header-left">
-          <button className="dc-back-btn" onClick={() => navigate('/conteggi')}>← Conteggi</button>
+          <button className="dc-back-btn" onClick={() => navigate(-1 as any)}>← Conteggi</button>
           <div>
             <h1>{padroncino.ragioneSociale}</h1>
             <span className="dc-header-mese">📅 {formatMese(mese)}</span>
@@ -1360,6 +1425,15 @@ export default function DettaglioConteggio() {
             onChange={makeSetter(setRigheF)}
             onAdd={() => setRigheF((p) => [...p, { id: newId(), descrizione: '', valore: null, nota: '' }])}
             onDelete={(id) => setRigheF((p) => p.filter((r) => r.id !== id))}
+            onImportXls={(nuove) => {
+              const righeImportate = nuove.map((r) => ({
+                id: newId(),
+                descrizione: r.descrizione,
+                valore: r.valore,
+                nota: r.nota,
+              }));
+              setRigheF((prev) => [...prev, ...righeImportate]);
+            }}
           />
         )}
         {activeTab === 'addebiti' && (

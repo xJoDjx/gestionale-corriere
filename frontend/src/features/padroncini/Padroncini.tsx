@@ -5,6 +5,10 @@ import {
   Padroncino, NuovoPadroncino,
 } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 
 // ─── HELPERS ──────────────────────────────────────────
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
@@ -30,21 +34,24 @@ function scadenzaInfo(dateStr?: string | null): { days: number; cls: string; lab
   return { days, cls, label };
 }
 
-/** Calcola stato DURC dal testo */
-function durcStatus(dateStr?: string | null): { label: string; cls: string } {
+/** Calcola stato DURC */
+function durcStatus(dateStr?: string | null): { label: string; cls: string; days?: number } {
   if (!dateStr) return { label: 'ASSENTE', cls: 'pd-doc-absent' };
   const info = scadenzaInfo(dateStr);
   if (!info) return { label: 'ASSENTE', cls: 'pd-doc-absent' };
-  if (info.days < 0) return { label: 'SCADUTO', cls: 'pd-doc-expired' };
-  if (info.days <= 10) return { label: 'IN SCADENZA', cls: 'pd-doc-warning' };
-  return { label: 'REGOLARE', cls: 'pd-doc-ok' };
+  if (info.days < 0) return { label: 'SCADUTO', cls: 'pd-doc-expired', days: info.days };
+  if (info.days <= 30) return { label: 'IN SCADENZA', cls: 'pd-doc-warning', days: info.days };
+  return { label: 'VALIDO', cls: 'pd-doc-ok', days: info.days };
 }
 
 /** Stato DVR */
 function dvrStatus(dateStr?: string | null, esente?: boolean): { label: string; cls: string } {
   if (esente) return { label: 'ESENTE', cls: 'pd-doc-esente' };
   if (!dateStr) return { label: 'ASSENTE', cls: 'pd-doc-absent' };
-  return { label: 'REGOLARE', cls: 'pd-doc-ok' };
+  const info = scadenzaInfo(dateStr);
+  if (!info) return { label: 'ASSENTE', cls: 'pd-doc-absent' };
+  if (info.days < 0) return { label: 'SCADUTO', cls: 'pd-doc-expired' };
+  return { label: 'VALIDO', cls: 'pd-doc-ok' };
 }
 
 // ─── TIPI LOCALI ──────────────────────────────────────
@@ -711,6 +718,205 @@ function normalizeDocPath(filePath: string) {
     .replace(/^uploads\/padroncini\//, '');
 }
 
+// ─── TAB STORICO CONTEGGI ─────────────────────────────
+interface StoricoMese {
+  id: string;
+  mese: string;
+  stato: 'BOZZA' | 'CHIUSO' | 'CONFERMATO';
+  fatturato: number;
+  addebiti: number;
+  compensazioni: number;
+  netto: number;
+  nSpedizioni: number | null;
+}
+
+function fmtMese(mese: string) {
+  const [y, m] = mese.split('-');
+  const months = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  return `${months[parseInt(m) - 1]} ${y}`;
+}
+
+function StatoConteggioBadge({ stato }: { stato: string }) {
+  const map: Record<string, string> = { BOZZA: 'pd-doc-absent', CHIUSO: 'pd-doc-warning', CONFERMATO: 'pd-doc-ok' };
+  return <span className={`pd-doc-badge ${map[stato] ?? 'pd-doc-absent'}`}>{stato}</span>;
+}
+
+const CHART_COLORS = {
+  fatturato: '#6366f1',
+  addebiti:  '#f97316',
+  netto:     '#22c55e',
+};
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{
+      background: 'var(--bg-primary)',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      padding: '10px 14px',
+      boxShadow: '0 4px 16px rgba(0,0,0,.12)',
+      minWidth: 180,
+    }}>
+      <p style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>{label}</p>
+      {payload.map((entry: any) => (
+        <p key={entry.dataKey} style={{ fontSize: 12, margin: '2px 0', color: entry.color }}>
+          <span style={{ fontWeight: 600 }}>{entry.name}:</span>{' '}
+          {fmtEur(entry.value)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function TabStoricoConteggi({ p }: { p: Padroncino }) {
+  const [storico, setStorico] = useState<StoricoMese[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`${API_BASE}/padroncini/${p.id}/storico-conteggi`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setStorico(data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [p.id]);
+
+  if (loading) return <div className="pd-empty-tab"><div className="pd-spinner" /></div>;
+  if (storico.length === 0) return <EmptyTab icon="📊" msg="Nessun conteggio trovato per questo padroncino" />;
+
+  const totFatt  = storico.reduce((s, r) => s + r.fatturato * 1.22, 0);
+  const totAdd   = storico.reduce((s, r) => s + r.addebiti + r.compensazioni, 0);
+  const totNetto = storico.reduce((s, r) => s + r.netto, 0);
+
+  // Dati per il grafico (ordine cronologico)
+  const chartData = [...storico]
+    .sort((a, b) => a.mese.localeCompare(b.mese))
+    .map((r) => ({
+      mese:      fmtMese(r.mese),
+      fatturato: Math.round(r.fatturato * 1.22 * 100) / 100,
+      addebiti:  Math.round((r.addebiti + r.compensazioni) * 100) / 100,
+      netto:     r.netto,
+    }));
+
+  return (
+    <div>
+      {/* ── KPI cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">Fatturato totale (c/IVA)</span>
+          <span className="pd-fin-card-val blue">{fmtEur(totFatt)}</span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">Addebiti totali</span>
+          <span className="pd-fin-card-val orange">{fmtEur(totAdd)}</span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">Netto totale</span>
+          <span className={`pd-fin-card-val ${totNetto >= 0 ? 'green' : ''}`}
+            style={totNetto < 0 ? { color: 'var(--danger)' } : {}}>
+            {fmtEur(totNetto)}
+          </span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">Mesi registrati</span>
+          <span className="pd-fin-card-val">{storico.length}</span>
+        </div>
+      </div>
+
+      {/* ── Grafico ── */}
+      <div style={{
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: '20px 8px 12px 8px',
+        marginBottom: 20,
+      }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, paddingLeft: 12 }}>
+          ANDAMENTO MENSILE
+        </p>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="mese"
+              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+              width={42}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              iconType="circle"
+              iconSize={8}
+              wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+              formatter={(value) =>
+                value === 'fatturato' ? 'Fatturato (c/IVA)'
+                : value === 'addebiti' ? 'Addebiti + Comp.'
+                : 'Netto'
+              }
+            />
+            <Bar dataKey="fatturato" fill={CHART_COLORS.fatturato} radius={[4,4,0,0]} maxBarSize={36} />
+            <Bar dataKey="addebiti"  fill={CHART_COLORS.addebiti}  radius={[4,4,0,0]} maxBarSize={36} />
+            <Line
+              type="monotone"
+              dataKey="netto"
+              stroke={CHART_COLORS.netto}
+              strokeWidth={2.5}
+              dot={{ r: 4, fill: CHART_COLORS.netto, strokeWidth: 0 }}
+              activeDot={{ r: 6 }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* ── Tabella dettaglio ── */}
+      <div className="pd-items-table-wrap">
+        <table className="pd-items-table">
+          <thead>
+            <tr>
+              <th>MESE</th>
+              <th>STATO</th>
+              <th style={{ textAlign: 'right' }}>FATTURATO (c/IVA)</th>
+              <th style={{ textAlign: 'right' }}>ADDEBITI</th>
+              <th style={{ textAlign: 'right' }}>COMP.</th>
+              <th style={{ textAlign: 'right' }}>SPEDIZIONI</th>
+              <th style={{ textAlign: 'right' }}>NETTO</th>
+            </tr>
+          </thead>
+          <tbody>
+            {storico.map((r) => (
+              <tr key={r.id} className="pd-item-row" style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/conteggi/${p.id}?mese=${r.mese}`)}>
+                <td style={{ fontWeight: 600 }}>{fmtMese(r.mese)}</td>
+                <td><StatoConteggioBadge stato={r.stato} /></td>
+                <td style={{ textAlign: 'right', color: 'var(--primary)' }}>{fmtEur(r.fatturato * 1.22)}</td>
+                <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.addebiti)}</td>
+                <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.compensazioni)}</td>
+                <td style={{ textAlign: 'right' }}>
+                  {r.nSpedizioni !== null ? r.nSpedizioni.toLocaleString('it-IT') : <span className="pd-empty">—</span>}
+                </td>
+                <td style={{ textAlign: 'right', color: r.netto >= 0 ? '#16a34a' : 'var(--danger)', fontWeight: 600 }}>
+                  {fmtEur(r.netto)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promise<void> }) {
   const [docs, setDocs] = useState<Documento[]>((p as any).documenti || []);
   const [loading, setLoading] = useState(false);
@@ -1048,28 +1254,30 @@ export function PadroncinoDetail({
   const durcSt = durcStatus(p.scadenzaDurc);
   const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
 
+  const nMezzi = p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0;
+  const nPalmari = p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0;
+  const nAutisti = p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0;
+
   const TABS = [
-    { key: 'info', label: 'Anagrafica' },
-    { key: 'mezzi', label: `Mezzi (${p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0})` },
-    { key: 'palmari', label: `Palmari (${p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0})` },
-    { key: 'autisti', label: `Autisti (${p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0})` },
-    { key: 'documenti', label: 'Documenti' },
-    { key: 'log', label: 'Log' },
+    { key: 'info',      icon: '📋', label: 'Anagrafica' },
+    { key: 'mezzi',     icon: '🚛', label: 'Mezzi',    count: nMezzi },
+    { key: 'palmari',   icon: '📱', label: 'Palmari',  count: nPalmari },
+    { key: 'autisti',   icon: '👤', label: 'Autisti',  count: nAutisti },
+    { key: 'storico',   icon: '📊', label: 'Storico Conteggi' },
+    { key: 'documenti', icon: '📁', label: 'Documenti' },
+    { key: 'log',       icon: '📜', label: 'Log' },
   ];
 
   return (
     <div className="pd-detail-panel">
       <div className="pd-detail-header">
-        {onBack && (
-          <button className="btn-outline btn-sm pd-back-btn" onClick={onBack}>← Torna alla lista</button>
-        )}
         <div className="pd-detail-header-row">
           <div className="pd-detail-title-row">
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {onBack && (
+                <button className="btn-outline btn-sm" onClick={onBack}>← Torna alla lista</button>
+              )}
               <h2 className="pd-detail-title">{p.ragioneSociale}</h2>
-              {p.codice && <span className="pd-detail-codice">Cod. {p.codice}</span>}
-            </div>
-            <div className="pd-detail-badges">
               <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
                 {p.attivo ? 'ATTIVO' : 'DISMESSO'}
               </span>
@@ -1079,11 +1287,34 @@ export function PadroncinoDetail({
                 <span className="pd-detail-fatt">Fatt. {fmtEur(p.fatturatoMese)}</span>
               )}
             </div>
+            <span className="pd-detail-codice">
+              {p.codice ? `Cod. ${p.codice} · ` : ''}{nMezzi} mezzi · {nPalmari} palmari · {nAutisti} autisti
+            </span>
           </div>
           <div className="pd-detail-actions">
             <button className="btn-outline btn-sm" onClick={() => setShowModifica(true)}>✏️ Modifica</button>
             <button className="btn-danger btn-sm" onClick={handleElimina}>🗑 Elimina</button>
           </div>
+        </div>
+      </div>
+
+      <div className="pd-fin-cards">
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">FATTURATO TOTALE</span>
+          <span className="pd-fin-card-val">{p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}</span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">ADDEBITI TOTALI</span>
+          <span className="pd-fin-card-val orange">{p.addebitiTotali != null ? fmtEur(p.addebitiTotali) : '—'}</span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">DA BONIFICARE</span>
+          <span className="pd-fin-card-val green">{p.daBonificare != null ? fmtEur(p.daBonificare) : '—'}</span>
+        </div>
+        <div className="pd-fin-card">
+          <span className="pd-fin-card-label">MEDIA MENSILE</span>
+          <span className="pd-fin-card-val blue">{p.mediaMensile != null ? fmtEur(p.mediaMensile) : '—'}</span>
+          <span className="pd-fin-card-sub">fattura/mese</span>
         </div>
       </div>
 
@@ -1094,7 +1325,8 @@ export function PadroncinoDetail({
             className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`}
             onClick={() => setTab(t.key)}
           >
-            {t.label}
+            {t.icon} {t.label}
+            {t.count !== undefined && <span className="pd-tab-count">{t.count}</span>}
           </button>
         ))}
       </div>
@@ -1104,6 +1336,7 @@ export function PadroncinoDetail({
         {tab === 'mezzi' && <TabMezzi p={p} onRefresh={handleRefresh} />}
         {tab === 'palmari' && <TabPalmari p={p} onRefresh={handleRefresh} />}
         {tab === 'autisti' && <TabAutisti p={p} onRefresh={handleRefresh} />}
+        {tab === 'storico' && <TabStoricoConteggi p={p} />}
         {tab === 'documenti' && <TabDocumenti p={p} onRefresh={handleRefresh} />}
         {tab === 'log' && <LogEntita entityType="padroncino" entityId={p.id} />}
       </div>
@@ -1200,21 +1433,25 @@ export default function PadronciniPage() {
         <h1>Padroncini</h1>
         <div className="pd-page-stats">
           <div className="pd-page-stat">
+            <span className="pd-page-stat-icon">👥</span>
             <span className="pd-page-stat-val">{stats?.attivi ?? padroncini.filter(p => p.attivo).length}</span>
             <span className="pd-page-stat-label">PADRONCINI ATTIVI</span>
             <span className="pd-page-stat-sub">{stats?.dismissi ?? 0} dismessi · {stats?.totali ?? padroncini.length} totali</span>
           </div>
           <div className="pd-page-stat pd-page-stat-alert">
+            <span className="pd-page-stat-icon">⚠️</span>
             <span className="pd-page-stat-val pd-page-stat-val-red">{stats?.alertDocumenti ?? 0}</span>
             <span className="pd-page-stat-label">ALERT DOCUMENTI</span>
             <span className="pd-page-stat-sub">DURC scaduti o in scadenza</span>
           </div>
           <div className="pd-page-stat">
+            <span className="pd-page-stat-icon">🚛</span>
             <span className="pd-page-stat-val">{stats?.flottaMezzi ?? 0}</span>
             <span className="pd-page-stat-label">FLOTTA MEZZI</span>
             <span className="pd-page-stat-sub">{stats?.flottaDisponibili ?? 0} disponibili</span>
           </div>
           <div className="pd-page-stat">
+            <span className="pd-page-stat-icon">📱</span>
             <span className="pd-page-stat-val">{stats?.palmariAttivi ?? 0}</span>
             <span className="pd-page-stat-label">PALMARI ATTIVI</span>
             <span className="pd-page-stat-sub">su {stats?.palmariTotali ?? 0} totali</span>
@@ -1245,10 +1482,10 @@ export default function PadronciniPage() {
               <th>STATO</th>
               <th>DURC</th>
               <th>DVR</th>
-              <th>PALMARI</th>
-              <th>MEZZI</th>
-              <th>AUTISTI</th>
-              <th></th>
+              <th style={{ textAlign: 'center' }}>PALM.</th>
+              <th style={{ textAlign: 'center' }}>MEZZI</th>
+              <th style={{ textAlign: 'center' }}>AUTISTI</th>
+              <th style={{ textAlign: 'right' }}>FATTURATO</th>
             </tr>
           </thead>
           <tbody>
@@ -1257,41 +1494,44 @@ export default function PadronciniPage() {
             )}
             {filtered.map((p) => {
               const durcSt = durcStatus(p.scadenzaDurc);
+              const durcInfo = scadenzaInfo(p.scadenzaDurc);
               const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
               return (
                 <tr key={p.id} className="pd-row"
                   onClick={() => navigate(`/padroncini/${p.id}`)}>
                   <td>
                     <span className="pd-ragsoc">{p.ragioneSociale}</span>
-                    {p.partitaIva && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>PI: {p.partitaIva}</div>}
+                    <div className="pd-codice-row">
+                      {p.codice ? `Cod. ${p.codice}` : ''}{p.codice && p.partitaIva ? ' · ' : ''}{p.partitaIva ? `PI: ${p.partitaIva}` : ''}
+                    </div>
                   </td>
                   <td>
                     <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
                       {p.attivo ? 'ATTIVO' : 'DISMESSO'}
                     </span>
                   </td>
-                  <td><span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span></td>
-                  <td><span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span></td>
                   <td>
+                    <span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span>
+                    {durcInfo && <span className="pd-scad-sub">{durcInfo.label}</span>}
+                  </td>
+                  <td><span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span></td>
+                  <td style={{ textAlign: 'center' }}>
                     <span className="pd-count pd-count-blue">
                       {p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ textAlign: 'center' }}>
                     <span className="pd-count pd-count-blue">
                       {p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ textAlign: 'center' }}>
                     <span className="pd-count pd-count-blue">
                       {p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0}
                     </span>
                   </td>
-                  <td>
-                    <button className="btn-primary btn-sm"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/padroncini/${p.id}`); }}>
-                      Dettagli
-                    </button>
+                  <td className="pd-fatturato">
+                    {p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}
                   </td>
                 </tr>
               );

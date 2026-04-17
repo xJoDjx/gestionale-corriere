@@ -1,9 +1,10 @@
 // src/features/palmari/DettaglioPalmare.tsx
-// BUG 2 FIX: aggiunto form state + handleSave per consentire la modifica dei dati
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { palmariApi, padronciniApi } from '../../lib/api';
 import type { Palmare, Padroncino } from '../../lib/api';
+import LogEntita from '../log/LogEntita';
+import '../mezzi/FlottaMezzi.css';
 
 const fmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -12,11 +13,13 @@ const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
 
 const STATO_META: Record<string, { label: string; cls: string }> = {
-  DISPONIBILE: { label: 'Disponibile', cls: 'badge-green' },
-  ASSEGNATO:   { label: 'Assegnato',   cls: 'badge-blue' },
-  GUASTO:      { label: 'Guasto',      cls: 'badge-red' },
-  DISMESSO:    { label: 'Dismesso',    cls: 'badge-gray' },
+  DISPONIBILE: { label: 'Disponibile', cls: 'fm-badge-green' },
+  ASSEGNATO:   { label: 'Assegnato',   cls: 'fm-badge-blue' },
+  GUASTO:      { label: 'Guasto',      cls: 'fm-badge-red' },
+  DISMESSO:    { label: 'Dismesso',    cls: 'fm-badge-gray' },
 };
+
+type TabKey = 'info' | 'assegnazioni' | 'log';
 
 export default function DettaglioPalmare() {
   const { id } = useParams<{ id: string }>();
@@ -26,11 +29,11 @@ export default function DettaglioPalmare() {
   const [padroncini, setPadroncini] = useState<Padroncino[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [assegnaForm, setAssegnaForm] = useState({ padroncinoId: '', dataInizio: '' });
   const [showAssegna, setShowAssegna] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // ── FIX BUG 2: stato form per modifica ──────────────────
   const [form, setFormState] = useState<Partial<Palmare>>({});
   const [dirty, setDirty] = useState(false);
 
@@ -48,7 +51,7 @@ export default function DettaglioPalmare() {
         padronciniApi.list({ limit: '200' }),
       ]);
       setPalmare(p);
-      setFormState(p); // ← popola il form con i dati del palmare
+      setFormState(p);
       setDirty(false);
       setPadroncini(pResp.data);
     } catch (e: any) {
@@ -60,7 +63,6 @@ export default function DettaglioPalmare() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── FIX BUG 2: salvataggio modifiche ──────────────────────
   const handleSave = async () => {
     if (!id) return;
     setSaving(true);
@@ -100,7 +102,7 @@ export default function DettaglioPalmare() {
   };
 
   const handleChiudiAssegnazione = async (assegnazioneId: string) => {
-    if (!confirm('Chiudere l\'assegnazione corrente?')) return;
+    if (!window.confirm('Chiudere l\'assegnazione corrente?')) return;
     try {
       await palmariApi.chiudiAssegnazione(assegnazioneId);
       await load();
@@ -110,202 +112,274 @@ export default function DettaglioPalmare() {
   };
 
   if (loading) return (
-    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-      Caricamento palmare...
+    <div className="fm-page">
+      <div className="fm-loading"><div className="fm-spinner" /><span>Caricamento palmare...</span></div>
     </div>
   );
-  if (error) return (
-    <div style={{ padding: 32 }}>
-      <div style={{ color: '#dc2626', marginBottom: 16 }}>⚠️ {error}</div>
-      <button className="btn-primary" onClick={() => navigate('/palmari')}>← Torna ai Palmari</button>
+  if (error || !palmare) return (
+    <div className="fm-page">
+      <div className="fm-error">
+        <span>⚠️ {error || 'Palmare non trovato'}</span>
+        <button className="btn-outline" onClick={() => navigate('/palmari')}>← Torna ai Palmari</button>
+      </div>
     </div>
   );
-  if (!palmare) return null;
 
   const attiva = palmare.assegnazioni?.find((a) => !a.dataFine);
-  const storiche = palmare.assegnazioni?.filter((a) => a.dataFine) ?? [];
-  const meta = STATO_META[palmare.stato] || { label: palmare.stato, cls: 'badge-gray' };
+  const meta = STATO_META[palmare.stato] || { label: palmare.stato, cls: 'fm-badge-gray' };
+
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: 'info', label: 'Dati Palmare' },
+    { key: 'assegnazioni', label: `Assegnazioni (${palmare.assegnazioni?.length ?? 0})` },
+    { key: 'log', label: 'Log' },
+  ];
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button
-          onClick={() => navigate('/palmari')}
-          style={{
-            background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-            color: 'var(--text-primary)', fontSize: 13,
-          }}
-        >← Palmari</button>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>📱 {palmare.codice}</h1>
-        <span className={`palm-badge ${meta.cls}`} style={{ fontSize: 12 }}>{meta.label.toUpperCase()}</span>
-
-        {/* ── FIX BUG 2: pulsante Salva in header ── */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+    <div className="fm-page">
+      {/* ── TOPBAR ── */}
+      <div className="dm-topbar">
+        <button className="btn-ghost-sm" onClick={() => navigate('/palmari')}>← Palmari</button>
+        <div className="dm-topbar-title">
+          <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800 }}>
+            📱 {palmare.codice}
+          </h1>
+          {palmare.marca && palmare.modello && (
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              {palmare.marca} {palmare.modello}
+            </span>
+          )}
+          <span className={`fm-badge ${meta.cls}`}>{meta.label.toUpperCase()}</span>
+          {attiva && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              → {attiva.ragioneSociale}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
           {dirty && (
-            <button
-              className="btn-primary"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ fontSize: 13 }}
-            >
+            <button className="btn-primary" disabled={saving} onClick={handleSave}>
               {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
             </button>
           )}
-          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>✓ Salvato</span>}
+          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>✓ Salvato</span>}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* ── TABS ── */}
+      <div className="dm-tabs-bar">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`dm-tab ${activeTab === t.key ? 'dm-tab-active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-        {/* ── FIX BUG 2: Scheda anagrafica EDITABILE ── */}
-        <div className="detail-card">
-          <h3 className="detail-card-title">📋 Dati Palmare</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Codice</label>
-              <input
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, boxSizing: 'border-box' }}
-                value={form.codice ?? ''}
-                onChange={(e) => set('codice', e.target.value.toUpperCase())}
-              />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Marca</label>
+      {/* ── TAB INFO ── */}
+      {activeTab === 'info' && (
+        <div className="dm-layout">
+          <div className="dm-col-left">
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>📱</span> Identificazione</div>
+              <div className="dm-section-row">
+                <div className="dm-field">
+                  <label>Codice</label>
+                  <input
+                    className="dm-input"
+                    style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+                    value={form.codice ?? ''}
+                    onChange={(e) => set('codice', e.target.value.toUpperCase())}
+                  />
+                </div>
+                <div className="dm-field">
+                  <label>Stato</label>
+                  <select
+                    className="dm-select"
+                    value={form.stato ?? ''}
+                    onChange={(e) => set('stato', e.target.value)}
+                  >
+                    <option value="DISPONIBILE">Disponibile</option>
+                    <option value="ASSEGNATO">Assegnato</option>
+                    <option value="GUASTO">Guasto</option>
+                    <option value="DISMESSO">Dismesso</option>
+                  </select>
+                </div>
+              </div>
+              <div className="dm-section-row">
+                <div className="dm-field">
+                  <label>Marca</label>
+                  <input
+                    className="dm-input"
+                    value={form.marca ?? ''}
+                    onChange={(e) => set('marca', e.target.value)}
+                    placeholder="—"
+                  />
+                </div>
+                <div className="dm-field">
+                  <label>Modello</label>
+                  <input
+                    className="dm-input"
+                    value={form.modello ?? ''}
+                    onChange={(e) => set('modello', e.target.value)}
+                    placeholder="—"
+                  />
+                </div>
+              </div>
+              <div className="dm-field dm-field-full">
+                <label>IMEI / Seriale</label>
                 <input
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                  value={form.marca ?? ''}
-                  onChange={(e) => set('marca', e.target.value)}
+                  className="dm-input"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                  value={form.imei ?? ''}
+                  onChange={(e) => set('imei', e.target.value)}
                   placeholder="—"
                 />
               </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Modello</label>
+              <div className="dm-field dm-field-full">
+                <label>SIM / Numero</label>
                 <input
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                  value={form.modello ?? ''}
-                  onChange={(e) => set('modello', e.target.value)}
+                  className="dm-input"
+                  style={{ fontFamily: 'monospace' }}
+                  value={form.simNumero ?? ''}
+                  onChange={(e) => set('simNumero', e.target.value)}
                   placeholder="—"
                 />
               </div>
+              <div className="dm-field dm-field-full">
+                <label>Note</label>
+                <textarea
+                  className="dm-textarea"
+                  rows={3}
+                  value={form.note ?? ''}
+                  onChange={(e) => set('note', e.target.value)}
+                  placeholder="Note aggiuntive…"
+                />
+              </div>
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>IMEI / Seriale</label>
-              <input
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }}
-                value={form.imei ?? ''}
-                onChange={(e) => set('imei', e.target.value)}
-                placeholder="—"
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>SIM / Numero</label>
-              <input
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }}
-                value={form.simNumero ?? ''}
-                onChange={(e) => set('simNumero', e.target.value)}
-                placeholder="—"
-              />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Tariffa giornaliera (€)</label>
+          </div>
+
+          <div className="dm-col-right">
+            {/* Tariffa */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>💶</span> Tariffa</div>
+              <div className="dm-field dm-field-full">
+                <label>Tariffa Mensile (€)</label>
                 <input
-                  type="number" step="0.01"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--primary)', fontSize: 13, fontWeight: 700, boxSizing: 'border-box' }}
+                  className="dm-input"
+                  type="number"
+                  step="0.01"
+                  style={{ color: 'var(--primary)', fontWeight: 700 }}
                   value={form.tariffaMensile ?? ''}
                   onChange={(e) => set('tariffaMensile', e.target.value ? parseFloat(e.target.value) : null)}
                 />
               </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Stato</label>
-                <select
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
-                  value={form.stato ?? ''}
-                  onChange={(e) => set('stato', e.target.value)}
-                >
-                  <option value="DISPONIBILE">Disponibile</option>
-                  <option value="ASSEGNATO">Assegnato</option>
-                  <option value="GUASTO">Guasto</option>
-                  <option value="DISMESSO">Dismesso</option>
-                </select>
-              </div>
+              {form.tariffaMensile != null && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  Annuale stimato: {fmtEur(Number(form.tariffaMensile) * 12)}
+                </div>
+              )}
             </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>Note</label>
-              <textarea
-                rows={2}
-                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
-                value={form.note ?? ''}
-                onChange={(e) => set('note', e.target.value)}
-                placeholder="Note aggiuntive…"
-              />
+
+            {/* Assegnazione corrente */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>👤</span> Assegnazione Corrente</div>
+              {attiva ? (
+                <div className="dm-assegn-row dm-assegn-attiva">
+                  <div>
+                    <span className="dm-assegn-nome">{attiva.ragioneSociale}</span>
+                    <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>
+                  </div>
+                  <div className="dm-assegn-date">dal {fmt(attiva.dataInizio)}</div>
+                  <button
+                    className="btn-outline btn-sm"
+                    style={{ color: '#dc2626', borderColor: '#dc2626', marginTop: 8 }}
+                    onClick={() => handleChiudiAssegnazione(attiva.id)}
+                  >
+                    🔓 Chiudi assegnazione
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nessun padroncino assegnato</span>
+                  <button className="btn-primary btn-sm" onClick={() => { setShowAssegna(true); setActiveTab('assegnazioni'); }}>
+                    🔗 Assegna Padroncino
+                  </button>
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Creato il {fmt(palmare.createdAt)}
+
+            {/* Info creazione */}
+            <div className="dm-section-card">
+              <div className="dm-section-title"><span>📋</span> Info Record</div>
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 0', color: 'var(--text-secondary)' }}>Creato il</td>
+                    <td style={{ padding: '4px 0', textAlign: 'right' }}>{fmt(palmare.createdAt)}</td>
+                  </tr>
+                  {palmare.imei && (
+                    <tr>
+                      <td style={{ padding: '4px 0', color: 'var(--text-secondary)' }}>IMEI</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', fontFamily: 'monospace', fontSize: 11 }}>{palmare.imei}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="dm-actions-card">
+              <button className="btn-outline" onClick={() => navigate('/palmari')}>← Annulla</button>
+              <button className="btn-primary" disabled={!dirty || saving} onClick={handleSave}>
+                {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* ── Assegnazione attiva ── */}
-        <div className="detail-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 className="detail-card-title" style={{ margin: 0 }}>👤 Assegnazione Corrente</h3>
+      {/* ── TAB ASSEGNAZIONI ── */}
+      {activeTab === 'assegnazioni' && (
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              Storico Assegnazioni
+            </h3>
             {!attiva && (
-              <button
-                className="btn-primary btn-sm"
-                onClick={() => setShowAssegna((v) => !v)}
-              >+ Assegna</button>
+              <button className="btn-primary btn-sm" onClick={() => setShowAssegna((v) => !v)}>
+                🔗 Nuova Assegnazione
+              </button>
             )}
           </div>
 
-          {attiva ? (
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)', marginBottom: 8 }}>
-                {attiva.ragioneSociale}
-              </div>
-              <table className="detail-table">
-                <tbody>
-                  <tr><td>Data inizio</td><td>{fmt(attiva.dataInizio)}</td></tr>
-                  <tr><td>Fine prevista</td><td>{attiva.dataFine ? fmt(attiva.dataFine) : 'In corso'}</td></tr>
-                </tbody>
-              </table>
-              <button
-                className="btn-sm"
-                style={{ marginTop: 12, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}
-                onClick={() => handleChiudiAssegnazione(attiva.id)}
-              >Chiudi assegnazione</button>
-            </div>
-          ) : (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Nessuna assegnazione attiva</div>
-          )}
-
-          {/* Form assegna */}
+          {/* Form nuova assegnazione */}
           {showAssegna && !attiva && (
-            <div style={{ marginTop: 16, padding: 16, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Padroncino</label>
-                <select
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}
-                  value={assegnaForm.padroncinoId}
-                  onChange={(e) => setAssegnaForm((f) => ({ ...f, padroncinoId: e.target.value }))}
-                >
-                  <option value="">Seleziona padroncino...</option>
-                  {padroncini.filter(p => p.attivo).map((p) => (
-                    <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Data inizio</label>
-                <input
-                  type="date"
-                  style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}
-                  value={assegnaForm.dataInizio}
-                  onChange={(e) => setAssegnaForm((f) => ({ ...f, dataInizio: e.target.value }))}
-                />
+            <div style={{ marginBottom: 20, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Padroncino</label>
+                  <select
+                    className="dm-select"
+                    value={assegnaForm.padroncinoId}
+                    onChange={(e) => setAssegnaForm((f) => ({ ...f, padroncinoId: e.target.value }))}
+                  >
+                    <option value="">Seleziona padroncino...</option>
+                    {padroncini.filter((p) => p.attivo).map((p) => (
+                      <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Data inizio</label>
+                  <input
+                    type="date"
+                    className="dm-input"
+                    value={assegnaForm.dataInizio}
+                    onChange={(e) => setAssegnaForm((f) => ({ ...f, dataInizio: e.target.value }))}
+                  />
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn-primary btn-sm" onClick={handleAssegna} disabled={saving}>
@@ -315,33 +389,49 @@ export default function DettaglioPalmare() {
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── Storico assegnazioni ── */}
-        {storiche.length > 0 && (
-          <div className="detail-card" style={{ gridColumn: '1 / -1' }}>
-            <h3 className="detail-card-title">📜 Storico Assegnazioni</h3>
-            <table className="detail-table">
-              <thead>
-                <tr>
-                  <th>Padroncino</th>
-                  <th>Data inizio</th>
-                  <th>Data fine</th>
-                </tr>
-              </thead>
-              <tbody>
-                {storiche.map((a) => (
-                  <tr key={a.id}>
-                    <td>{a.ragioneSociale}</td>
-                    <td>{fmt(a.dataInizio)}</td>
-                    <td>{fmt(a.dataFine)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          {!palmare.assegnazioni || palmare.assegnazioni.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              Nessuna assegnazione registrata
+            </div>
+          ) : (
+            <div className="dm-assegnazioni-list">
+              {palmare.assegnazioni.map((a) => (
+                <div key={a.id} className={`dm-assegn-row ${!a.dataFine ? 'dm-assegn-attiva' : ''}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+                    <div>
+                      <span className="dm-assegn-nome">{a.ragioneSociale}</span>
+                      {!a.dataFine && <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>}
+                    </div>
+                    {!a.dataFine && (
+                      <button
+                        className="btn-outline btn-sm"
+                        style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                        onClick={() => handleChiudiAssegnazione(a.id)}
+                      >
+                        🔓 Chiudi
+                      </button>
+                    )}
+                  </div>
+                  <div className="dm-assegn-date">
+                    {fmt(a.dataInizio)} → {a.dataFine ? fmt(a.dataFine) : 'in corso'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB LOG ── */}
+      {activeTab === 'log' && id && (
+        <div style={{ padding: '20px 24px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
+            Log modifiche palmare
+          </h3>
+          <LogEntita entityType="palmare" entityId={id} />
+        </div>
+      )}
     </div>
   );
 }
