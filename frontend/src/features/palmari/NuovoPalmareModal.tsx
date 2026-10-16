@@ -81,7 +81,7 @@ export default function NuovoPalmareModal({ open, onClose, onSave }: Props) {
 
         <div className="form-field">
           <label className="form-label">Tariffa giornaliera (€)</label>
-          <input className="form-input" type="number" step="0.01" value={form.tariffa} onChange={(e) => set('tariffa', e.target.value)} placeholder="35,00" />
+          <input className="form-input" type="number" step="0.01" value={form.tariffa} onChange={(e) => set('tariffa', e.target.value)} placeholder="1,99" />
         </div>
 
         <div className="form-field">

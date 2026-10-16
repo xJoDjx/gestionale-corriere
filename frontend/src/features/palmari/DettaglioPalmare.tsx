@@ -291,7 +291,7 @@ export default function DettaglioPalmare() {
             <div className="dm-section-card">
               <div className="dm-section-title"><span>💶</span> Tariffa</div>
               <div className="dm-field dm-field-full">
-                <label>Tariffa Mensile (€)</label>
+                <label>Tariffa giornaliera (€/giorno)</label>
                 <input
                   className="dm-input"
                   type="number"
@@ -303,7 +303,7 @@ export default function DettaglioPalmare() {
               </div>
               {form.tariffaMensile != null && (
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
-                  Annuale stimato: {fmtEur(Number(form.tariffaMensile) * 12)}
+                  Mese (30 gg): {fmtEur(Number(form.tariffaMensile) * 30)} · Anno: {fmtEur(Number(form.tariffaMensile) * 365)}
                 </div>
               )}
             </div>

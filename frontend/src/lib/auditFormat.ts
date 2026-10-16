@@ -108,7 +108,7 @@ export const CODICE_AUTISTA_FIELD_PRIORITY: [string, string][] = [
 
 // Campi palmare con label leggibile (in ordine di priorità da mostrare)
 export const PALMARE_FIELD_PRIORITY: [string, string][] = [
-  ['tariffaMensile', 'tariffa mensile'],
+  ['tariffaMensile', 'tariffa giornaliera'],
   ['stato', 'stato'],
   ['codiceAssociato', 'codice associato'],
   ['marca', 'marca'],
@@ -153,7 +153,7 @@ const FIELD_LABELS: Record<string, string> = {
   segno: 'segno', riferimentoId: 'riferimento', descrizione: 'descrizione', importo: 'importo',
   tipo: 'tipo', codice: 'codice', nome: 'nome', cognome: 'cognome', note: 'note', zone: 'zone',
   target: 'target', bonus: 'bonus', malus: 'malus', attivo: 'stato',
-  tariffaFissa: 'tariffa fissa', tariffaRitiro: 'tariffa ritiro', tariffaMensile: 'tariffa mensile',
+  tariffaFissa: 'tariffa fissa', tariffaRitiro: 'tariffa ritiro', tariffaMensile: 'tariffa giornaliera',
   stato: 'stato', codiceAssociato: 'codice associato', marca: 'marca', modello: 'modello',
   imei: 'imei', simNumero: 'numero sim',
   ragioneSociale: 'ragione sociale', partitaIva: 'partita IVA', codiceFiscale: 'codice fiscale',

@@ -288,7 +288,7 @@ export default function Palmari() {
         <div className="pm-kpi-card pm-kpi-green">
           <span className="pm-kpi-label">ENTRATE MENSILI</span>
           <span className="pm-kpi-val pm-kpi-val-green">{fmtEur(stats?.entrateMensili)}</span>
-          <span className="pm-kpi-sub">tariffe</span>
+          <span className="pm-kpi-sub">tariffe giornaliere × giorni del mese</span>
         </div>
       </div>
 
@@ -488,7 +488,7 @@ export default function Palmari() {
               <SortTh label="SERIALE / MODELLO" col="codice"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortTh label="STATO"              col="stato"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortTh label="PADRONCINO"         col="padroncino" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="pm-th-sort pm-th-purple" onClick={() => handleSort('tariffa')}>TARIFFA {sortKey === 'tariffa' ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}</th>
+              <th className="pm-th-sort pm-th-purple" onClick={() => handleSort('tariffa')}>TARIFFA €/GG {sortKey === 'tariffa' ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}</th>
               <SortTh label="DATA ASSEGNAZIONE"  col="dataAss"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th className="pm-th">NOTE</th>
               <th className="pm-th"></th>
@@ -528,7 +528,7 @@ export default function Palmari() {
                   </td>
                   <td className="pm-td pm-td-purple">
                     {p.tariffaMensile != null
-                      ? <span className="pm-tariffa">{fmtEur(p.tariffaMensile)}</span>
+                      ? <span className="pm-tariffa">{fmtEur(p.tariffaMensile)}<small style={{ opacity: 0.7 }}>/gg</small></span>
                       : <span className="pm-empty">—</span>
                     }
                   </td>

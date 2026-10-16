@@ -77,7 +77,9 @@ export class PalmariService {
       disponibili,
       assegnati,
       guasti,
-      entrateMensili: Number(rateAttive._sum.tariffaMensile ?? 0),
+      // tariffaMensile contiene la tariffa GIORNALIERA: la portiamo a mese con i giorni del mese corrente
+      entrateMensili: +(Number(rateAttive._sum.tariffaMensile ?? 0) *
+        new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()).toFixed(2),
     };
   }
 
