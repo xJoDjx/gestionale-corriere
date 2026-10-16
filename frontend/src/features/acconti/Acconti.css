@@ -263,16 +263,25 @@
   font-size: 13px;
 }
 
+.acc-table thead tr { background: #eff6ff; }
+
 .acc-table th {
   padding: 10px 14px;
   text-align: left;
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: #66758A;
   text-transform: uppercase;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border);
+  background: #f2f5f7;
+  border-bottom: 1px solid #e0e5eb;
+}
+
+[data-theme="dark"] .acc-table thead tr,
+[data-theme="dark"] .acc-table th {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--badge-blue);
+  border-bottom-color: var(--border);
 }
 
 .acc-table td {
@@ -281,9 +290,8 @@
   color: var(--text-secondary);
 }
 
-.acc-row:hover td {
-  background: var(--bg-hover);
-}
+.acc-table tbody tr.acc-row:nth-child(even) td { background: var(--table-row-alt); }
+.acc-row:hover td { background: var(--table-row-hover); }
 
 .acc-row:last-child td {
   /* keep border for footer */
@@ -356,8 +364,25 @@
 .acc-actions {
   display: flex;
   justify-content: center;
+  gap: 4px;
   opacity: 0;
   transition: opacity 0.12s;
+}
+
+.acc-edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 4px;
+  transition: all 0.12s;
+}
+
+.acc-edit-btn:hover {
+  background: var(--info-bg, rgba(59,130,246,.1));
+  color: var(--info, #3b82f6);
 }
 
 .acc-row:hover .acc-actions {
@@ -390,39 +415,7 @@
   color: var(--text-primary);
 }
 
-/* Buttons (riuso globale) */
-.btn-primary {
-  padding: 8px 18px;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  transition: background 0.15s;
-}
-
-.btn-primary:hover { background: var(--primary-hover); }
-
-.btn-outline {
-  padding: 8px 18px;
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  transition: all 0.15s;
-}
-
-.btn-outline:hover {
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-}
+/* btn-primary, btn-outline → definiti in global.css */
 
 .req { color: var(--danger); margin-left: 2px; }
 .input-error { border-color: var(--danger) !important; }

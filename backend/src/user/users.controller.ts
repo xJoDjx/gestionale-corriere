@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, Req,
+  Controller, Get, Post, Put, Delete, Param, Body, Req, ForbiddenException,
 } from '@nestjs/common';
 import { UsersService, CreateUserDto, UpdateUserDto } from './users.service';
 
@@ -29,8 +29,7 @@ export class UsersController {
 
   @Put(':id/toggle-attivo')
   toggleAttivo(@Param('id') id: string, @Req() req: any) {
-    const requesterId: string = req.user?.id ?? id; // fallback safe
-    return this.service.toggleAttivo(id, requesterId);
+    return this.service.toggleAttivo(id, req.user.id);
   }
 
   @Put(':id/password')
@@ -38,9 +37,21 @@ export class UsersController {
     return this.service.changePassword(id, body.password);
   }
 
+  @Put(':id/sezioni')
+  updateSezioni(@Param('id') id: string, @Body() body: { sezioni: string[] }) {
+    return this.service.updateSezioni(id, body.sezioni ?? []);
+  }
+
+  @Get(':id/password-plain')
+  getPasswordPlain(@Param('id') id: string, @Req() req: any) {
+    if (req.user?.ruolo !== 'ADMIN') {
+      throw new ForbiddenException('Solo gli Admin possono visualizzare le password');
+    }
+    return this.service.getPasswordPlain(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: any) {
-    const requesterId: string = req.user?.id ?? '';
-    return this.service.remove(id, requesterId);
+    return this.service.remove(id, req.user.id);
   }
 }

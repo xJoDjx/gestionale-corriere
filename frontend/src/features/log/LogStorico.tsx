@@ -1,18 +1,11 @@
 // src/features/log/LogStorico.tsx
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { api } from '../../lib/api';
+import {
+  type AuditEntry, ENTITY_LABELS, AZIONE_COLORS, AZIONE_LABELS,
+  getHumanReadableDescription, fmtDate,
+} from '../../lib/auditFormat';
 import './LogStorico.css';
-
-interface AuditEntry {
-  id: string;
-  entityType: string;
-  entityId: string;
-  azione: string;
-  createdAt: string;
-  dataPrima: Record<string, any> | null;
-  dataDopo: Record<string, any> | null;
-  user: { nome: string; cognome: string; email: string } | null;
-}
 
 interface LogResponse {
   data: AuditEntry[];
@@ -22,98 +15,23 @@ interface LogResponse {
   totalPages: number;
 }
 
-const ENTITY_LABELS: Record<string, string> = {
-  mezzo: '🚚 Mezzo',
-  padroncino: '👤 Padroncino',
-  palmare: '📱 Palmare',
-  codice_autista: '🏷️ Autista',
-  codiceAutista: '🏷️ Autista',
-  acconto: '💰 Acconto',
-  assegnazione_mezzo: '🔗 Ass. Mezzo',
-  assegnazione_palmare: '🔗 Ass. Palmare',
-  assegnazione_codice_autista: '🔗 Ass. Autista',
-};
-
-const AZIONE_COLORS: Record<string, string> = {
-  CREATE: 'log-action-create',
-  UPDATE: 'log-action-update',
-  DELETE: 'log-action-delete',
-  ASSEGNA: 'log-action-assegna',
-  CHIUDI_ASSEGNAZIONE: 'log-action-chiudi',
-};
-
-const AZIONE_LABELS: Record<string, string> = {
-  CREATE: '+ Creazione',
-  UPDATE: '✏️ Modifica',
-  DELETE: '🗑 Eliminazione',
-  ASSEGNA: '🔗 Assegnazione',
-  CHIUDI_ASSEGNAZIONE: '🔓 Fine assegnazione',
-};
-
-/**
- * Ricava una descrizione leggibile dall'entità e dai suoi dati,
- * sostituendo il cuid grezzo nella colonna "Entità".
- */
-function getEntityDescription(entry: AuditEntry): string {
-  const d = entry.dataDopo ?? entry.dataPrima;
-
-  switch (entry.entityType) {
-    case 'assegnazione_mezzo':
-      if (d?.targa && d?.ragioneSociale) return `${d.targa} → ${d.ragioneSociale}`;
-      if (d?.targa) return `Mezzo ${d.targa}`;
-      break;
-
-    case 'assegnazione_palmare':
-      if (d?.codicePalmare && d?.ragioneSociale) return `${d.codicePalmare} → ${d.ragioneSociale}`;
-      if (d?.codicePalmare) return `Palmare ${d.codicePalmare}`;
-      break;
-
-    case 'assegnazione_codice_autista':
-      if (d?.codiceAutista && d?.ragioneSociale) return `${d.codiceAutista} → ${d.ragioneSociale}`;
-      if (d?.codiceAutista) return `Autista ${d.codiceAutista}`;
-      break;
-
-    case 'mezzo':
-      if (d?.targa) return `Targa ${d.targa}`;
-      if (d?.marca && d?.modello) return `${d.marca} ${d.modello}`;
-      break;
-
-    case 'padroncino':
-      if (d?.ragioneSociale) return d.ragioneSociale;
-      break;
-
-    case 'palmare':
-      if (d?.codice) return `Palmare ${d.codice}`;
-      break;
-
-    case 'codice_autista':
-    case 'codiceAutista':
-      if (d?.codice) return `Autista ${d.codice}`;
-      if (d?.nome || d?.cognome) return [d?.nome, d?.cognome].filter(Boolean).join(' ');
-      break;
-
-    case 'acconto':
-      if (d?.codiceAutista) return `${d.codiceAutista}${d?.padroncinoCollegato ? ` (${d.padroncinoCollegato})` : ''}`;
-      break;
-  }
-
-  // Fallback: ultimi 8 chars del cuid
-  return `#${entry.entityId.slice(-8)}`;
-}
-
-function fmtDate(d: string) {
-  return new Date(d).toLocaleString('it-IT', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
 function DiffViewer({ prima, dopo }: { prima: any; dopo: any }) {
   if (!prima && !dopo) return null;
+
+  const skipDiff = new Set([
+    'createdAt', 'updatedAt', 'deletedAt',
+    'conteggioMensileId', 'padroncinoId', 'mezzoId', 'palmareId',
+    'codiceAutistaId', 'userId', 'ordine', 'id',
+    // Campi di relazione: compaiono/spariscono solo perché una delle due
+    // versioni confrontate include la relazione e l'altra no (rumore, non
+    // una modifica reale).
+    'assegnazioni', 'acconti', 'kmAttualiAl', 'modificaManuale',
+  ]);
+
   const keys = Array.from(new Set([
     ...Object.keys(prima ?? {}),
     ...Object.keys(dopo ?? {}),
-  ])).filter((k) => !['createdAt', 'updatedAt', 'deletedAt'].includes(k));
+  ])).filter((k) => !skipDiff.has(k));
 
   const changed = keys.filter((k) => {
     const v1 = JSON.stringify(prima?.[k]);
@@ -122,6 +40,14 @@ function DiffViewer({ prima, dopo }: { prima: any; dopo: any }) {
   });
 
   if (changed.length === 0) return <span className="log-nodiff">Nessuna variazione rilevata</span>;
+
+  const fmtVal = (v: any) => {
+    if (v == null) return <em>—</em>;
+    const s = String(v);
+    // Date ISO
+    if (s.match(/^\d{4}-\d{2}-\d{2}T/)) return new Date(s).toLocaleDateString('it-IT');
+    return s;
+  };
 
   return (
     <table className="log-diff-table">
@@ -132,8 +58,8 @@ function DiffViewer({ prima, dopo }: { prima: any; dopo: any }) {
         {changed.map((k) => (
           <tr key={k}>
             <td className="log-diff-key">{k}</td>
-            <td className="log-diff-before">{prima?.[k] != null ? String(prima[k]) : <em>—</em>}</td>
-            <td className="log-diff-after">{dopo?.[k] != null ? String(dopo[k]) : <em>—</em>}</td>
+            <td className="log-diff-before">{fmtVal(prima?.[k])}</td>
+            <td className="log-diff-after">{fmtVal(dopo?.[k])}</td>
           </tr>
         ))}
       </tbody>
@@ -143,6 +69,8 @@ function DiffViewer({ prima, dopo }: { prima: any; dopo: any }) {
 
 const LIMIT = 50;
 
+interface UtenteOption { id: string; nome: string; cognome: string; }
+
 export default function LogStorico() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -151,9 +79,28 @@ export default function LogStorico() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Filtri
   const [filterEntityType, setFilterEntityType] = useState('');
   const [filterAzione, setFilterAzione] = useState('');
+  const [filterUserId, setFilterUserId] = useState('');
+  const [utenti, setUtenti] = useState<UtenteOption[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api.get<UtenteOption[]>('/users')
+      .then(setUtenti)
+      .catch(() => {});
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(value);
+      setPage(1);
+    }, 350);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,6 +112,8 @@ export default function LogStorico() {
       });
       if (filterEntityType) params.set('entityType', filterEntityType);
       if (filterAzione) params.set('azione', filterAzione);
+      if (filterUserId) params.set('userId', filterUserId);
+      if (search) params.set('search', search);
 
       const res = await api.get<LogResponse>(`/audit?${params}`);
       setEntries(res.data);
@@ -174,12 +123,10 @@ export default function LogStorico() {
     } finally {
       setLoading(false);
     }
-  }, [page, filterEntityType, filterAzione]);
+  }, [page, filterEntityType, filterAzione, filterUserId, search]);
 
   useEffect(() => { load(); }, [load]);
-
-  // Reset pagina quando cambiano i filtri
-  useEffect(() => { setPage(1); }, [filterEntityType, filterAzione]);
+  useEffect(() => { setPage(1); }, [filterEntityType, filterAzione, filterUserId]);
 
   return (
     <div className="log-page">
@@ -190,12 +137,20 @@ export default function LogStorico() {
         </div>
       </div>
 
-      {/* Filtri */}
-      <div className="log-filters">
+      {/* Toolbar: ricerca + filtri */}
+      <div className="log-toolbar">
+        <input
+          className="log-search"
+          type="search"
+          placeholder="🔍 Cerca targa, padroncino, importo..."
+          value={searchInput}
+          onChange={(e) => handleSearchChange(e.target.value)}
+        />
+
         <select
-          className="log-filter-select"
+          className="log-select"
           value={filterEntityType}
-          onChange={(e) => setFilterEntityType(e.target.value)}
+          onChange={(e) => { setFilterEntityType(e.target.value); setPage(1); }}
         >
           <option value="">Tutte le entità</option>
           <option value="mezzo">Mezzi</option>
@@ -203,15 +158,19 @@ export default function LogStorico() {
           <option value="palmare">Palmari</option>
           <option value="codice_autista">Codici Autista</option>
           <option value="acconto">Acconti</option>
+          <option value="documento">Documenti</option>
+          <option value="conteggio_mensile">Conteggi Mensili</option>
+          <option value="conteggio_riga">Righe Conteggio</option>
           <option value="assegnazione_mezzo">Assegnazioni Mezzo</option>
           <option value="assegnazione_palmare">Assegnazioni Palmare</option>
           <option value="assegnazione_codice_autista">Assegnazioni Autista</option>
+          <option value="utente">Utenti (accessi)</option>
         </select>
 
         <select
-          className="log-filter-select"
+          className="log-select"
           value={filterAzione}
-          onChange={(e) => setFilterAzione(e.target.value)}
+          onChange={(e) => { setFilterAzione(e.target.value); setPage(1); }}
         >
           <option value="">Tutte le azioni</option>
           <option value="CREATE">Creazione</option>
@@ -219,11 +178,37 @@ export default function LogStorico() {
           <option value="DELETE">Eliminazione</option>
           <option value="ASSEGNA">Assegnazione</option>
           <option value="CHIUDI_ASSEGNAZIONE">Fine assegnazione</option>
+          <option value="GENERA_CONTRATTO">Contratto mezzo</option>
+          <option value="GENERA_CONTRATTO_MEZZI">Contratto mezzi</option>
+          <option value="GENERA_CONTRATTO_PALMARE">Contratto palmari</option>
+          <option value="GENERA_CONTRATTO_CODICI">Contratto codici</option>
+          <option value="LOGIN">Accesso</option>
         </select>
 
-        {(filterEntityType || filterAzione) && (
-          <button className="btn-outline btn-sm" onClick={() => { setFilterEntityType(''); setFilterAzione(''); }}>
-            ✕ Reset filtri
+        <select
+          className="log-select"
+          value={filterUserId}
+          onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
+        >
+          <option value="">Tutti gli utenti</option>
+          {utenti.map((u) => (
+            <option key={u.id} value={u.id}>{u.nome} {u.cognome}</option>
+          ))}
+        </select>
+
+        {(filterEntityType || filterAzione || filterUserId || search) && (
+          <button
+            className="btn-outline btn-sm"
+            onClick={() => {
+              setFilterEntityType('');
+              setFilterAzione('');
+              setFilterUserId('');
+              setSearchInput('');
+              setSearch('');
+              setPage(1);
+            }}
+          >
+            ✕ Reset
           </button>
         )}
       </div>
@@ -244,14 +229,14 @@ export default function LogStorico() {
                 <th>UTENTE</th>
                 <th>TIPO</th>
                 <th>AZIONE</th>
-                <th>DETTAGLIO</th>
-                <th></th>
+                <th>DESCRIZIONE</th>
+                <th className="log-col-expand"></th>
               </tr>
             </thead>
             <tbody>
               {entries.map((e) => (
                 <Fragment key={e.id}>
-                  <tr key={e.id}
+                  <tr
                     className={`log-row ${expanded === e.id ? 'log-row-expanded' : ''}`}
                     onClick={() => setExpanded(expanded === e.id ? null : e.id)}
                   >
@@ -269,9 +254,8 @@ export default function LogStorico() {
                         {AZIONE_LABELS[e.azione] ?? e.azione}
                       </span>
                     </td>
-                    {/* ← Colonna leggibile al posto dell'entityId grezzo */}
-                    <td className="log-entity-desc" title={e.entityId}>
-                      {getEntityDescription(e)}
+                    <td className="log-desc" title={e.entityId}>
+                      {getHumanReadableDescription(e)}
                     </td>
                     <td className="log-expand-btn">{expanded === e.id ? '▲' : '▼'}</td>
                   </tr>

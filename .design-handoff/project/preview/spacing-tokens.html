@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',sans-serif; background:#f7f8fa; padding:20px; }
+.label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
+.row { display:flex; gap:6px; align-items:flex-end; margin-bottom:14px; }
+.sp { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.sp-block { background:#2563eb; border-radius:4px; width:100%; opacity:0.85; }
+.sp-val { font-size:10px; font-weight:700; color:#0f172a; }
+.sp-name { font-size:9px; color:#94a3b8; }
+.radii-row { display:flex; gap:10px; flex-wrap:wrap; }
+.radius-ex { background:#fff; border:1px solid #e5e7eb; width:56px; height:56px; display:flex; align-items:center; justify-content:center; }
+.radius-label { font-size:9px; color:#94a3b8; text-align:center; margin-top:4px; }
+.shadow-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; font-size:12px; color:#475569; width:160px; }
+</style>
+</head>
+<body>
+<div class="label">Spacing Scale</div>
+<div class="row">
+  <div class="sp"><div class="sp-block" style="height:4px;width:24px"></div><div class="sp-val">4px</div><div class="sp-name">xs</div></div>
+  <div class="sp"><div class="sp-block" style="height:8px;width:32px"></div><div class="sp-val">8px</div><div class="sp-name">sm</div></div>
+  <div class="sp"><div class="sp-block" style="height:16px;width:48px"></div><div class="sp-val">16px</div><div class="sp-name">md</div></div>
+  <div class="sp"><div class="sp-block" style="height:24px;width:64px"></div><div class="sp-val">24px</div><div class="sp-name">lg</div></div>
+  <div class="sp"><div class="sp-block" style="height:32px;width:80px"></div><div class="sp-val">32px</div><div class="sp-name">xl</div></div>
+  <div class="sp"><div class="sp-block" style="height:48px;width:96px"></div><div class="sp-val">48px</div><div class="sp-name">2xl</div></div>
+</div>
+<div class="label">Border Radius</div>
+<div class="radii-row" style="margin-bottom:14px">
+  <div><div class="radius-ex" style="border-radius:6px">sm</div><div class="radius-label">6px</div></div>
+  <div><div class="radius-ex" style="border-radius:8px">md</div><div class="radius-label">8px</div></div>
+  <div><div class="radius-ex" style="border-radius:12px">lg</div><div class="radius-label">12px</div></div>
+  <div><div class="radius-ex" style="border-radius:16px">xl</div><div class="radius-label">16px</div></div>
+  <div><div class="radius-ex" style="border-radius:999px;width:auto;padding:0 14px">pill</div><div class="radius-label">999px</div></div>
+</div>
+<div class="label">Shadows</div>
+<div style="display:flex;gap:14px;flex-wrap:wrap;">
+  <div>
+    <div class="shadow-card" style="box-shadow:0 1px 2px rgba(15,23,42,0.04),0 1px 3px rgba(15,23,42,0.04)">card default</div>
+    <div class="radius-label">--card-shadow</div>
+  </div>
+  <div>
+    <div class="shadow-card" style="box-shadow:0 4px 12px rgba(15,23,42,0.08)">card hover</div>
+    <div class="radius-label">--card-shadow-hover</div>
+  </div>
+</div>
+</body>
+</html>

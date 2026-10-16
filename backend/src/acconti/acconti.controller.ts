@@ -1,5 +1,10 @@
-import { Controller, Get, Post, Delete, Param, Query, Body } from '@nestjs/common';
-import { AccontiService, CreateAccontoDto } from './acconti.service';
+import {
+  Controller, Get, Post, Put, Delete, Param, Query, Body, Req,
+  UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { AccontiService, CreateAccontoDto, UpdateAccontoDto } from './acconti.service';
 
 @Controller('acconti')
 export class AccontiController {
@@ -24,12 +29,29 @@ export class AccontiController {
   }
 
   @Post()
-  create(@Body() dto: CreateAccontoDto) {
-    return this.service.create(dto, 'system');
+  create(@Body() dto: CreateAccontoDto, @Req() req: any) {
+    return this.service.create(dto, req.user.id);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateAccontoDto, @Req() req: any) {
+    return this.service.update(id, dto, req.user.id);
+  }
+
+  @Post('importa')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  importaExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('mese') mese: string,
+    @Req() req: any,
+  ) {
+    if (!file) throw new BadRequestException('File mancante');
+    if (!mese) throw new BadRequestException('Mese di competenza mancante');
+    return this.service.importaExcel(file, mese, req.user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id, 'system');
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.service.remove(id, req.user.id);
   }
 }

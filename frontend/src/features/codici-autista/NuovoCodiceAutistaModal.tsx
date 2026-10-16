@@ -15,12 +15,15 @@ export interface NuovoCodiceAutista {
   tariffaFissa: string;
   tariffaRitiro: string;
   target: string;
+  bonus: string;
+  malus: string;
+  zone: string;
   note: string;
 }
 
 const EMPTY: NuovoCodiceAutista = {
   codice: '', nome: '', cognome: '',
-  tariffaFissa: '', tariffaRitiro: '', target: '', note: '',
+  tariffaFissa: '', tariffaRitiro: '', target: '', bonus: '', malus: '', zone: '', note: '',
 };
 
 export default function NuovoCodiceAutistaModal({ open, onClose, onSave }: Props) {
@@ -86,6 +89,21 @@ export default function NuovoCodiceAutistaModal({ open, onClose, onSave }: Props
         <div className="form-field">
           <label className="form-label">Target</label>
           <input className="form-input" type="number" placeholder="es. 100" value={form.target} onChange={(e) => set('target', e.target.value)} />
+        </div>
+        <div className="form-row-2">
+          <div className="form-field">
+            <label className="form-label">Bonus (€)</label>
+            <input className="form-input" type="number" placeholder="es. 1.00" value={form.bonus} onChange={(e) => set('bonus', e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label className="form-label">Malus (€)</label>
+            <input className="form-input" type="number" placeholder="es. 1.00" value={form.malus} onChange={(e) => set('malus', e.target.value)} />
+          </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Zone</label>
+          <input className="form-input" placeholder="es. Nord, Centro..." value={form.zone} onChange={(e) => set('zone', e.target.value)} />
         </div>
 
         <div className="form-field">

@@ -16,6 +16,7 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
+  email?: string;
   nome?: string;
   cognome?: string;
   ruolo?: 'ADMIN' | 'OPERATORE' | 'VIEWER';
@@ -28,7 +29,7 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async findAll() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: { deletedAt: null },
       select: {
         id: true,
@@ -39,9 +40,14 @@ export class UsersService {
         attivo: true,
         createdAt: true,
         updatedAt: true,
+        permessi: { where: { risorsa: 'sezione' }, select: { azione: true } },
       },
       orderBy: { createdAt: 'asc' },
     });
+    return users.map(({ permessi, ...u }) => ({
+      ...u,
+      sezioniVisibili: permessi.map(p => p.azione),
+    }));
   }
 
   async findOne(id: string) {
@@ -56,11 +62,24 @@ export class UsersService {
         attivo: true,
         createdAt: true,
         updatedAt: true,
-        permessi: true,
+        permessi: { where: { risorsa: 'sezione' }, select: { azione: true } },
       },
     });
     if (!user) throw new NotFoundException('Utente non trovato');
-    return user;
+    const { permessi, ...rest } = user;
+    return { ...rest, sezioniVisibili: permessi.map(p => p.azione) };
+  }
+
+  async updateSezioni(id: string, sezioni: string[]) {
+    await this.findOne(id);
+    await this.prisma.permesso.deleteMany({ where: { userId: id, risorsa: 'sezione' } });
+    if (sezioni.length > 0) {
+      await this.prisma.permesso.createMany({
+        data: sezioni.map(azione => ({ userId: id, risorsa: 'sezione', azione })),
+        skipDuplicates: true,
+      });
+    }
+    return { updated: true };
   }
 
   async create(dto: CreateUserDto) {
@@ -72,6 +91,7 @@ export class UsersService {
       data: {
         email: dto.email,
         password: hashed,
+        passwordPlain: dto.password,
         nome: dto.nome,
         cognome: dto.cognome,
         ruolo: dto.ruolo ?? 'OPERATORE',
@@ -89,16 +109,23 @@ export class UsersService {
     return user;
   }
 
+  async getPasswordPlain(id: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { passwordPlain: true },
+    });
+    if (!user) throw new NotFoundException('Utente non trovato');
+    return { passwordPlain: user.passwordPlain ?? null };
+  }
+
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
 
-    const data: any = { ...dto };
-    if (dto.password) {
-      data.password = await bcrypt.hash(dto.password, 12);
-    }
-    delete data.password; // già hashata sopra se presente
-    if (dto.password) {
-      data.password = await bcrypt.hash(dto.password, 12);
+    const { password, ...rest } = dto;
+    const data: any = { ...rest };
+    if (password) {
+      data.password = await bcrypt.hash(password, 12);
+      data.passwordPlain = password;
     }
 
     return this.prisma.user.update({
@@ -142,7 +169,10 @@ export class UsersService {
 
   async changePassword(id: string, newPassword: string) {
     const hashed = await bcrypt.hash(newPassword, 12);
-    await this.prisma.user.update({ where: { id }, data: { password: hashed } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { password: hashed, passwordPlain: newPassword },
+    });
     return { success: true };
   }
 }

@@ -1,0 +1,127 @@
+/* src/features/esportazione/Esportazione.css */
+
+.esp-page {
+  padding: var(--space-lg);
+  max-width: 900px;
+}
+
+.esp-header {
+  margin-bottom: var(--space-xl);
+}
+
+.esp-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.esp-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Alerts */
+.esp-alert {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: var(--space-md);
+}
+
+.esp-alert-error {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.esp-alert-success {
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  color: #15803d;
+}
+
+[data-theme="dark"] .esp-alert-success {
+  color: #4ade80;
+  background: rgba(22, 163, 74, 0.12);
+}
+
+/* Grid */
+.esp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-md);
+}
+
+/* Card */
+.esp-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  transition: box-shadow 0.15s;
+}
+
+.esp-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.esp-card-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.esp-card-body {
+  flex: 1;
+}
+
+.esp-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.esp-card-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Month picker */
+.esp-mese-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.esp-mese-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.esp-mese-input {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+}
+
+/* Button override — full width in card */
+.esp-btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: auto;
+}

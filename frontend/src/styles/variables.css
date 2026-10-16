@@ -1,49 +1,63 @@
 /* ============================================
    GESTIONALE CORRIERE - DESIGN SYSTEM
-   Supporta tema dark (default) e light
+   Light theme default (matches Lovable mockup).
    ============================================ */
 
-/* ─── DARK THEME (default) ───────────────── */
+/* ─── LIGHT THEME (default) ───────────────── */
 :root,
-[data-theme="dark"] {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
-  --bg-tertiary: #242837;
-  --bg-elevated: #2a2e3d;
-  --bg-hover: #323750;
+[data-theme="light"] {
+  --bg-primary: #f7f8fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f1f4;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f1f3f6;
+  --bg-card: #ffffff;
 
-  --text-primary: #e8eaf0;
-  --text-secondary: #9ca3b4;
-  --text-muted: #6b7280;
+  --card-bg: #ffffff;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --card-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
 
-  --primary: #6366f1;
-  --primary-hover: #818cf8;
-  --primary-muted: rgba(99, 102, 241, 0.15);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
 
-  --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.12);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.12);
-  --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.12);
-  --info: #3b82f6;
-  --info-bg: rgba(59, 130, 246, 0.12);
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-muted: rgba(37, 99, 235, 0.10);
 
-  --badge-green: #22c55e;
-  --badge-green-bg: rgba(34, 197, 94, 0.15);
-  --badge-orange: #f97316;
-  --badge-orange-bg: rgba(249, 115, 22, 0.15);
-  --badge-red: #ef4444;
-  --badge-red-bg: rgba(239, 68, 68, 0.15);
-  --badge-blue: #3b82f6;
-  --badge-blue-bg: rgba(59, 130, 246, 0.15);
-  --badge-purple: #a855f7;
-  --badge-purple-bg: rgba(168, 85, 247, 0.15);
-  --badge-gray: #6b7280;
-  --badge-gray-bg: rgba(107, 114, 128, 0.15);
+  --accent-orange: #f97316;
+  --accent-orange-bg: rgba(249, 115, 22, 0.12);
 
-  --border: #2a2e3d;
-  --border-hover: #3d4259;
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.12);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.14);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.12);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.12);
+
+  --badge-green: #15803d;
+  --badge-green-bg: #dcfce7;
+  --badge-orange: #c2410c;
+  --badge-orange-bg: #ffedd5;
+  --badge-red: #b91c1c;
+  --badge-red-bg: #fee2e2;
+  --badge-yellow: #a16207;
+  --badge-yellow-bg: #fef3c7;
+  --badge-blue: #1d4ed8;
+  --badge-blue-bg: #dbeafe;
+  --badge-purple: #7c3aed;
+  --badge-purple-bg: #ede9fe;
+  --badge-gray: #475569;
+  --badge-gray-bg: #e2e8f0;
+
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --border-hover: #cbd5e1;
+
+  --table-row-alt: #fafbfc;
+  --table-row-hover: #f1f5f9;
 
   --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
@@ -58,56 +72,81 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
 
   --sidebar-width: 220px;
-  --sidebar-bg: #141722;
+  --sidebar-bg: #121821;
+  --sidebar-border: #e5e7eb;
+  --sidebar-item: #98a4b3;
+  --sidebar-item-hover-bg: #f1f5f9;
+  --sidebar-item-active-bg: #2563eb;
+  --sidebar-item-active-fg: #ffffff;
 }
 
-/* ─── LIGHT THEME ────────────────────────── */
-[data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f0f1f4;
-  --bg-elevated: #e8eaef;
-  --bg-hover: #eceef3;
+/* ─── DARK THEME ───────────────────────────── */
+[data-theme="dark"] {
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-tertiary: #242837;
+  --bg-elevated: #2a2e3d;
+  --bg-hover: #323750;
+  --bg-card: #1a1d27;
 
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
+  --card-bg: #1a1d27;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
 
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --primary-muted: rgba(79, 70, 229, 0.1);
+  --text-primary: #e8eaf0;
+  --text-secondary: #9ca3b4;
+  --text-muted: #6b7280;
 
-  --success: #16a34a;
-  --success-bg: rgba(22, 163, 74, 0.1);
-  --warning: #d97706;
-  --warning-bg: rgba(217, 119, 6, 0.1);
-  --danger: #dc2626;
-  --danger-bg: rgba(220, 38, 38, 0.1);
-  --info: #2563eb;
-  --info-bg: rgba(37, 99, 235, 0.1);
+  --primary: #6366f1;
+  --primary-hover: #818cf8;
+  --primary-muted: rgba(99, 102, 241, 0.15);
 
-  --badge-green: #15803d;
-  --badge-green-bg: rgba(21, 128, 61, 0.12);
-  --badge-orange: #c2410c;
-  --badge-orange-bg: rgba(194, 65, 12, 0.12);
-  --badge-red: #dc2626;
-  --badge-red-bg: rgba(220, 38, 38, 0.12);
-  --badge-blue: #1d4ed8;
-  --badge-blue-bg: rgba(29, 78, 216, 0.12);
-  --badge-purple: #7c3aed;
-  --badge-purple-bg: rgba(124, 58, 237, 0.12);
-  --badge-gray: #6b7280;
-  --badge-gray-bg: rgba(107, 114, 128, 0.12);
+  --accent-orange: #f97316;
+  --accent-orange-bg: rgba(249, 115, 22, 0.2);
 
-  --border: #e5e7eb;
-  --border-hover: #d1d5db;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.12);
+  --warning: #f59e0b;
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --info: #3b82f6;
+  --info-bg: rgba(59, 130, 246, 0.12);
 
-  --sidebar-bg: #ffffff;
+  --badge-green: #4ade80;
+  --badge-green-bg: rgba(34, 197, 94, 0.18);
+  --badge-orange: #fb923c;
+  --badge-orange-bg: rgba(249, 115, 22, 0.18);
+  --badge-red: #f87171;
+  --badge-red-bg: rgba(239, 68, 68, 0.18);
+  --badge-yellow: #fbbf24;
+  --badge-yellow-bg: rgba(245, 158, 11, 0.18);
+  --badge-blue: #60a5fa;
+  --badge-blue-bg: rgba(59, 130, 246, 0.18);
+  --badge-purple: #c084fc;
+  --badge-purple-bg: rgba(168, 85, 247, 0.18);
+  --badge-gray: #9ca3af;
+  --badge-gray-bg: rgba(107, 114, 128, 0.18);
+
+  --border: #2a2e3d;
+  --border-strong: #3d4259;
+  --border-hover: #3d4259;
+
+  --table-row-alt: #1e2230;
+  --table-row-hover: #242a3a;
+
+  --sidebar-bg: #141722;
+  --sidebar-border: #2a2e3d;
+  --sidebar-item: #9ca3b4;
+  --sidebar-item-hover-bg: #242837;
+  --sidebar-item-active-bg: #6366f1;
+  --sidebar-item-active-fg: #ffffff;
 }
 
 /* ─── Transizione tema fluida ────────────── */
 *, *::before, *::after {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.05s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.05s ease;
 }

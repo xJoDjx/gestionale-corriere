@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { resolveDataFineAssegnazione } from '../common/data-fine-assegnazione.util';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -18,10 +19,14 @@ export class MezziService {
     const data: Record<string, any> = { ...rest };
 
     if (proprietario && !data.societaNoleggio) data.societaNoleggio = proprietario;
-    if (nContratto && !data.riferimentoContratto) data.riferimentoContratto = nContratto;
+    // riferimentoContratto (alias legacy) → riferimento_contratto
+    if (nContratto && !data.riferimentoContratto && !data.riferimento_contratto) {
+      data.riferimento_contratto = nContratto;
+    }
     delete data.proprietario;
     delete data.nContratto;
 
+    // Converti date (camelCase ancora, prima del remap)
     const dateFields = [
       'scadenzaAssicurazione', 'scadenzaRevisione', 'scadenzaBollo',
       'scadenzaTagliando', 'scadenzaTachigrafo', 'inizioNoleggio', 'fineNoleggio',
@@ -33,7 +38,43 @@ export class MezziService {
       }
     }
 
+    // ── Remap camelCase → snake_case per i campi dello schema Prisma ──
+    // Questi campi sono definiti in snake_case nello schema senza @map,
+    // quindi Prisma li espone ancora in snake_case.
+    const camelToSnake: Record<string, string> = {
+      tipoPossesso:         'tipo_possesso',
+      pIvaLocatore:         'p_iva_locatore',
+      telefonoLocatore:     'telefono_locatore',
+      emailLocatore:        'email_locatore',
+      riferimentoContratto: 'riferimento_contratto',
+      kmAttualiAl:          'km_attuali_al',
+    };
+    for (const [camel, snake] of Object.entries(camelToSnake)) {
+      if (camel in data) {
+        data[snake] = data[camel];
+        delete data[camel];
+      }
+    }
+
     return data;
+  }
+
+  // ─── Normalizza risposta Prisma → camelCase ──────────
+  // I campi definiti snake_case nello schema senza @map vengono restituiti
+  // da Prisma in snake_case; il frontend si aspetta camelCase.
+  private normalizeMezzo(m: any): any {
+    if (!m) return m;
+    const { tipo_possesso, p_iva_locatore, telefono_locatore, email_locatore,
+            riferimento_contratto, km_attuali_al, ...rest } = m;
+    return {
+      ...rest,
+      tipoPossesso:         tipo_possesso         ?? rest.tipoPossesso,
+      pIvaLocatore:         p_iva_locatore         ?? rest.pIvaLocatore,
+      telefonoLocatore:     telefono_locatore      ?? rest.telefonoLocatore,
+      emailLocatore:        email_locatore         ?? rest.emailLocatore,
+      riferimentoContratto: riferimento_contratto  ?? rest.riferimentoContratto,
+      kmAttualiAl:          km_attuali_al          ?? rest.kmAttualiAl,
+    };
   }
 
   // ─── LIST ────────────────────────────────────────────
@@ -74,7 +115,7 @@ export class MezziService {
       this.prisma.mezzo.count({ where }),
     ]);
 
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { data: data.map((m) => this.normalizeMezzo(m)), total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   // ─── STATS ──────────────────────────────────────────
@@ -90,6 +131,7 @@ export class MezziService {
       this.prisma.mezzo.count({
         where: {
           deletedAt: null,
+          stato: { notIn: ['DISMESSO', 'VENDUTO'] },
           OR: [
             { scadenzaAssicurazione: { lte: new Date(Date.now() + 30 * 86400000) } },
             { scadenzaRevisione: { lte: new Date(Date.now() + 30 * 86400000) } },
@@ -104,6 +146,7 @@ export class MezziService {
     return {
       totali, disponibili, assegnati,
       entrateNoleggio,
+      sommaRate: canoniNoleggio,
       margine: entrateNoleggio - canoniNoleggio,
       scadenzeImminenti,
     };
@@ -115,6 +158,10 @@ export class MezziService {
     return this.prisma.mezzo.findMany({
       where: {
         deletedAt: null,
+        // Un mezzo dismesso/venduto è fuori flotta: le sue scadenze non
+        // interessano più, altrimenti restano per sempre in lista come dati
+        // obsoleti (bug segnalato: scadenze "imminenti" di mezzi non più in uso).
+        stato: { notIn: ['DISMESSO', 'VENDUTO'] },
         OR: [
           { scadenzaAssicurazione: { lte: entro } },
           { scadenzaRevisione: { lte: entro } },
@@ -147,7 +194,7 @@ export class MezziService {
       },
     });
     if (!mezzo) throw new NotFoundException('Mezzo non trovato');
-    return mezzo;
+    return this.normalizeMezzo(mezzo);
   }
 
   // ─── IMPORTA EXCEL ──────────────────────────────────
@@ -247,7 +294,7 @@ async importaExcel(buffer: Buffer) {
           modello,
           alimentazione: this.mapAlimentazione(String(row[foglio.colAlimentazione] ?? '').trim()) as Alimentazione,
           stato: foglio.stato as StatoMezzo,
-          tipoPossesso: foglio.tipoPossesso, // rimosso casting TipoPossesso per evitare errore TS
+          tipo_possesso: foglio.tipoPossesso,
           societaNoleggio: row[foglio.colProprietario] ? String(row[foglio.colProprietario]).trim() : null,
           inizioNoleggio: parseDate(row[foglio.colInizioContratto]),
           fineNoleggio: parseDate(row[foglio.colFineContratto]),
@@ -258,7 +305,7 @@ async importaExcel(buffer: Buffer) {
           scadenzaBollo: foglio.colScadBollo !== null ? parseDate(row[foglio.colScadBollo]) : null,
           kmLimite: foglio.colKmLimite !== null ? parseNum(row[foglio.colKmLimite]) : null,
           kmAttuali: foglio.colKmAttuali !== null ? parseNum(row[foglio.colKmAttuali]) : null,
-          kmAttualiAl,
+          km_attuali_al: kmAttualiAl,
           annoImmatricolazione: foglio.colImmatric !== null ? parseDate(row[foglio.colImmatric])?.getFullYear() : null,
           note: foglio.colNote !== null && row[foglio.colNote] ? String(row[foglio.colNote]).trim() : null,
         };
@@ -275,7 +322,7 @@ async importaExcel(buffer: Buffer) {
           mezzo = await this.prisma.mezzo.update({ where: { id: mezzo.id }, data: dataPayload });
           risultati.aggiornati++;
         } else {
-          mezzo = await this.prisma.mezzo.create({ data: dataPayload });
+          mezzo = await this.prisma.mezzo.create({ data: { ...dataPayload, maggiorazioneRicarica: 20 } });
           risultati.creati++;
         }
 
@@ -357,12 +404,16 @@ async importaExcel(buffer: Buffer) {
       azione: 'CREATE', dataDopo: mezzo as any,
     });
 
-    return mezzo;
+    return this.normalizeMezzo(mezzo);
   }
 
   // ─── UPDATE ─────────────────────────────────────────
   async update(id: string, dto: UpdateMezzoDto, userId: string) {
-    const existing = await this.findOne(id);
+    // Fetch "prima" senza relazioni: deve avere la stessa forma di "mezzo" (dataDopo)
+    // qui sotto, altrimenti il diff nell'audit log segnala sempre falsi cambiamenti
+    // (es. "assegnazioni") solo perché una versione include la relazione e l'altra no.
+    const existing = await this.prisma.mezzo.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new NotFoundException('Mezzo non trovato');
     const data = this.normalizeDto(dto);
 
     const mezzo = await this.prisma.mezzo.update({ where: { id }, data: data as any });
@@ -372,7 +423,42 @@ async importaExcel(buffer: Buffer) {
       azione: 'UPDATE', dataPrima: existing as any, dataDopo: mezzo as any,
     });
 
-    return mezzo;
+    return this.normalizeMezzo(mezzo);
+  }
+
+  // ─── DUPLICA ────────────────────────────────────────
+  // Copia tutti i campi del mezzo tranne: id, targa (rigenerata), createdAt/updatedAt/deletedAt,
+  // stato/utilizzatore (resettati: la nuova copia non è assegnata) e note.
+  // Assegnazioni, note (entità separata), log di audit e documenti NON vengono copiati:
+  // partono vuoti per il nuovo mezzo perché sono relazioni indipendenti, non campi del record.
+  async duplica(id: string, userId: string) {
+    const original = await this.prisma.mezzo.findFirst({ where: { id, deletedAt: null } });
+    if (!original) throw new NotFoundException('Mezzo non trovato');
+
+    const {
+      id: _id, targa: _targa, createdAt, updatedAt, deletedAt,
+      note, stato, utilizzatore,
+      ...rest
+    } = original as any;
+
+    const nuovaTarga = `COPIA-${original.targa}-${Date.now().toString().slice(-5)}`;
+
+    const mezzo = await this.prisma.mezzo.create({
+      data: {
+        ...rest,
+        targa: nuovaTarga,
+        stato: 'DISPONIBILE',
+        utilizzatore: null,
+        note: null,
+      },
+    });
+
+    await this.audit.log({
+      userId, entityType: 'mezzo', entityId: mezzo.id,
+      azione: 'CREATE', dataDopo: mezzo as any,
+    });
+
+    return this.normalizeMezzo(mezzo);
   }
 
   // ─── SOFT DELETE ────────────────────────────────────
@@ -391,35 +477,49 @@ async importaExcel(buffer: Buffer) {
 
   // ─── ASSEGNAZIONI ───────────────────────────────────
   async createAssegnazione(mezzoId: string, dto: CreateAssegnazioneMezzoDto, userId: string) {
-    await this.findOne(mezzoId);
+    const mezzoInfo = await this.findOne(mezzoId); // validazione fuori dalla transazione
 
-    // Chiudi assegnazione attiva precedente
-    const attiva = await this.prisma.assegnazioneMezzo.findFirst({
-      where: { mezzoId, deletedAt: null, dataFine: null },
+    // Operazioni atomiche: chiudi attiva + crea nuova + aggiorna stato mezzo
+    let chiusaAttiva: { id: string; ragioneSociale?: string } | null = null;
+    const assegnazione = await this.prisma.$transaction(async (tx) => {
+      const attiva = await tx.assegnazioneMezzo.findFirst({
+        where: { mezzoId, deletedAt: null, dataFine: null },
+        include: { padroncino: { select: { ragioneSociale: true } } },
+      });
+      if (attiva) {
+        await tx.assegnazioneMezzo.update({
+          where: { id: attiva.id },
+          data: { dataFine: new Date(dto.dataInizio) },
+        });
+        chiusaAttiva = { id: attiva.id, ragioneSociale: attiva.padroncino?.ragioneSociale };
+      }
+
+      const assegnazione = await tx.assegnazioneMezzo.create({
+        data: {
+          mezzoId,
+          padroncinoId: dto.padroncinoId,
+          dataInizio: new Date(dto.dataInizio),
+          dataFine: dto.dataFine ? new Date(dto.dataFine) : null,
+          note: dto.note,
+        },
+        include: {
+          padroncino: { select: { id: true, ragioneSociale: true } },
+          mezzo: { select: { targa: true } },
+        },
+      });
+
+      await tx.mezzo.update({ where: { id: mezzoId }, data: { stato: 'ASSEGNATO' } });
+      return assegnazione;
     });
-    if (attiva) {
-      await this.prisma.assegnazioneMezzo.update({
-        where: { id: attiva.id },
-        data: { dataFine: new Date(dto.dataInizio) },
+
+    // Logga la chiusura implicita (riassegnazione), altrimenti sparisce dallo storico
+    if (chiusaAttiva) {
+      await this.audit.log({
+        userId, entityType: 'assegnazione_mezzo', entityId: (chiusaAttiva as any).id,
+        azione: 'CHIUDI_ASSEGNAZIONE',
+        dataDopo: { targa: (mezzoInfo as any).targa, ragioneSociale: (chiusaAttiva as any).ragioneSociale } as any,
       });
     }
-
-    const assegnazione = await this.prisma.assegnazioneMezzo.create({
-      data: {
-        mezzoId,
-        padroncinoId: dto.padroncinoId,
-        dataInizio: new Date(dto.dataInizio),
-        dataFine: dto.dataFine ? new Date(dto.dataFine) : null,
-        note: dto.note,
-      },
-      include: {
-        padroncino: { select: { id: true, ragioneSociale: true } },
-        mezzo: { select: { targa: true } },
-      },
-    });
-
-    // Aggiorna stato mezzo → ASSEGNATO
-    await this.prisma.mezzo.update({ where: { id: mezzoId }, data: { stato: 'ASSEGNATO' } });
 
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazione.id,
@@ -427,6 +527,8 @@ async importaExcel(buffer: Buffer) {
       dataDopo: {
         targa: assegnazione.mezzo.targa,
         ragioneSociale: assegnazione.padroncino.ragioneSociale,
+        padroncinoId: dto.padroncinoId,
+        mezzoId,
         dataInizio: dto.dataInizio,
       } as any,
     });
@@ -434,35 +536,87 @@ async importaExcel(buffer: Buffer) {
     return assegnazione;
   }
 
-  async chiudiAssegnazione(assegnazioneId: string, userId: string) {
+  async chiudiAssegnazione(assegnazioneId: string, userId: string, dataFineStr?: string) {
     const ass = await this.prisma.assegnazioneMezzo.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
       include: {
         mezzo: { select: { id: true, targa: true } },
-        padroncino: { select: { ragioneSociale: true } },
+        padroncino: { select: { id: true, ragioneSociale: true } },
       },
     });
     if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
-    await this.prisma.assegnazioneMezzo.update({
-      where: { id: assegnazioneId },
-      data: { dataFine: new Date() },
-    });
+    const dataFine = resolveDataFineAssegnazione(dataFineStr, ass.dataInizio);
 
-    // Controlla se ci sono altre assegnazioni attive
-    const altreAttive = await this.prisma.assegnazioneMezzo.count({
-      where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
+    // Atomico: chiudi assegnazione + aggiorna stato mezzo se necessario
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assegnazioneMezzo.update({
+        where: { id: assegnazioneId },
+        data: { dataFine },
+      });
+      const altreAttive = await tx.assegnazioneMezzo.count({
+        where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
+      });
+      if (altreAttive === 0) {
+        await tx.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
+      }
     });
-    if (altreAttive === 0) {
-      await this.prisma.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
-    }
 
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId,
       azione: 'CHIUDI_ASSEGNAZIONE',
-      dataDopo: { targa: ass.mezzo.targa, ragioneSociale: ass.padroncino.ragioneSociale } as any,
+      dataDopo: {
+        targa: ass.mezzo.targa,
+        ragioneSociale: ass.padroncino.ragioneSociale,
+        padroncinoId: ass.padroncino.id,
+        mezzoId: ass.mezzo.id,
+        dataInizio: ass.dataInizio,
+        dataFine,
+      } as any,
     });
 
     return { closed: true };
+  }
+
+  async deleteAssegnazione(assegnazioneId: string, userId: string) {
+    const ass = await this.prisma.assegnazioneMezzo.findFirst({
+      where: { id: assegnazioneId, deletedAt: null },
+      include: {
+        mezzo: { select: { id: true, targa: true } },
+        padroncino: { select: { id: true, ragioneSociale: true } },
+      },
+    });
+    if (!ass) throw new NotFoundException('Assegnazione non trovata');
+
+    // Soft delete dell'assegnazione
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assegnazioneMezzo.update({
+        where: { id: assegnazioneId },
+        data: { deletedAt: new Date() },
+      });
+
+      // Ricalcola stato mezzo: se non rimangono assegnazioni attive → DISPONIBILE
+      const altreAttive = await tx.assegnazioneMezzo.count({
+        where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
+      });
+      if (altreAttive === 0) {
+        await tx.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
+      }
+    });
+
+    await this.audit.log({
+      userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId,
+      azione: 'DELETE',
+      dataPrima: {
+        targa: ass.mezzo.targa,
+        ragioneSociale: ass.padroncino.ragioneSociale,
+        padroncinoId: ass.padroncino.id,
+        mezzoId: ass.mezzo.id,
+        dataInizio: ass.dataInizio,
+        dataFine: ass.dataFine,
+      } as any,
+    });
+
+    return { deleted: true };
   }
 }

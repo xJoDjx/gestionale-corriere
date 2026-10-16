@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
-  Padroncino, NuovoPadroncino,
+  Padroncino, CreatePadroncinoPayload,
 } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
 import {
@@ -10,8 +10,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 
+
 // ─── HELPERS ──────────────────────────────────────────
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 function fmtEur(n: number) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
@@ -69,6 +70,10 @@ interface NuovoPadroncinoForm {
   scadenzaDurc: string;
   dvrEsente: boolean;
   note: string;
+  rappresentanteNome: string;
+  rappresentanteCognome: string;
+  cfRappresentante: string;
+  qualificaRappresentante: string;
 }
 
 // ─── MODAL MODIFICA PADRONCINO ────────────────────────
@@ -81,7 +86,7 @@ function ModificaPadroncinoModal({
   open: boolean;
   p: Padroncino;
   onClose: () => void;
-  onSave: (data: Partial<NuovoPadroncino>) => Promise<void>;
+  onSave: (data: Partial<CreatePadroncinoPayload>) => Promise<void>;
 }) {
   const [form, setForm] = useState({
     ragioneSociale: p.ragioneSociale || '',
@@ -93,9 +98,13 @@ function ModificaPadroncinoModal({
     pec: p.pec || '',
     iban: p.iban || '',
     scadenzaDurc: p.scadenzaDurc ? p.scadenzaDurc.substring(0, 10) : '',
-    dvrEsente: (p as any).dvrEsente || false,
+    dvrEsente: p.dvrEsente || false,
     note: p.note || '',
     attivo: p.attivo,
+    rappresentanteNome: p.rappresentanteNome || '',
+    rappresentanteCognome: p.rappresentanteCognome || '',
+    cfRappresentante: p.cfRappresentante || '',
+    qualificaRappresentante: p.qualificaRappresentante || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -111,9 +120,13 @@ function ModificaPadroncinoModal({
         pec: p.pec || '',
         iban: p.iban || '',
         scadenzaDurc: p.scadenzaDurc ? p.scadenzaDurc.substring(0, 10) : '',
-        dvrEsente: (p as any).dvrEsente || false,
+        dvrEsente: p.dvrEsente || false,
         note: p.note || '',
         attivo: p.attivo,
+        rappresentanteNome: p.rappresentanteNome || '',
+        rappresentanteCognome: p.rappresentanteCognome || '',
+        cfRappresentante: p.cfRappresentante || '',
+        qualificaRappresentante: p.qualificaRappresentante || '',
       });
     }
   }, [open, p]);
@@ -135,6 +148,12 @@ function ModificaPadroncinoModal({
         iban: form.iban || undefined,
         scadenzaDurc: form.scadenzaDurc || undefined,
         note: form.note || undefined,
+        attivo: form.attivo,
+        dvrEsente: form.dvrEsente,
+        rappresentanteNome: form.rappresentanteNome || undefined,
+        rappresentanteCognome: form.rappresentanteCognome || undefined,
+        cfRappresentante: form.cfRappresentante || undefined,
+        qualificaRappresentante: form.qualificaRappresentante || undefined,
       });
       onClose();
     } catch (e: any) {
@@ -149,7 +168,7 @@ function ModificaPadroncinoModal({
 
   if (!open) return null;
   return (
-    <div className="pd-modal-overlay" onClick={onClose}>
+    <div className="pd-modal-overlay">
       <div className="pd-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="pd-modal-header">
           <h3>✏️ Modifica Padroncino</h3>
@@ -196,6 +215,41 @@ function ModificaPadroncinoModal({
               <label>IBAN</label>
               <input className="pd-modal-input" value={form.iban}
                 onChange={(e) => setF('iban', e.target.value)} />
+            </div>
+
+            {/* ── Rappresentante legale ── */}
+            <div className="pd-modal-field pd-modal-full" style={{ borderTop: '1px dashed var(--border)', paddingTop: 12, marginTop: 4 }}>
+              <label style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                👤 Rappresentante Legale (per contratti)
+              </label>
+            </div>
+            <div className="pd-modal-field">
+              <label>Nome Rappresentante</label>
+              <input className="pd-modal-input" value={form.rappresentanteNome}
+                onChange={(e) => setF('rappresentanteNome', e.target.value)} />
+            </div>
+            <div className="pd-modal-field">
+              <label>Cognome Rappresentante</label>
+              <input className="pd-modal-input" value={form.rappresentanteCognome}
+                onChange={(e) => setF('rappresentanteCognome', e.target.value)} />
+            </div>
+            <div className="pd-modal-field">
+              <label>C.F. Rappresentante</label>
+              <input className="pd-modal-input" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
+                value={form.cfRappresentante}
+                onChange={(e) => setF('cfRappresentante', e.target.value.toUpperCase())} />
+            </div>
+            <div className="pd-modal-field">
+              <label>Qualifica</label>
+              <select className="pd-modal-input" value={form.qualificaRappresentante}
+                onChange={(e) => setF('qualificaRappresentante', e.target.value)}>
+                <option value="">-- seleziona --</option>
+                <option>Amministratore Unico</option>
+                <option>Legale Rappresentante</option>
+                <option>Socio</option>
+                <option>Titolare</option>
+                <option>Procuratore</option>
+              </select>
             </div>
 
             {/* DURC con logica automatica */}
@@ -261,12 +315,13 @@ function NuovoPadroncinoModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (data: NuovoPadroncino) => Promise<void>;
+  onSave: (data: CreatePadroncinoPayload) => Promise<void>;
 }) {
   const empty: NuovoPadroncinoForm = {
     ragioneSociale: '', partitaIva: '', codiceFiscale: '',
     indirizzo: '', telefono: '', email: '', pec: '', iban: '',
     scadenzaDurc: '', dvrEsente: false, note: '',
+    rappresentanteNome: '', rappresentanteCognome: '', cfRappresentante: '', qualificaRappresentante: '',
   };
   const [form, setForm] = useState<NuovoPadroncinoForm>(empty);
   const [saving, setSaving] = useState(false);
@@ -296,7 +351,7 @@ function NuovoPadroncinoModal({
 
   if (!open) return null;
   return (
-    <div className="pd-modal-overlay" onClick={handleClose}>
+    <div className="pd-modal-overlay">
       <div className="pd-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
         <div className="pd-modal-header">
           <h3>➕ Nuovo Padroncino</h3>
@@ -411,7 +466,7 @@ function AssegnaModal({
 
   if (!open) return null;
   return (
-    <div className="pd-modal-overlay" onClick={onClose}>
+    <div className="pd-modal-overlay">
       <div className="pd-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pd-modal-header">
           <h3>{title}</h3>
@@ -458,7 +513,9 @@ function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
 
 // ─── TAB MEZZI ────────────────────────────────────────
 function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
+  const [showContratto, setShowContratto] = useState(false);
   const [mezziDisp, setMezziDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
 
   const loadMezziDisp = async () => {
@@ -492,6 +549,9 @@ function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
         <button className="btn-primary btn-sm" onClick={() => { loadMezziDisp(); setShowAssegna(true); }}>
           🔗 Assegna Mezzo
         </button>
+        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
+          📄 Crea Contratto
+        </button>
       </div>
 
       {attivi.length === 0 ? (
@@ -510,11 +570,12 @@ function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
                 <tr key={m.id} className="pd-item-row">
                   <td className="pd-item-targa">{m.targa}</td>
                   <td><span className="pd-item-marca">{m.marca}</span> <span className="pd-item-modello">{m.modello}</span></td>
-                  <td>{m.alimentazione}</td>
+                  <td><span className={`pd-item-badge ${m.alimentazione === 'ELETTRICO' ? 'pd-item-badge-green' : 'pd-item-badge-gray'}`}>{m.alimentazione}</span></td>
                   <td>{fmtData(m.dataInizio)}</td>
-                  <td>{m.tariffa != null ? fmtEur(m.tariffa) : <span className="pd-empty">—</span>}</td>
-                  <td>
-                    <button className="fm-del-btn" title="Rimuovi assegnazione" onClick={() => handleRimuovi(m.id)}>✕</button>
+                  <td className="pd-td-purple">{m.tariffa != null ? <span className="pd-val-purple">{fmtEur(m.tariffa)}</span> : <span className="pd-empty">—</span>}</td>
+                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button className="btn-outline btn-sm" title="Vai ai dettagli del mezzo" onClick={() => navigate(`/flotta/${m.mezzoId}`)}>Dettagli</button>
+                    <button className="pd-del-btn" title="Rimuovi assegnazione" onClick={() => handleRimuovi(m.id)}>✕</button>
                   </td>
                 </tr>
               ))}
@@ -551,13 +612,239 @@ function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
         open={showAssegna} onClose={() => setShowAssegna(false)}
         onSave={handleAssegna} title="Assegna Mezzo a Padroncino" items={mezziDisp}
       />
+
+      <ContrattoMezziModal
+        open={showContratto} onClose={() => setShowContratto(false)}
+        p={p} attivi={attivi}
+      />
+    </div>
+  );
+}
+
+// ─── MODALE CONTRATTO MEZZI ────────────────────────────
+function ContrattoMezziModal({
+  open, onClose, p, attivi,
+}: {
+  open: boolean; onClose: () => void; p: Padroncino;
+  attivi: Array<{ id: string; mezzoId: string; targa: string; dataInizio: string }>;
+}) {
+  const [nomeRapp,      setNomeRapp]      = useState('');
+  const [cognomeRapp,   setCognomeRapp]   = useState('');
+  const [cfRapp,        setCfRapp]        = useState('');
+  const [qualificaRapp, setQualificaRapp] = useState('Amministratore Unico');
+  const [dataFirma,     setDataFirma]     = useState(new Date().toISOString().split('T')[0]);
+  const [eccedenzaKm,   setEccedenzaKm]   = useState('0.10');
+  const [selezionati,   setSelezionati]   = useState<string[]>([]);
+  const [generating,    setGenerating]    = useState(false);
+  const [errMsg,        setErrMsg]        = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setNomeRapp(p.rappresentanteNome ?? '');
+    setCognomeRapp(p.rappresentanteCognome ?? '');
+    setCfRapp(p.cfRappresentante ?? '');
+    setQualificaRapp(p.qualificaRappresentante ?? 'Amministratore Unico');
+    setDataFirma(new Date().toISOString().split('T')[0]);
+    setEccedenzaKm('0.10');
+    setSelezionati(attivi.map((a) => a.mezzoId));
+    setErrMsg('');
+  }, [open]);
+
+  const toggleMezzo = (mezzoId: string) => {
+    setSelezionati((cur) => cur.includes(mezzoId) ? cur.filter((id) => id !== mezzoId) : [...cur, mezzoId]);
+  };
+
+  const handleGenera = async () => {
+    if (selezionati.length === 0) { setErrMsg('Seleziona almeno un mezzo'); return; }
+    setErrMsg(''); setGenerating(true);
+    try {
+      await padronciniApi.generaContrattoMezzi(p.id, {
+        nomeRapp: nomeRapp || undefined, cognomeRapp: cognomeRapp || undefined,
+        cfRapp: cfRapp || undefined, qualificaRapp: qualificaRapp || undefined,
+        dataFirma, mezzoIds: selezionati,
+        eccedenzaKm: eccedenzaKm !== '' ? parseFloat(eccedenzaKm) : undefined,
+        _ragioneSociale: p.ragioneSociale,
+      });
+      onClose();
+    } catch (e: any) { setErrMsg(e.message || 'Errore generazione contratto'); }
+    finally { setGenerating(false); }
+  };
+
+  if (!open) return null;
+  return (
+    <div className="pd-modal-overlay">
+      <div className="pd-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pd-modal-header">
+          <h3>📄 Crea Contratto Noleggio Mezzi</h3>
+          <button className="pd-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="pd-modal-body">
+          <div className="pd-modal-field">
+            <label>Mezzi da includere</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+              {attivi.map((a) => (
+                <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  <input type="checkbox" checked={selezionati.includes(a.mezzoId)} onChange={() => toggleMezzo(a.mezzoId)} />
+                  {a.targa}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="pd-modal-field">
+            <label>Nome Rappresentante</label>
+            <input className="pd-modal-input" value={nomeRapp} onChange={(e) => setNomeRapp(e.target.value)} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Cognome Rappresentante</label>
+            <input className="pd-modal-input" value={cognomeRapp} onChange={(e) => setCognomeRapp(e.target.value)} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Codice Fiscale Rappresentante</label>
+            <input className="pd-modal-input" value={cfRapp} onChange={(e) => setCfRapp(e.target.value.toUpperCase())} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Qualifica</label>
+            <select className="pd-modal-input" value={qualificaRapp} onChange={(e) => setQualificaRapp(e.target.value)}>
+              <option>Amministratore Unico</option>
+              <option>Legale Rappresentante</option>
+              <option>Socio</option>
+              <option>Titolare</option>
+              <option>Procuratore</option>
+            </select>
+          </div>
+          <div className="pd-modal-field">
+            <label>Data Firma</label>
+            <input className="pd-modal-input" type="date" value={dataFirma} onChange={(e) => setDataFirma(e.target.value)} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Eccedenza km (€/km)</label>
+            <input className="pd-modal-input" type="number" step="0.01" value={eccedenzaKm} onChange={(e) => setEccedenzaKm(e.target.value)} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '4px 2px' }}>
+            ℹ️ La rata noleggio e i km mensili inclusi vengono presi da ciascun mezzo (rata noleggio / km limite).
+          </div>
+          {errMsg && <div className="dm-err-msg">⚠️ {errMsg}</div>}
+        </div>
+        <div className="pd-modal-footer">
+          <button className="btn-outline btn-sm" onClick={onClose}>Annulla</button>
+          <button className="btn-primary btn-sm" onClick={handleGenera} disabled={generating || selezionati.length === 0}>
+            {generating ? '⏳ Generazione...' : '📥 Genera e Scarica Contratto'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODALE CONTRATTO PALMARI ──────────────────────────
+function ContrattoPalmareModal({
+  open, onClose, p, attivi,
+}: {
+  open: boolean; onClose: () => void; p: Padroncino;
+  attivi: Array<{ id: string; palmareId: string; codice: string; dataInizio: string }>;
+}) {
+  const [nomeRapp,      setNomeRapp]      = useState('');
+  const [cognomeRapp,   setCognomeRapp]   = useState('');
+  const [cfRapp,        setCfRapp]        = useState('');
+  const [qualificaRapp, setQualificaRapp] = useState('Amministratore Unico');
+  const [dataFirma,     setDataFirma]     = useState(new Date().toISOString().split('T')[0]);
+  const [selezionati,   setSelezionati]   = useState<string[]>([]);
+  const [generating,    setGenerating]    = useState(false);
+  const [errMsg,        setErrMsg]        = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setNomeRapp(p.rappresentanteNome ?? '');
+    setCognomeRapp(p.rappresentanteCognome ?? '');
+    setCfRapp(p.cfRappresentante ?? '');
+    setQualificaRapp(p.qualificaRappresentante ?? 'Amministratore Unico');
+    setDataFirma(new Date().toISOString().split('T')[0]);
+    setSelezionati(attivi.map((a) => a.palmareId));
+    setErrMsg('');
+  }, [open]);
+
+  const togglePalmare = (palmareId: string) => {
+    setSelezionati((cur) => cur.includes(palmareId) ? cur.filter((id) => id !== palmareId) : [...cur, palmareId]);
+  };
+
+  const handleGenera = async () => {
+    if (selezionati.length === 0) { setErrMsg('Seleziona almeno un palmare'); return; }
+    setErrMsg(''); setGenerating(true);
+    try {
+      await padronciniApi.generaContrattoPalmari(p.id, {
+        nomeRapp: nomeRapp || undefined, cognomeRapp: cognomeRapp || undefined,
+        cfRapp: cfRapp || undefined, qualificaRapp: qualificaRapp || undefined,
+        dataFirma, palmareIds: selezionati, _ragioneSociale: p.ragioneSociale,
+      });
+      onClose();
+    } catch (e: any) { setErrMsg(e.message || 'Errore generazione contratto'); }
+    finally { setGenerating(false); }
+  };
+
+  if (!open) return null;
+  return (
+    <div className="pd-modal-overlay">
+      <div className="pd-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pd-modal-header">
+          <h3>📄 Crea Contratto Noleggio Palmare</h3>
+          <button className="pd-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="pd-modal-body">
+          <div className="pd-modal-field">
+            <label>Palmari da includere</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+              {attivi.map((a) => (
+                <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  <input type="checkbox" checked={selezionati.includes(a.palmareId)} onChange={() => togglePalmare(a.palmareId)} />
+                  {a.codice}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="pd-modal-field">
+            <label>Nome Rappresentante</label>
+            <input className="pd-modal-input" value={nomeRapp} onChange={(e) => setNomeRapp(e.target.value)} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Cognome Rappresentante</label>
+            <input className="pd-modal-input" value={cognomeRapp} onChange={(e) => setCognomeRapp(e.target.value)} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Codice Fiscale Rappresentante</label>
+            <input className="pd-modal-input" value={cfRapp} onChange={(e) => setCfRapp(e.target.value.toUpperCase())} />
+          </div>
+          <div className="pd-modal-field">
+            <label>Qualifica</label>
+            <select className="pd-modal-input" value={qualificaRapp} onChange={(e) => setQualificaRapp(e.target.value)}>
+              <option>Amministratore Unico</option>
+              <option>Legale Rappresentante</option>
+              <option>Socio</option>
+              <option>Titolare</option>
+              <option>Procuratore</option>
+            </select>
+          </div>
+          <div className="pd-modal-field">
+            <label>Data Firma</label>
+            <input className="pd-modal-input" type="date" value={dataFirma} onChange={(e) => setDataFirma(e.target.value)} />
+          </div>
+          {errMsg && <div className="dm-err-msg">⚠️ {errMsg}</div>}
+        </div>
+        <div className="pd-modal-footer">
+          <button className="btn-outline btn-sm" onClick={onClose}>Annulla</button>
+          <button className="btn-primary btn-sm" onClick={handleGenera} disabled={generating || selezionati.length === 0}>
+            {generating ? '⏳ Generazione...' : '📥 Genera e Scarica Contratto'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── TAB PALMARI ──────────────────────────────────────
 function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
+  const [showContratto, setShowContratto] = useState(false);
   const [palmariDisp, setPalmariDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
 
   const loadPalmariDisp = async () => {
@@ -590,6 +877,9 @@ function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
         <button className="btn-primary btn-sm" onClick={() => { loadPalmariDisp(); setShowAssegna(true); }}>
           🔗 Assegna Palmare
         </button>
+        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
+          📄 Crea Contratto
+        </button>
       </div>
 
       {attivi.length === 0 ? (
@@ -604,10 +894,11 @@ function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
               {attivi.map((pal) => (
                 <tr key={pal.id} className="pd-item-row">
                   <td className="pd-item-targa">{pal.codice}</td>
-                  <td>{pal.tariffa != null ? fmtEur(pal.tariffa) : '—'}</td>
+                  <td className="pd-td-purple">{pal.tariffa != null ? <span className="pd-val-purple">{fmtEur(pal.tariffa)}</span> : <span className="pd-empty">—</span>}</td>
                   <td>{fmtData(pal.dataInizio)}</td>
-                  <td>
-                    <button className="fm-del-btn" title="Rimuovi" onClick={() => handleRimuovi(pal.id)}>✕</button>
+                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button className="btn-outline btn-sm" title="Vai ai dettagli del palmare" onClick={() => navigate(`/palmari/${pal.palmareId}`)}>Dettagli</button>
+                    <button className="pd-del-btn" title="Rimuovi" onClick={() => handleRimuovi(pal.id)}>✕</button>
                   </td>
                 </tr>
               ))}
@@ -620,19 +911,189 @@ function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
         open={showAssegna} onClose={() => setShowAssegna(false)}
         onSave={handleAssegna} title="Assegna Palmare a Padroncino" items={palmariDisp}
       />
+
+      <ContrattoPalmareModal
+        open={showContratto} onClose={() => setShowContratto(false)}
+        p={p} attivi={attivi}
+      />
+    </div>
+  );
+}
+
+// ─── INLINE EDIT CELL ─────────────────────────────────
+function InlineEditCell({
+  value,
+  tipo,
+  onSave,
+  placeholder,
+  valueClassName,
+}: {
+  value: string | number | null | undefined;
+  tipo: 'text' | 'number' | 'euro';
+  onSave: (val: string) => Promise<void>;
+  placeholder?: string;
+  valueClassName?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = () => {
+    const raw = value != null ? String(value) : '';
+    setDraft(raw);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const commit = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+    } catch { /* ignora */ }
+    finally {
+      setSaving(false);
+      setEditing(false);
+    }
+  };
+
+  const cancel = () => setEditing(false);
+
+  const displayVal = () => {
+    if (value == null || value === '') return <span className="pd-empty">—</span>;
+    if (tipo === 'euro') return <span className={valueClassName}>{fmtEur(Number(value))}</span>;
+    return <span className={valueClassName}>{String(value)}</span>;
+  };
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 80 }}>
+        <input
+          ref={inputRef}
+          type={tipo === 'text' ? 'text' : 'number'}
+          step={tipo === 'euro' ? '0.01' : tipo === 'number' ? '1' : undefined}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') cancel();
+          }}
+          onBlur={commit}
+          disabled={saving}
+          style={{
+            width: tipo === 'text' ? 110 : 72,
+            fontSize: 12,
+            padding: '2px 6px',
+            border: '1.5px solid var(--primary)',
+            borderRadius: 5,
+            background: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+          }}
+          placeholder={placeholder}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <span
+      title="Clicca per modificare"
+      onClick={startEdit}
+      style={{
+        cursor: 'pointer',
+        borderBottom: '1px dashed var(--border)',
+        paddingBottom: 1,
+        minWidth: 24,
+        display: 'inline-block',
+      }}
+    >
+      {displayVal()}
+    </span>
+  );
+}
+
+// ─── MODALE CONTRATTO CODICI AUTISTA ───────────────────
+function ContrattoCodiciModal({
+  open, onClose, p, attivi,
+}: {
+  open: boolean; onClose: () => void; p: Padroncino;
+  attivi: Array<{ id: string; codiceId: string; codice: string }>;
+}) {
+  const [dataContratto, setDataContratto] = useState(new Date().toISOString().split('T')[0]);
+  const [selezionati,   setSelezionati]   = useState<string[]>([]);
+  const [generating,    setGenerating]    = useState(false);
+  const [errMsg,        setErrMsg]        = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setDataContratto(new Date().toISOString().split('T')[0]);
+    setSelezionati(attivi.map((a) => a.codiceId));
+    setErrMsg('');
+  }, [open]);
+
+  const toggleCodice = (codiceId: string) => {
+    setSelezionati((cur) => cur.includes(codiceId) ? cur.filter((id) => id !== codiceId) : [...cur, codiceId]);
+  };
+
+  const handleGenera = async () => {
+    if (selezionati.length === 0) { setErrMsg('Seleziona almeno un codice autista'); return; }
+    setErrMsg(''); setGenerating(true);
+    try {
+      await padronciniApi.generaContrattoCodici(p.id, {
+        dataContratto, codiceAutistaIds: selezionati, _ragioneSociale: p.ragioneSociale,
+      });
+      onClose();
+    } catch (e: any) { setErrMsg(e.message || 'Errore generazione contratto'); }
+    finally { setGenerating(false); }
+  };
+
+  if (!open) return null;
+  return (
+    <div className="pd-modal-overlay">
+      <div className="pd-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pd-modal-header">
+          <h3>📄 Crea Contratto Codici Autista</h3>
+          <button className="pd-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="pd-modal-body">
+          <div className="pd-modal-field">
+            <label>Codici da includere</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+              {attivi.map((a) => (
+                <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  <input type="checkbox" checked={selezionati.includes(a.codiceId)} onChange={() => toggleCodice(a.codiceId)} />
+                  {a.codice}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="pd-modal-field">
+            <label>Data Contratto</label>
+            <input className="pd-modal-input" type="date" value={dataContratto} onChange={(e) => setDataContratto(e.target.value)} />
+          </div>
+          {errMsg && <div className="dm-err-msg">⚠️ {errMsg}</div>}
+        </div>
+        <div className="pd-modal-footer">
+          <button className="btn-outline btn-sm" onClick={onClose}>Annulla</button>
+          <button className="btn-primary btn-sm" onClick={handleGenera} disabled={generating || selezionati.length === 0}>
+            {generating ? '⏳ Generazione...' : '📥 Genera e Scarica Contratto'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── TAB AUTISTI ──────────────────────────────────────
 function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+  const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
+  const [showContratto, setShowContratto] = useState(false);
   const [autistiDisp, setAutistiDisp] = useState<Array<{ id: string; label: string; sub?: string }>>([]);
 
   const loadAutistiDisp = async () => {
     try {
       const res = await codiciAutistaApi.list({ limit: '200' });
-      // Filtra solo quelli non assegnati (attivi senza dataFine)
       const disponibili = res.data.filter((c: any) => {
         const assAttiva = c.assegnazioni?.find((a: any) => !a.dataFine);
         return !assAttiva;
@@ -656,6 +1117,18 @@ function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
     await onRefresh();
   };
 
+  /** Salva un campo del CodiceAutista e fa refresh */
+  const handleSaveField = async (codiceId: string, field: string, rawVal: string) => {
+    let parsed: any = rawVal === '' ? null : rawVal;
+    if (field === 'tariffaFissa' || field === 'tariffaRitiro' || field === 'bonus' || field === 'malus') {
+      parsed = rawVal === '' ? null : parseFloat(rawVal);
+    } else if (field === 'target') {
+      parsed = rawVal === '' ? null : parseInt(rawVal, 10);
+    }
+    await codiciAutistaApi.update(codiceId, { [field]: parsed });
+    await onRefresh();
+  };
+
   const attivi = (p.codiciAutista || []).filter((a) => !a.dataFine);
 
   return (
@@ -664,35 +1137,117 @@ function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
         <button className="btn-primary btn-sm" onClick={() => { loadAutistiDisp(); setShowAssegna(true); }}>
           🔗 Assegna Codice Autista
         </button>
+        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
+          📄 Crea Contratto
+        </button>
       </div>
 
       {attivi.length === 0 ? (
         <EmptyTab icon="👤" msg="Nessun codice autista assegnato" />
       ) : (
-        <div className="pd-items-table-wrap">
-          <table className="pd-items-table">
+        <div className="pd-items-table-wrap" style={{ overflowX: 'auto' }}>
+          <table className="pd-items-table" style={{ minWidth: 700 }}>
             <thead>
-              <tr><th>CODICE</th><th>NOME</th><th>DATA INIZIO</th><th></th></tr>
+              <tr>
+                <th>CODICE</th>
+                <th>DATA INIZIO</th>
+                <th>TARIFFA</th>
+                <th>TARGET</th>
+                <th>BONUS</th>
+                <th>MALUS</th>
+                <th>TARIFFA RITIRO</th>
+                <th>NOTE</th>
+                <th>ZONE</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               {attivi.map((a) => (
                 <tr key={a.id} className="pd-item-row">
                   <td className="pd-item-targa">{a.codice}</td>
-                  <td>{[a.nome, a.cognome].filter(Boolean).join(' ') || <span className="pd-empty">—</span>}</td>
                   <td>{fmtData(a.dataInizio)}</td>
+                  <td className="pd-td-purple">
+                    <InlineEditCell
+                      value={a.tariffaFissa}
+                      tipo="euro"
+                      placeholder="0.00"
+                      valueClassName="pd-val-purple"
+                      onSave={(v) => handleSaveField(a.codiceId, 'tariffaFissa', v)}
+                    />
+                  </td>
                   <td>
-                    <button className="fm-del-btn" title="Rimuovi" onClick={() => handleRimuovi(a.id)}>✕</button>
+                    <InlineEditCell
+                      value={a.target}
+                      tipo="number"
+                      placeholder="0"
+                      onSave={(v) => handleSaveField(a.codiceId, 'target', v)}
+                    />
+                  </td>
+                  <td className="pd-td-green">
+                    <InlineEditCell
+                      value={a.bonus}
+                      tipo="euro"
+                      placeholder="0.00"
+                      valueClassName="pd-val-green"
+                      onSave={(v) => handleSaveField(a.codiceId, 'bonus', v)}
+                    />
+                  </td>
+                  <td className="pd-td-red">
+                    <InlineEditCell
+                      value={a.malus}
+                      tipo="euro"
+                      placeholder="0.00"
+                      valueClassName="pd-val-red"
+                      onSave={(v) => handleSaveField(a.codiceId, 'malus', v)}
+                    />
+                  </td>
+                  <td className="pd-td-amber">
+                    <InlineEditCell
+                      value={a.tariffaRitiro}
+                      tipo="euro"
+                      placeholder="0.00"
+                      valueClassName="pd-val-amber"
+                      onSave={(v) => handleSaveField(a.codiceId, 'tariffaRitiro', v)}
+                    />
+                  </td>
+                  <td>
+                    <InlineEditCell
+                      value={a.note}
+                      tipo="text"
+                      placeholder="Note..."
+                      onSave={(v) => handleSaveField(a.codiceId, 'note', v)}
+                    />
+                  </td>
+                  <td>
+                    <InlineEditCell
+                      value={a.zone}
+                      tipo="text"
+                      placeholder="Zone..."
+                      onSave={(v) => handleSaveField(a.codiceId, 'zone', v)}
+                    />
+                  </td>
+                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button className="btn-outline btn-sm" title="Vai ai dettagli del codice autista" onClick={() => navigate(`/codici-autista/${a.codiceId}`)}>Dettagli</button>
+                    <button className="pd-del-btn" title="Rimuovi" onClick={() => handleRimuovi(a.id)}>✕</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 4px' }}>
+            💡 Clicca su un valore per modificarlo direttamente
+          </div>
         </div>
       )}
 
       <AssegnaModal
         open={showAssegna} onClose={() => setShowAssegna(false)}
         onSave={handleAssegna} title="Assegna Codice Autista" items={autistiDisp}
+      />
+
+      <ContrattoCodiciModal
+        open={showContratto} onClose={() => setShowContratto(false)}
+        p={p} attivi={attivi}
       />
     </div>
   );
@@ -723,7 +1278,10 @@ interface StoricoMese {
   id: string;
   mese: string;
   stato: 'BOZZA' | 'CHIUSO' | 'CONFERMATO';
+  /** Fatturato con IVA inclusi acconti (netto da acconti) — per il dettaglio fattura */
   fatturato: number;
+  /** Fatturato lordo con IVA, senza detrarre acconti — per statistiche e grafici */
+  fatturatoLordo: number;
   addebiti: number;
   compensazioni: number;
   netto: number;
@@ -746,6 +1304,21 @@ const CHART_COLORS = {
   addebiti:  '#f97316',
   netto:     '#22c55e',
 };
+
+function pctDelta(curr: number | null | undefined, prev: number | null | undefined): number | null {
+  if (curr == null || prev == null || prev === 0) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+function DeltaBadge({ pct }: { pct: number | null }) {
+  if (pct == null) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>;
+  const up = pct >= 0;
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, color: up ? '#16a34a' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+      {up ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -777,10 +1350,9 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API_BASE}/padroncini/${p.id}/storico-conteggi`)
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) setStorico(data); })
-      .catch(() => {})
+    padronciniApi.storicoConteggi(p.id)
+      .then((data) => { if (!cancelled) setStorico(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setStorico([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [p.id]);
@@ -788,7 +1360,13 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
   if (loading) return <div className="pd-empty-tab"><div className="pd-spinner" /></div>;
   if (storico.length === 0) return <EmptyTab icon="📊" msg="Nessun conteggio trovato per questo padroncino" />;
 
-  const totFatt  = storico.reduce((s, r) => s + r.fatturato * 1.22, 0);
+  // Mappa mese → riga precedente (ordine cronologico) per calcolo delta %
+  const sorted = [...storico].sort((a, b) => a.mese.localeCompare(b.mese));
+  const prevMese = new Map<string, StoricoMese>();
+  sorted.forEach((r, i) => { if (i > 0) prevMese.set(r.mese, sorted[i - 1]); });
+
+  // fatturatoLordo = fatturato con IVA escludendo acconti (per statistiche/grafici)
+  const totFatt  = storico.reduce((s, r) => s + (r.fatturatoLordo ?? r.fatturato), 0);
   const totAdd   = storico.reduce((s, r) => s + r.addebiti + r.compensazioni, 0);
   const totNetto = storico.reduce((s, r) => s + r.netto, 0);
 
@@ -797,7 +1375,7 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
     .sort((a, b) => a.mese.localeCompare(b.mese))
     .map((r) => ({
       mese:      fmtMese(r.mese),
-      fatturato: Math.round(r.fatturato * 1.22 * 100) / 100,
+      fatturato: r.fatturatoLordo ?? r.fatturato,                     // lordo senza acconti
       addebiti:  Math.round((r.addebiti + r.compensazioni) * 100) / 100,
       netto:     r.netto,
     }));
@@ -806,18 +1384,18 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
     <div>
       {/* ── KPI cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--blue">
           <span className="pd-fin-card-label">Fatturato totale (c/IVA)</span>
           <span className="pd-fin-card-val blue">{fmtEur(totFatt)}</span>
         </div>
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--yellow">
           <span className="pd-fin-card-label">Addebiti totali</span>
           <span className="pd-fin-card-val orange">{fmtEur(totAdd)}</span>
         </div>
-        <div className="pd-fin-card">
+        <div className={`pd-fin-card ${totNetto >= 0 ? 'pd-fin-card--green' : 'pd-fin-card--red'}`}>
           <span className="pd-fin-card-label">Netto totale</span>
           <span className={`pd-fin-card-val ${totNetto >= 0 ? 'green' : ''}`}
-            style={totNetto < 0 ? { color: 'var(--danger)' } : {}}>
+            style={totNetto < 0 ? { color: '#dc2626' } : {}}>
             {fmtEur(totNetto)}
           </span>
         </div>
@@ -887,10 +1465,12 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
               <th>MESE</th>
               <th>STATO</th>
               <th style={{ textAlign: 'right' }}>FATTURATO (c/IVA)</th>
+              <th style={{ textAlign: 'right' }}>Δ FATT.</th>
               <th style={{ textAlign: 'right' }}>ADDEBITI</th>
               <th style={{ textAlign: 'right' }}>COMP.</th>
               <th style={{ textAlign: 'right' }}>SPEDIZIONI</th>
-              <th style={{ textAlign: 'right' }}>NETTO</th>
+              <th style={{ textAlign: 'right' }}>Δ SPED.</th>
+              <th style={{ textAlign: 'right' }}>BONIFICATO</th>
             </tr>
           </thead>
           <tbody>
@@ -899,11 +1479,20 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
                 onClick={() => navigate(`/conteggi/${p.id}?mese=${r.mese}`)}>
                 <td style={{ fontWeight: 600 }}>{fmtMese(r.mese)}</td>
                 <td><StatoConteggioBadge stato={r.stato} /></td>
-                <td style={{ textAlign: 'right', color: 'var(--primary)' }}>{fmtEur(r.fatturato * 1.22)}</td>
+                <td style={{ textAlign: 'right', color: 'var(--primary)' }}>{fmtEur(r.fatturatoLordo ?? r.fatturato)}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <DeltaBadge pct={pctDelta(
+                    r.fatturatoLordo ?? r.fatturato,
+                    prevMese.get(r.mese) ? (prevMese.get(r.mese)!.fatturatoLordo ?? prevMese.get(r.mese)!.fatturato) : null
+                  )} />
+                </td>
                 <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.addebiti)}</td>
                 <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.compensazioni)}</td>
                 <td style={{ textAlign: 'right' }}>
                   {r.nSpedizioni !== null ? r.nSpedizioni.toLocaleString('it-IT') : <span className="pd-empty">—</span>}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <DeltaBadge pct={pctDelta(r.nSpedizioni, prevMese.get(r.mese)?.nSpedizioni ?? null)} />
                 </td>
                 <td style={{ textAlign: 'right', color: r.netto >= 0 ? '#16a34a' : 'var(--danger)', fontWeight: 600 }}>
                   {fmtEur(r.netto)}
@@ -925,11 +1514,19 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
   const [uploadForm, setUploadForm] = useState({ nome: '', tipo: 'CONTRATTO', scadenza: '', note: '' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ nome: '', tipo: 'CONTRATTO', scadenza: '', note: '' });
+  const [saving, setSaving] = useState(false);
+
+  const getToken = () => localStorage.getItem('token');
 
   const loadDocs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/padroncini/${p.id}/documenti`);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/padroncini/${p.id}/documenti`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) setDocs(await res.json());
     } catch { /* ignora */ }
     finally { setLoading(false); }
@@ -949,8 +1546,10 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
       if (uploadForm.scadenza) fd.append('scadenza', uploadForm.scadenza);
       if (uploadForm.note) fd.append('note', uploadForm.note);
 
+      const token = getToken();
       const res = await fetch(`${API_BASE}/padroncini/${p.id}/documenti`, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text());
@@ -969,11 +1568,55 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
   const handleDelete = async (docId: string) => {
     if (!window.confirm('Eliminare questo documento?')) return;
     try {
-      await fetch(`${API_BASE}/padroncini/${p.id}/documenti/${docId}`, { method: 'DELETE' });
+      const token = getToken();
+      await fetch(`${API_BASE}/padroncini/${p.id}/documenti/${docId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       await loadDocs();
       await onRefresh();
     } catch (e: any) {
       alert('Errore: ' + e.message);
+    }
+  };
+
+  const openEdit = (doc: Documento) => {
+    setShowUpload(false);
+    setEditingDocId(doc.id);
+    setEditForm({
+      nome: doc.nome || '',
+      tipo: doc.tipo || 'CONTRATTO',
+      scadenza: doc.scadenza ? doc.scadenza.substring(0, 10) : '',
+      note: doc.note || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingDocId) return;
+    setSaving(true);
+    try {
+      const body: Record<string, string> = {};
+      if (editForm.nome)     body.nome     = editForm.nome;
+      if (editForm.tipo)     body.tipo     = editForm.tipo;
+      body.scadenza = editForm.scadenza || '';
+      body.note     = editForm.note;
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/padroncini/${p.id}/documenti/${editingDocId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setEditingDocId(null);
+      await loadDocs();
+      await onRefresh();
+    } catch (e: any) {
+      alert('Errore salvataggio: ' + e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -985,16 +1628,52 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
   };
 
   const TIPI_DOC = [
-    'CONTRATTO', 'VISURA', 'DURC', 'DVR', 'IDENTITA', 'ALTRO',
+    'CONTRATTO', 'VISURA', 'DURC', 'DVR', 'LICENZA', 'IDENTITA', 'ALTRO',
   ];
 
   return (
     <div>
       <div className="pd-tab-actions">
-        <button className="btn-primary btn-sm" onClick={() => setShowUpload(!showUpload)}>
+        <button className="btn-primary btn-sm" onClick={() => { setShowUpload(!showUpload); setEditingDocId(null); }}>
           📎 Carica Documento
         </button>
       </div>
+
+      {editingDocId && (
+        <div className="pd-upload-panel">
+          <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>✏️ Modifica documento</div>
+          <div className="pd-modal-grid2" style={{ marginBottom: 12 }}>
+            <div className="pd-modal-field">
+              <label>Nome</label>
+              <input className="pd-modal-input" value={editForm.nome}
+                onChange={(e) => setEditForm((f) => ({ ...f, nome: e.target.value }))} />
+            </div>
+            <div className="pd-modal-field">
+              <label>Tipo Documento</label>
+              <select className="pd-modal-input" value={editForm.tipo}
+                onChange={(e) => setEditForm((f) => ({ ...f, tipo: e.target.value }))}>
+                {TIPI_DOC.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="pd-modal-field">
+              <label>Scadenza</label>
+              <input className="pd-modal-input" type="date" value={editForm.scadenza}
+                onChange={(e) => setEditForm((f) => ({ ...f, scadenza: e.target.value }))} />
+            </div>
+            <div className="pd-modal-field">
+              <label>Note</label>
+              <input className="pd-modal-input" value={editForm.note}
+                onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+            <button className="btn-outline btn-sm" onClick={() => setEditingDocId(null)}>Annulla</button>
+            <button className="btn-primary btn-sm" onClick={handleSaveEdit} disabled={saving}>
+              {saving ? 'Salvataggio...' : '💾 Salva modifiche'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showUpload && (
         <div className="pd-upload-panel">
@@ -1039,7 +1718,7 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
                   <div style={{ fontWeight: 600 }}>{selectedFile.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtSize(selectedFile.size)}</div>
                 </div>
-                <button className="fm-del-btn" style={{ marginLeft: 'auto' }}
+                <button className="pd-del-btn" style={{ marginLeft: 'auto' }}
                   onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}>✕</button>
               </div>
             ) : (
@@ -1068,7 +1747,7 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
         <div className="pd-items-table-wrap">
           <table className="pd-items-table">
             <thead>
-              <tr><th>DOCUMENTO</th><th>TIPO</th><th>SCADENZA</th><th>DIM.</th><th>DATA</th><th></th></tr>
+              <tr><th>DOCUMENTO</th><th>TIPO</th><th>SCADENZA</th><th>NOTE</th><th>DIM.</th><th>DATA</th><th></th></tr>
             </thead>
             <tbody>
               {docs.map((d) => {
@@ -1095,10 +1774,19 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
                         </span>
                       ) : <span className="pd-empty">—</span>}
                     </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={d.note || ''}>
+                      {d.note ? d.note : <span className="pd-empty">—</span>}
+                    </td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtSize(d.dimensione)}</td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtData(d.createdAt)}</td>
                     <td>
-                      <button className="fm-del-btn" title="Elimina" onClick={() => handleDelete(d.id)}>🗑</button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="pd-del-btn" title="Modifica"
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', fontSize: 14 }}
+                          onClick={() => openEdit(d)}>✏️</button>
+                        <button className="pd-del-btn" title="Elimina" onClick={() => handleDelete(d.id)}>🗑</button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1125,73 +1813,238 @@ function Field({ label, value, mono }: { label: string; value?: string | null; m
 
 function TabInfo({ p }: { p: Padroncino }) {
   const durcSt = durcStatus(p.scadenzaDurc);
-  const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
+  const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
   const durcInfo = scadenzaInfo(p.scadenzaDurc);
+  const dvrInfo = scadenzaInfo(p.scadenzaDvr);
+
+  const barClass = (st: { cls: string }) => {
+    if (st.cls === 'pd-doc-ok') return 'pd-scad-bar--green';
+    if (st.cls === 'pd-doc-warning') return 'pd-scad-bar--yellow';
+    if (st.cls === 'pd-doc-expired') return 'pd-scad-bar--red';
+    if (st.cls === 'pd-doc-esente') return 'pd-scad-bar--blue';
+    return 'pd-scad-bar--gray';
+  };
+
+  const durcScaduto = durcSt.cls === 'pd-doc-expired';
+  const dvrScaduto = dvrSt.cls === 'pd-doc-expired';
+  const alertMsg = durcScaduto && dvrScaduto
+    ? 'DURC e DVR scaduti — verificare documentazione'
+    : durcScaduto
+      ? 'DURC scaduto — verificare documentazione'
+      : dvrScaduto
+        ? 'DVR scaduto — verificare documentazione'
+        : null;
 
   return (
-    <div className="pd-info-grid">
-      <div className="pd-section">
-        <h4>Dati Anagrafici</h4>
-        <Field label="Ragione Sociale" value={p.ragioneSociale} />
-        <Field label="Partita IVA" value={p.partitaIva} mono />
-        <Field label="Codice Fiscale" value={p.codiceFiscale} mono />
-        <Field label="Indirizzo" value={p.indirizzo} />
-      </div>
-      <div className="pd-section">
-        <h4>Contatti</h4>
-        <Field label="Telefono" value={p.telefono} />
-        <Field label="Email" value={p.email} />
-        <Field label="PEC" value={p.pec} />
-        <Field label="IBAN" value={p.iban} mono />
-      </div>
-      <div className="pd-section pd-section-full">
-        <h4>Documenti & Scadenze</h4>
-        <div className="pd-scadenze">
-          {/* DURC */}
-          <div className={`pd-scad-row ${durcInfo?.cls ?? 'pd-scad-absent'}`}>
-            <span className="pd-scad-type">DURC</span>
-            {p.scadenzaDurc ? (
-              <>
-                <span className="pd-scad-date">{new Date(p.scadenzaDurc).toLocaleDateString('it-IT')}</span>
-                <span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span>
-                {durcInfo && <span className="pd-scad-days">{durcInfo.label}</span>}
-              </>
-            ) : (
-              <>
-                <span className="pd-scad-date pd-empty">Non inserito</span>
-                <span className="pd-doc-badge pd-doc-absent">ASSENTE</span>
-              </>
-            )}
+    <div className="pd-info-stack">
+      {/* ── Anagrafica + Contatti (2 colonne) ── */}
+      <div className="pd-info-grid2">
+        <div className="pd-info-card">
+          <h4 className="pd-info-h">Dati Anagrafici</h4>
+          <div className="pd-info-fields pd-info-fields--2col">
+            <Field label="Ragione Sociale" value={p.ragioneSociale} />
+            <span />
+            <Field label="Partita IVA" value={p.partitaIva} mono />
+            <Field label="Codice Fiscale" value={p.codiceFiscale} mono />
+            <Field label="Indirizzo" value={p.indirizzo} />
           </div>
 
-          {/* DVR */}
-          <div className={`pd-scad-row ${(p as any).dvrEsente ? 'pd-scad-esente' : p.scadenzaDvr ? 'pd-scad-ok' : 'pd-scad-absent'}`}>
-            <span className="pd-scad-type">DVR</span>
-            {(p as any).dvrEsente ? (
-              <>
-                <span className="pd-scad-date">Non soggetto a DVR</span>
-                <span className="pd-doc-badge pd-doc-esente">ESENTE</span>
-              </>
-            ) : p.scadenzaDvr ? (
-              <>
-                <span className="pd-scad-date">{new Date(p.scadenzaDvr).toLocaleDateString('it-IT')}</span>
-                <span className="pd-doc-badge pd-doc-ok">REGOLARE</span>
-              </>
-            ) : (
-              <>
-                <span className="pd-scad-date pd-empty">Non caricato</span>
-                <span className="pd-doc-badge pd-doc-absent">ASSENTE</span>
-              </>
-            )}
+          {/* Rappresentante legale — mostrato solo se compilato */}
+          {(p.rappresentanteNome || p.rappresentanteCognome || p.cfRappresentante) && (
+            <>
+              <div style={{ borderTop: '1px dashed var(--border)', margin: '12px 0 8px', paddingTop: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                  👤 Rappresentante Legale
+                </span>
+              </div>
+              <div className="pd-info-fields pd-info-fields--2col">
+                <Field
+                  label="Nome e Cognome"
+                  value={[p.rappresentanteNome, p.rappresentanteCognome].filter(Boolean).join(' ') || null}
+                />
+                <Field
+                  label="Qualifica"
+                  value={p.qualificaRappresentante}
+                />
+                <Field label="C.F. Rappresentante" value={p.cfRappresentante} mono />
+                <span />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="pd-info-card">
+          <h4 className="pd-info-h">Contatti</h4>
+          <div className="pd-info-fields pd-info-fields--2col">
+            <Field label="Telefono" value={p.telefono} />
+            <Field label="Email" value={p.email} />
+            <Field label="PEC" value={p.pec} />
+            <Field label="IBAN" value={p.iban} mono />
           </div>
         </div>
       </div>
-      {p.note && (
-        <div className="pd-section pd-section-full">
-          <h4>Note</h4>
-          <p className="pd-note-text">{p.note}</p>
+
+      {/* ── Documenti & Scadenze ── */}
+      <div className="pd-info-card">
+        <h4 className="pd-info-h">Documenti & Scadenze</h4>
+        <div className="pd-scad-list">
+          <div className={`pd-scad-item ${barClass(durcSt)}`}>
+            <span className="pd-scad-label">DURC</span>
+            <span className="pd-scad-date">
+              {p.scadenzaDurc ? new Date(p.scadenzaDurc).toLocaleDateString('it-IT') : 'Non inserito'}
+            </span>
+            <div className="pd-scad-end">
+              <span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span>
+              {durcInfo && <span className="pd-scad-days">{durcInfo.label}</span>}
+            </div>
+          </div>
+          <div className={`pd-scad-item ${barClass(dvrSt)}`}>
+            <span className="pd-scad-label">DVR</span>
+            <span className="pd-scad-date">
+              {p.dvrEsente
+                ? 'Non soggetto a DVR'
+                : p.scadenzaDvr
+                  ? new Date(p.scadenzaDvr).toLocaleDateString('it-IT')
+                  : 'Non inserito'}
+            </span>
+            <div className="pd-scad-end">
+              <span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span>
+              {dvrInfo && !p.dvrEsente && <span className="pd-scad-days">{dvrInfo.label}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Alert banner ── */}
+      {alertMsg && (
+        <div className="pd-alert-banner">
+          <span className="pd-alert-banner-ico">⚠️</span>
+          <span className="pd-alert-banner-msg">{alertMsg}</span>
         </div>
       )}
+
+      {/* ── Andamento fatturato ── */}
+      <AndamentoChart padroncinoId={p.id} />
+
+      {/* ── Note ── */}
+      <div className="pd-info-card">
+        <h4 className="pd-info-h">Note</h4>
+        <p className="pd-note-text">{p.note || <span className="pd-empty">Nessuna nota</span>}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── GRAFICO ANDAMENTO FATTURATO ──────────────────────
+function AndamentoChart({ padroncinoId }: { padroncinoId: string }) {
+  const currentYear = new Date().getFullYear();
+  const [yearFrom, setYearFrom] = useState<number>(currentYear);
+  const [yearTo, setYearTo] = useState<number>(currentYear);
+  const [data, setData] = useState<Array<{ mese: string; fatturato: number; addebiti: number; daBonificare: number }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const dal = `${yearFrom}-01`;
+        const al = `${yearTo}-12`;
+        const res = await padronciniApi.andamento(padroncinoId, dal, al);
+        if (!cancelled) setData(res);
+      } catch (e) {
+        if (!cancelled) setData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [padroncinoId, yearFrom, yearTo]);
+
+  // Espandi su tutti i mesi del range (anche 0)
+  const chartData = useMemo(() => {
+    const byMese = new Map(data.map((d) => [d.mese, d]));
+    const out: Array<{ label: string; mese: string; fatturato: number; addebiti: number; daBonificare: number }> = [];
+    const MESI_LBL = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
+    for (let y = yearFrom; y <= yearTo; y++) {
+      for (let m = 1; m <= 12; m++) {
+        const k = `${y}-${String(m).padStart(2, '0')}`;
+        const row = byMese.get(k);
+        const label = yearFrom === yearTo ? MESI_LBL[m - 1] : `${MESI_LBL[m - 1]} ${String(y).slice(2)}`;
+        out.push({
+          label,
+          mese: k,
+          fatturato: row?.fatturato ?? 0,
+          addebiti: row?.addebiti ?? 0,
+          daBonificare: row?.daBonificare ?? 0,
+        });
+      }
+    }
+    return out;
+  }, [data, yearFrom, yearTo]);
+
+  const years = [];
+  for (let y = currentYear - 5; y <= currentYear + 1; y++) years.push(y);
+
+  return (
+    <div className="pd-info-card">
+      <div className="pd-chart-head">
+        <h4 className="pd-info-h" style={{ border: 'none', padding: 0, margin: 0 }}>Andamento Fatturato</h4>
+        <div className="pd-chart-range">
+          <label>
+            Dal
+            <select
+              value={yearFrom}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                setYearFrom(v);
+                if (v > yearTo) setYearTo(v);
+              }}
+            >
+              {years.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+          <label>
+            Al
+            <select
+              value={yearTo}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                setYearTo(v);
+                if (v < yearFrom) setYearFrom(v);
+              }}
+            >
+              {years.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+        </div>
+      </div>
+      <div className="pd-chart-wrap">
+        {loading ? (
+          <div className="pd-chart-loading">Caricamento…</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
+              <Tooltip
+                formatter={(v: any) => fmtEur(Number(v))}
+                contentStyle={{
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="fatturato"    name="Fatturato"    fill="#2563eb" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="addebiti"     name="Addebiti"     fill="#f97316" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="daBonificare" name="Da bonificare" fill="#16a34a" radius={[3, 3, 0, 0]} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 }
@@ -1235,7 +2088,7 @@ export function PadroncinoDetail({
     onRefresh();
   }, [fetchDetail, onRefresh]);
 
-  const handleSaveModifica = async (data: Partial<NuovoPadroncino>) => {
+  const handleSaveModifica = async (data: Partial<CreatePadroncinoPayload>) => {
     await padronciniApi.update(p.id, data);
     await handleRefresh();
   };
@@ -1252,7 +2105,7 @@ export function PadroncinoDetail({
 
   const durc = scadenzaInfo(p.scadenzaDurc);
   const durcSt = durcStatus(p.scadenzaDurc);
-  const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
+  const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
 
   const nMezzi = p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0;
   const nPalmari = p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0;
@@ -1299,21 +2152,21 @@ export function PadroncinoDetail({
       </div>
 
       <div className="pd-fin-cards">
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--blue">
           <span className="pd-fin-card-label">FATTURATO TOTALE</span>
-          <span className="pd-fin-card-val">{p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}</span>
+          <span className="pd-fin-card-val blue">{p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}</span>
         </div>
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--yellow">
           <span className="pd-fin-card-label">ADDEBITI TOTALI</span>
           <span className="pd-fin-card-val orange">{p.addebitiTotali != null ? fmtEur(p.addebitiTotali) : '—'}</span>
         </div>
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--green">
           <span className="pd-fin-card-label">DA BONIFICARE</span>
           <span className="pd-fin-card-val green">{p.daBonificare != null ? fmtEur(p.daBonificare) : '—'}</span>
         </div>
-        <div className="pd-fin-card">
+        <div className="pd-fin-card pd-fin-card--purple">
           <span className="pd-fin-card-label">MEDIA MENSILE</span>
-          <span className="pd-fin-card-val blue">{p.mediaMensile != null ? fmtEur(p.mediaMensile) : '—'}</span>
+          <span className="pd-fin-card-val purple">{p.mediaMensile != null ? fmtEur(p.mediaMensile) : '—'}</span>
           <span className="pd-fin-card-sub">fattura/mese</span>
         </div>
       </div>
@@ -1360,9 +2213,28 @@ export default function PadronciniPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [filtro, setFiltro] = useState<Filtro>('TUTTI');
+  const [filtro, setFiltro] = useState<Filtro>('ATTIVO');
   const [showNuovo, setShowNuovo] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState<{ creati: number; saltati: number; errori: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true);
+    try {
+      const result = await padronciniApi.importaExcel(file);
+      setImportResult(result);
+      await load();
+    } catch (err: any) {
+      alert('Errore importazione: ' + (err?.message ?? 'Errore sconosciuto'));
+    } finally {
+      setImportando(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -1395,7 +2267,7 @@ export default function PadronciniPage() {
     });
   }, [padroncini, search, filtro]);
 
-  const handleCreate = async (form: NuovoPadroncino) => {
+  const handleCreate = async (form: CreatePadroncinoPayload) => {
     try {
       const nuovo = await padronciniApi.create({
         ragioneSociale: form.ragioneSociale,
@@ -1429,31 +2301,51 @@ export default function PadronciniPage() {
 
   return (
     <div className="pd-page">
-      <div className="pd-page-header">
+      <div className="pd-page-titlebar">
         <h1>Padroncini</h1>
+
+        {(stats?.alertDocumenti ?? 0) > 0 && (
+          <span
+            className="pd-alert-pill"
+            title="Documenti in scadenza o scaduti"
+          >
+            <span className="pd-alert-pill-ico">⚠️</span>
+            {stats?.alertDocumenti ?? 0} alert
+          </span>
+        )}
+      </div>
+      <div className="pd-page-header">
         <div className="pd-page-stats">
-          <div className="pd-page-stat">
-            <span className="pd-page-stat-icon">👥</span>
+          <div className="pd-page-stat pd-page-stat--blue">
+            <div className="pd-page-stat-head">
+              <span className="pd-page-stat-label">PADRONCINI ATTIVI</span>
+              <span className="pd-page-stat-icon">👥</span>
+            </div>
             <span className="pd-page-stat-val">{stats?.attivi ?? padroncini.filter(p => p.attivo).length}</span>
-            <span className="pd-page-stat-label">PADRONCINI ATTIVI</span>
             <span className="pd-page-stat-sub">{stats?.dismissi ?? 0} dismessi · {stats?.totali ?? padroncini.length} totali</span>
           </div>
-          <div className="pd-page-stat pd-page-stat-alert">
-            <span className="pd-page-stat-icon">⚠️</span>
+          <div className="pd-page-stat pd-page-stat--alert">
+            <div className="pd-page-stat-head">
+              <span className="pd-page-stat-label">ALERT DOCUMENTI</span>
+              <span className="pd-page-stat-icon">⚠️</span>
+            </div>
             <span className="pd-page-stat-val pd-page-stat-val-red">{stats?.alertDocumenti ?? 0}</span>
-            <span className="pd-page-stat-label">ALERT DOCUMENTI</span>
             <span className="pd-page-stat-sub">DURC scaduti o in scadenza</span>
           </div>
-          <div className="pd-page-stat">
-            <span className="pd-page-stat-icon">🚛</span>
+          <div className="pd-page-stat pd-page-stat--green">
+            <div className="pd-page-stat-head">
+              <span className="pd-page-stat-label">FLOTTA MEZZI</span>
+              <span className="pd-page-stat-icon">🚛</span>
+            </div>
             <span className="pd-page-stat-val">{stats?.flottaMezzi ?? 0}</span>
-            <span className="pd-page-stat-label">FLOTTA MEZZI</span>
             <span className="pd-page-stat-sub">{stats?.flottaDisponibili ?? 0} disponibili</span>
           </div>
-          <div className="pd-page-stat">
-            <span className="pd-page-stat-icon">📱</span>
+          <div className="pd-page-stat pd-page-stat--purple">
+            <div className="pd-page-stat-head">
+              <span className="pd-page-stat-label">PALMARI ATTIVI</span>
+              <span className="pd-page-stat-icon">📱</span>
+            </div>
             <span className="pd-page-stat-val">{stats?.palmariAttivi ?? 0}</span>
-            <span className="pd-page-stat-label">PALMARI ATTIVI</span>
             <span className="pd-page-stat-sub">su {stats?.palmariTotali ?? 0} totali</span>
           </div>
         </div>
@@ -1462,7 +2354,7 @@ export default function PadronciniPage() {
       <div className="pd-toolbar">
         <div className="pd-search-wrap">
           <span>🔍</span>
-          <input className="pd-search" placeholder="Cerca per nome o P.IVA..."
+          <input className="pd-search" placeholder="Cerca per nome, codice o P.IVA..."
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="pd-filters">
@@ -1471,8 +2363,46 @@ export default function PadronciniPage() {
               onClick={() => setFiltro(f)}>{f}</button>
           ))}
         </div>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          style={{ display: 'none' }}
+          onChange={handleImportaExcel}
+        />
+        <button
+          className="btn-secondary pd-import-btn"
+          onClick={() => importInputRef.current?.click()}
+          disabled={importando}
+          title="Importa padroncini da file Excel"
+        >
+          {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
+        </button>
         <button className="btn-primary pd-nuovo-btn" onClick={() => setShowNuovo(true)}>+ Nuovo</button>
       </div>
+
+      {importResult && (
+        <div className="pd-import-overlay" onClick={() => setImportResult(null)}>
+          <div className="pd-import-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>📥 Risultati Importazione Excel</h3>
+            <div className="pd-import-stats">
+              <div><strong>{importResult.creati}</strong> creati</div>
+              <div><strong>{importResult.saltati}</strong> saltati (duplicati)</div>
+              <div><strong>{importResult.errori.length}</strong> errori</div>
+            </div>
+            {importResult.errori.length > 0 && (
+              <div className="pd-import-errors">
+                <h4>Errori:</h4>
+                <ul>
+                  {importResult.errori.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}
+                  {importResult.errori.length > 20 && <li>… e altri {importResult.errori.length - 20}</li>}
+                </ul>
+              </div>
+            )}
+            <button className="btn-primary" onClick={() => setImportResult(null)}>Chiudi</button>
+          </div>
+        </div>
+      )}
 
       <div className="pd-table-wrap">
         <table className="pd-table">
@@ -1495,15 +2425,15 @@ export default function PadronciniPage() {
             {filtered.map((p) => {
               const durcSt = durcStatus(p.scadenzaDurc);
               const durcInfo = scadenzaInfo(p.scadenzaDurc);
-              const dvrSt = dvrStatus(p.scadenzaDvr, (p as any).dvrEsente);
+              const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
               return (
                 <tr key={p.id} className="pd-row"
                   onClick={() => navigate(`/padroncini/${p.id}`)}>
                   <td>
                     <span className="pd-ragsoc">{p.ragioneSociale}</span>
-                    <div className="pd-codice-row">
-                      {p.codice ? `Cod. ${p.codice}` : ''}{p.codice && p.partitaIva ? ' · ' : ''}{p.partitaIva ? `PI: ${p.partitaIva}` : ''}
-                    </div>
+                    {p.codice && (
+                      <div className="pd-codice-row">Cod. {p.codice}</div>
+                    )}
                   </td>
                   <td>
                     <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
@@ -1511,8 +2441,16 @@ export default function PadronciniPage() {
                     </span>
                   </td>
                   <td>
-                    <span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span>
-                    {durcInfo && <span className="pd-scad-sub">{durcInfo.label}</span>}
+                    <div className="pd-tooltip-container">
+                      <span className={`pd-doc-badge ${durcSt.cls}`}>
+                        {durcSt.label}
+                      </span>
+                      {durcInfo && (
+                        <span className="pd-tooltip-text">
+                          {durcInfo.label}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td><span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span></td>
                   <td style={{ textAlign: 'center' }}>
@@ -1538,8 +2476,8 @@ export default function PadronciniPage() {
             })}
           </tbody>
         </table>
-        <div className="pd-table-footer">{filtered.length} di {padroncini.length} padroncini</div>
       </div>
+      <div className="pd-table-footer">{filtered.length} di {padroncini.length} padroncini</div>
 
       <NuovoPadroncinoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleCreate} />
     </div>

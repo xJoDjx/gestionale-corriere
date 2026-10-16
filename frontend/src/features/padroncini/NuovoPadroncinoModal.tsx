@@ -20,12 +20,18 @@ export interface NuovoPadroncino {
   scadenzaDurc: string;
   scadenzaDvr: string;
   note: string;
+  rappresentanteNome: string;
+  rappresentanteCognome: string;
+  cfRappresentante: string;
+  qualificaRappresentante: string;
 }
 
 const EMPTY: NuovoPadroncino = {
   ragioneSociale: '', partitaIva: '', codiceFiscale: '',
   indirizzo: '', telefono: '', email: '', pec: '', iban: '',
   scadenzaDurc: '', scadenzaDvr: '', note: '',
+  rappresentanteNome: '', rappresentanteCognome: '',
+  cfRappresentante: '', qualificaRappresentante: '',
 };
 
 export default function NuovoPadroncinoModal({ open, onClose, onSave }: Props) {
@@ -139,6 +145,35 @@ export default function NuovoPadroncinoModal({ open, onClose, onSave }: Props) {
         <div className="form-field">
           <label className="form-label">Scadenza DVR</label>
           <input className="form-input" type="date" value={form.scadenzaDvr} onChange={(e) => set('scadenzaDvr', e.target.value)} />
+        </div>
+
+        <span className="form-section-title">👤 RAPPRESENTANTE LEGALE (per contratti)</span>
+
+        <div className="form-field">
+          <label className="form-label">Nome</label>
+          <input className="form-input" value={form.rappresentanteNome} onChange={(e) => set('rappresentanteNome', e.target.value)} placeholder="Mario" />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Cognome</label>
+          <input className="form-input" value={form.rappresentanteCognome} onChange={(e) => set('rappresentanteCognome', e.target.value.toUpperCase())} placeholder="ROSSI" />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">C.F. Rappresentante</label>
+          <input className="form-input" value={form.cfRappresentante} onChange={(e) => set('cfRappresentante', e.target.value.toUpperCase())} placeholder="RSSMRA80A01F205X" maxLength={16} style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }} />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Qualifica</label>
+          <select className="form-input" value={form.qualificaRappresentante} onChange={(e) => set('qualificaRappresentante', e.target.value)}>
+            <option value="">-- seleziona --</option>
+            <option>Amministratore Unico</option>
+            <option>Legale Rappresentante</option>
+            <option>Socio</option>
+            <option>Titolare</option>
+            <option>Procuratore</option>
+          </select>
         </div>
 
         <span className="form-section-title">NOTE</span>

@@ -1,0 +1,337 @@
+/* ============================================
+   RICERCA GLOBALE
+   ============================================ */
+
+.ricerca-page {
+  padding: var(--space-lg);
+  max-width: 1100px;
+}
+
+.ricerca-header {
+  margin-bottom: var(--space-md);
+}
+
+.ricerca-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.ricerca-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ─── Searchbar ──────────────────────────── */
+.ricerca-searchbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0 14px;
+  margin-bottom: var(--space-md);
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.ricerca-searchbar:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-muted);
+}
+
+.ricerca-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-right: 10px;
+}
+
+.ricerca-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 14px 0;
+  font-size: 15px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.ricerca-clear {
+  background: var(--bg-tertiary);
+  border: none;
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ricerca-clear:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ─── Empty/Error/Hint ───────────────────── */
+.ricerca-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--card-bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.ricerca-error {
+  padding: 14px 18px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.ricerca-hint {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  box-shadow: var(--card-shadow);
+}
+
+.ricerca-hint p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ricerca-hint ul {
+  margin: 0;
+  padding-left: 22px;
+  line-height: 1.8;
+}
+
+.ricerca-hint code {
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* ─── Chip filtri ────────────────────────── */
+.ricerca-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ricerca-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.12s;
+}
+
+.ricerca-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ricerca-chip.is-active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.ricerca-chip-icon {
+  font-size: 13px;
+}
+
+.ricerca-chip-count {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.ricerca-chip.is-active .ricerca-chip-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.ricerca-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* ─── Group + Hits ───────────────────────── */
+.ricerca-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ricerca-group {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+
+.ricerca-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+}
+
+.ricerca-group-header h3 {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ricerca-group-icon {
+  font-size: 16px;
+}
+
+.ricerca-group-count {
+  background: var(--primary-muted);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+}
+
+.ricerca-hits {
+  display: flex;
+  flex-direction: column;
+}
+
+.ricerca-hit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s;
+}
+
+.ricerca-hit:last-child {
+  border-bottom: none;
+}
+
+.ricerca-hit:hover {
+  background: var(--bg-hover);
+}
+
+.ricerca-hit-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ricerca-hit-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ricerca-hit-snippet {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ricerca-hit-field {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ricerca-hit-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 200px;
+}
+
+.ricerca-hit-tag {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ricerca-hit-arrow {
+  color: var(--text-muted);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.ricerca-hit:hover .ricerca-hit-arrow {
+  color: var(--primary);
+}
+
+/* ─── Highlight ───────────────────────────── */
+.ricerca-mark {
+  background: #fef08a;
+  color: #713f12;
+  padding: 0 2px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .ricerca-mark {
+  background: rgba(250, 204, 21, 0.25);
+  color: #fde047;
+}

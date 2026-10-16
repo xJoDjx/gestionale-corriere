@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: #f7f8fa; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .card { border-radius: 8px; overflow: hidden; }
+  .top { height: 44px; }
+  .bot { background: #fff; border: 1px solid #e5e7eb; border-top: none; padding: 8px 10px; border-radius: 0 0 8px 8px; }
+  .name { font-size: 11px; font-weight: 700; color: #0f172a; }
+  .hex  { font-size: 10px; color: #94a3b8; font-family: monospace; margin-top: 1px; }
+  .pair { display: flex; height: 44px; }
+  .pair > div { flex: 1; }
+  .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="section-label">Semantic Colors — Solid + Tinted bg</div>
+<div class="grid">
+  <div class="card">
+    <div class="pair"><div style="background:#16a34a"></div><div style="background:rgba(22,163,74,0.12)"></div></div>
+    <div class="bot"><div class="name">Success</div><div class="hex">#16a34a</div></div>
+  </div>
+  <div class="card">
+    <div class="pair"><div style="background:#d97706"></div><div style="background:rgba(217,119,6,0.14)"></div></div>
+    <div class="bot"><div class="name">Warning</div><div class="hex">#d97706</div></div>
+  </div>
+  <div class="card">
+    <div class="pair"><div style="background:#dc2626"></div><div style="background:rgba(220,38,38,0.12)"></div></div>
+    <div class="bot"><div class="name">Danger</div><div class="hex">#dc2626</div></div>
+  </div>
+  <div class="card">
+    <div class="pair"><div style="background:#2563eb"></div><div style="background:rgba(37,99,235,0.12)"></div></div>
+    <div class="bot"><div class="name">Info</div><div class="hex">#2563eb</div></div>
+  </div>
+</div>
+<br>
+<div class="section-label">Text Scale</div>
+<div style="background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; display:flex; gap:24px; align-items:center;">
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <span style="font-size:14px;font-weight:700;color:#0f172a;">text-primary #0f172a</span>
+    <span style="font-size:13px;color:#475569;">text-secondary #475569</span>
+    <span style="font-size:12px;color:#94a3b8;">text-muted #94a3b8</span>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:6px;margin-left:20px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:32px;height:32px;background:#e5e7eb;border-radius:4px;"></div>
+      <span style="font-size:10px;color:#94a3b8;">border #e5e7eb</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:32px;height:32px;background:#d1d5db;border-radius:4px;"></div>
+      <span style="font-size:10px;color:#94a3b8;">border-strong #d1d5db</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

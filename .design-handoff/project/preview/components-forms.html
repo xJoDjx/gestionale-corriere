@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',sans-serif; background:#f7f8fa; padding:20px; }
+.label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-group { display:flex; flex-direction:column; gap:5px; }
+.form-label { font-size:12px; font-weight:600; color:#0f172a; }
+.form-input { padding:8px 10px; font-size:13px; font-family:'DM Sans',sans-serif; border:1px solid #e5e7eb; border-radius:8px; background:#fff; color:#0f172a; outline:none; }
+.form-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+.form-input.error { border-color:#dc2626; }
+select.form-input { cursor:pointer; }
+.badge-inline { font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; text-transform:uppercase; margin-top:2px; display:inline-block; }
+</style>
+</head>
+<body>
+<div class="label">Form Inputs</div>
+<div class="grid">
+  <div class="form-group">
+    <label class="form-label">Ragione Sociale *</label>
+    <input class="form-input" value="EL SPEDIZIONI SRL" />
+  </div>
+  <div class="form-group">
+    <label class="form-label">Partita IVA</label>
+    <input class="form-input" value="01234567890" />
+  </div>
+  <div class="form-group">
+    <label class="form-label">Scadenza DURC</label>
+    <input class="form-input" type="date" value="2026-03-31" />
+    <span class="badge-inline" style="color:#c2410c;background:#ffedd5">IN SCADENZA</span>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Stato</label>
+    <select class="form-select form-input">
+      <option>Attivo</option>
+      <option>Dismesso</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Focus state</label>
+    <input class="form-input" style="border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,0.1)" value="In editing..." />
+  </div>
+  <div class="form-group">
+    <label class="form-label">Error state</label>
+    <input class="form-input error" value="Valore non valido" />
+  </div>
+</div>
+</body>
+</html>

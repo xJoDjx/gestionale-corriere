@@ -215,10 +215,7 @@
   gap: 8px;
 }
 
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 11px;
-}
+/* btn-sm → definito in global.css */
 
 /* ─── Stato Badge ──────────────────────────── */
 .cd-stato {

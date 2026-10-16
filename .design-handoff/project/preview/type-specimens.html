@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',sans-serif; background:#f7f8fa; padding:20px; }
+.label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
+.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+.kpi { border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:4; background:#fff; }
+.kpi--blue  { background:#eff6ff; } .kpi--green  { background:#f0fdf4; } .kpi--red { background:#fef2f2; }
+.kpi--orange { background:#fff7ed; } .kpi--yellow { background:#fefce8; }
+.kpi-lbl { font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#94a3b8; }
+.kpi-val { font-size:26px; font-weight:700; letter-spacing:-0.01em; line-height:1.1; }
+.kpi-sub { font-size:10px; color:#94a3b8; margin-top:2px; }
+.mono-row { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 16px; display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
+.mono-chip { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; background:#f0f1f4; border-radius:5px; padding:4px 10px; color:#475569; }
+</style>
+</head>
+<body>
+<div class="label">KPI Values — 26px / 700 DM Sans</div>
+<div class="grid">
+  <div class="kpi kpi--blue">
+    <span class="kpi-lbl">Da Bonificare</span>
+    <span class="kpi-val" style="color:#1d4ed8">€ 18.420</span>
+    <span class="kpi-sub">Marzo 2026</span>
+  </div>
+  <div class="kpi kpi--green">
+    <span class="kpi-lbl">Padroncini Attivi</span>
+    <span class="kpi-val" style="color:#15803d">12</span>
+    <span class="kpi-sub">su 14 totali</span>
+  </div>
+  <div class="kpi kpi--red">
+    <span class="kpi-lbl">DURC Scaduti</span>
+    <span class="kpi-val" style="color:#b91c1c">3</span>
+    <span class="kpi-sub">richiedono azione</span>
+  </div>
+  <div class="kpi kpi--orange">
+    <span class="kpi-lbl">Conteggi Mese</span>
+    <span class="kpi-val" style="color:#c2410c">3/12</span>
+    <span class="kpi-sub">chiusi / totali</span>
+  </div>
+  <div class="kpi kpi--yellow">
+    <span class="kpi-lbl">Scadenze</span>
+    <span class="kpi-val" style="color:#a16207">30</span>
+    <span class="kpi-sub">entro 30 giorni</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-lbl">Mezzi Totali</span>
+    <span class="kpi-val">33</span>
+    <span class="kpi-sub">26 assegnati · 6 disponibili</span>
+  </div>
+</div>
+<div class="label">JetBrains Mono — Codici &amp; Timestamp</div>
+<div class="mono-row">
+  <span class="mono-chip">GR507EZ</span>
+  <span class="mono-chip">PAL-007</span>
+  <span class="mono-chip">09:45</span>
+  <span class="mono-chip">01234567890</span>
+  <span class="mono-chip">IT60 X054 2811 1010 0000 0123 456</span>
+</div>
+</body>
+</html>

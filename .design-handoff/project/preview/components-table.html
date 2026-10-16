@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',sans-serif; background:#f7f8fa; padding:20px; }
+.label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:8px; }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; background:#fff; border-radius:10px; overflow:hidden; border:1px solid #e5e7eb; }
+thead th { text-align:left; padding:10px 14px; font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; background:#fff; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
+tbody td { padding:12px 14px; color:#0f172a; border-bottom:1px solid #e5e7eb; vertical-align:middle; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:nth-child(even) td { background:#fafbfc; }
+.badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.03em; text-transform:uppercase; }
+.mono { font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; }
+.muted { color:#94a3b8; }
+</style>
+</head>
+<body>
+<div class="label">Table — Zebra Striping</div>
+<table>
+  <thead>
+    <tr><th>RAGIONE SOCIALE</th><th>PARTITA IVA</th><th>DURC</th><th>MEZZI</th><th>STATO</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="font-weight:600">EL SPEDIZIONI SRL</td>
+      <td class="mono muted">01234567890</td>
+      <td><span class="badge" style="color:#b91c1c;background:#fee2e2">SCADUTO</span></td>
+      <td>3</td>
+      <td><span class="badge" style="color:#15803d;background:#dcfce7">ATTIVO</span></td>
+    </tr>
+    <tr>
+      <td style="font-weight:600">QUICK EXPRESS SRLS</td>
+      <td class="mono muted">09876543210</td>
+      <td><span class="badge" style="color:#15803d;background:#dcfce7">VALIDO</span></td>
+      <td>2</td>
+      <td><span class="badge" style="color:#15803d;background:#dcfce7">ATTIVO</span></td>
+    </tr>
+    <tr>
+      <td style="font-weight:600">MEN LOGISTIC SRL</td>
+      <td class="mono muted">05551234567</td>
+      <td><span class="badge" style="color:#c2410c;background:#ffedd5">IN SCADENZA</span></td>
+      <td>4</td>
+      <td><span class="badge" style="color:#15803d;background:#dcfce7">ATTIVO</span></td>
+    </tr>
+    <tr>
+      <td style="font-weight:600">DI NARDO TRASPORTI</td>
+      <td class="mono muted">07771234567</td>
+      <td><span class="badge" style="color:#b91c1c;background:#fee2e2">SCADUTO</span></td>
+      <td>1</td>
+      <td><span class="badge" style="color:#7c3aed;background:#ede9fe">DISMESSO</span></td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>

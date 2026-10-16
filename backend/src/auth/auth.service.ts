@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -8,14 +9,31 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private auditService: AuditService,
   ) {}
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { permessi: { where: { risorsa: 'sezione' } } },
+    });
     if (!user || !user.attivo) throw new UnauthorizedException('Credenziali non valide');
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) throw new UnauthorizedException('Credenziali non valide');
+
+    const sezioniVisibili = user.ruolo === 'ADMIN'
+      ? null
+      : user.permessi.map(p => p.azione);
+
+    // Traccia l'accesso nel log storico (non deve mai bloccare il login)
+    this.auditService.log({
+      userId: user.id,
+      entityType: 'utente',
+      entityId: user.id,
+      azione: 'LOGIN',
+      dataDopo: { email: user.email, nome: user.nome, cognome: user.cognome },
+    });
 
     const payload = { sub: user.id, email: user.email, ruolo: user.ruolo };
     return {
@@ -26,6 +44,7 @@ export class AuthService {
         nome: user.nome,
         cognome: user.cognome,
         ruolo: user.ruolo,
+        sezioniVisibili,
       },
     };
   }

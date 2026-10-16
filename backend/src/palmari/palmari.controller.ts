@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Body, Query,
+  Controller, Get, Post, Put, Delete, Param, Body, Query, Req,
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -48,30 +48,35 @@ export class PalmariController {
   }
 
   @Post()
-  create(@Body() dto: CreatePalmareDto) {
-    return this.service.create(dto, 'system');
+  create(@Body() dto: CreatePalmareDto, @Req() req: any) {
+    return this.service.create(dto, req.user.id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePalmareDto) {
-    return this.service.update(id, dto, 'system');
+  update(@Param('id') id: string, @Body() dto: UpdatePalmareDto, @Req() req: any) {
+    return this.service.update(id, dto, req.user.id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id, 'system');
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.service.remove(id, req.user.id);
   }
 
   @Post(':id/assegnazioni')
   createAssegnazione(
     @Param('id') id: string,
     @Body() dto: CreateAssegnazionePalmareDto,
+    @Req() req: any,
   ) {
-    return this.service.createAssegnazione(id, dto, 'system');
+    return this.service.createAssegnazione(id, dto, req.user.id);
   }
 
   @Put('assegnazioni/:assegnazioneId/chiudi')
-  chiudiAssegnazione(@Param('assegnazioneId') id: string) {
-    return this.service.chiudiAssegnazione(id, 'system');
+  chiudiAssegnazione(
+    @Param('assegnazioneId') id: string,
+    @Body() body: { dataFine?: string },
+    @Req() req: any,
+  ) {
+    return this.service.chiudiAssegnazione(id, req.user.id, body?.dataFine);
   }
 }

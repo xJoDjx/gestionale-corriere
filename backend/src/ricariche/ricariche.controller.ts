@@ -63,5 +63,14 @@ export class RicaricheController {
   ricalcolaPadroncini(@Param('mese') mese: string) {
     return this.service.ricalcolaPadroncini(mese);
   }
+
+  /** Aggiorna % maggiorazione di una targa per un mese (ricalcola anche importi) */
+  @Patch(':mese/maggiorazione-targa')
+  aggiornaMaggiorazioneTarga(
+    @Param('mese') mese: string,
+    @Body() body: { targa: string; maggiorazione: number },
+  ) {
+    return this.service.aggiornaMaggiorazioneTarga(mese, body.targa, body.maggiorazione);
+  }
 }
 

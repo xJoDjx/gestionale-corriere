@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { resolveDataFineAssegnazione } from '../common/data-fine-assegnazione.util';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -217,11 +218,12 @@ export class PalmariService {
   }
 
   async update(id: string, dto: UpdatePalmareDto, userId: string) {
-    await this.findOne(id);
+    const existing = await this.prisma.palmare.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) throw new NotFoundException('Palmare non trovato');
     const palmare = await this.prisma.palmare.update({ where: { id }, data: dto as any });
     await this.audit.log({
       userId, entityType: 'palmare', entityId: id,
-      azione: 'UPDATE', dataDopo: palmare as any,
+      azione: 'UPDATE', dataPrima: existing as any, dataDopo: palmare as any,
     });
     return palmare;
   }
@@ -234,16 +236,23 @@ export class PalmariService {
   }
 
   async createAssegnazione(palmareId: string, dto: CreateAssegnazionePalmareDto, userId: string) {
-    await this.findOne(palmareId);
+    const palmareInfo = await this.findOne(palmareId);
 
     // Chiudi assegnazione attiva
     const attiva = await this.prisma.assegnazionePalmare.findFirst({
       where: { palmareId, deletedAt: null, dataFine: null },
+      include: { padroncino: { select: { ragioneSociale: true } } },
     });
     if (attiva) {
       await this.prisma.assegnazionePalmare.update({
         where: { id: attiva.id },
         data: { dataFine: new Date(dto.dataInizio) },
+      });
+      // Logga la chiusura implicita (riassegnazione), altrimenti sparisce dallo storico
+      await this.audit.log({
+        userId, entityType: 'assegnazione_palmare', entityId: attiva.id,
+        azione: 'CHIUDI_ASSEGNAZIONE',
+        dataDopo: { codicePalmare: palmareInfo.codice, ragioneSociale: attiva.padroncino?.ragioneSociale } as any,
       });
     }
 
@@ -263,7 +272,7 @@ export class PalmariService {
     await this.audit.log({
       userId, entityType: 'assegnazione_palmare', entityId: assegnazione.id,
       azione: 'ASSEGNA',
-      dataDopo: { palmareId, padroncinoId: dto.padroncinoId, ragioneSociale: assegnazione.padroncino.ragioneSociale } as any,
+      dataDopo: { codicePalmare: palmareInfo.codice, padroncinoId: dto.padroncinoId, ragioneSociale: assegnazione.padroncino.ragioneSociale } as any,
     });
 
     return {
@@ -272,16 +281,21 @@ export class PalmariService {
     };
   }
 
-  async chiudiAssegnazione(assegnazioneId: string, userId: string) {
+  async chiudiAssegnazione(assegnazioneId: string, userId: string, dataFineStr?: string) {
     const ass = await this.prisma.assegnazionePalmare.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
-      include: { palmare: { select: { id: true } } },
+      include: {
+        palmare: { select: { id: true, codice: true } },
+        padroncino: { select: { ragioneSociale: true } },
+      },
     });
     if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
+    const dataFine = resolveDataFineAssegnazione(dataFineStr, ass.dataInizio);
+
     await this.prisma.assegnazionePalmare.update({
       where: { id: assegnazioneId },
-      data: { dataFine: new Date() },
+      data: { dataFine },
     });
 
     // Aggiorna stato palmare → DISPONIBILE (se nessuna altra assegnazione attiva)
@@ -295,6 +309,7 @@ export class PalmariService {
     await this.audit.log({
       userId, entityType: 'assegnazione_palmare', entityId: assegnazioneId,
       azione: 'CHIUDI_ASSEGNAZIONE',
+      dataDopo: { codicePalmare: ass.palmare.codice, ragioneSociale: ass.padroncino?.ragioneSociale, dataInizio: ass.dataInizio, dataFine } as any,
     });
 
     return { closed: true };

@@ -1,9 +1,11 @@
 // src/features/codici-autista/DettaglioCodiceAutista.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { codiciAutistaApi, padronciniApi } from '../../lib/api';
-import type { CodiceAutista, Padroncino } from '../../lib/api';
+import { codiciAutistaApi, padronciniApi, noteApi } from '../../lib/api';
+import type { CodiceAutista, Padroncino, Nota } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import ChiudiAssegnazioneModal from '../../components/ui/ChiudiAssegnazioneModal';
+import type { ChiudiAssegnazioneTarget } from '../../components/ui/ChiudiAssegnazioneModal';
 import '../mezzi/FlottaMezzi.css';
 
 const fmt = (d: string | null | undefined) =>
@@ -12,7 +14,7 @@ const fmt = (d: string | null | undefined) =>
 const fmtEur = (n: number | null | undefined) =>
   n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
 
-type TabKey = 'info' | 'assegnazioni' | 'log';
+type TabKey = 'info' | 'assegnazioni' | 'note' | 'log';
 
 export default function DettaglioCodiceAutista() {
   const { id } = useParams<{ id: string }>();
@@ -25,10 +27,14 @@ export default function DettaglioCodiceAutista() {
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [assegnaForm, setAssegnaForm] = useState({ padroncinoId: '', dataInizio: '' });
   const [showAssegna, setShowAssegna] = useState(false);
+  const [chiudiTarget, setChiudiTarget] = useState<ChiudiAssegnazioneTarget | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [form, setFormState] = useState<Partial<CodiceAutista>>({});
   const [dirty, setDirty] = useState(false);
+  const [noteList, setNoteList]     = useState<Nota[]>([]);
+  const [notaTesto, setNotaTesto]   = useState('');
+  const [notaSaving, setNotaSaving] = useState(false);
 
   const set = (k: keyof CodiceAutista, v: any) => {
     setFormState((f) => ({ ...f, [k]: v }));
@@ -39,14 +45,16 @@ export default function DettaglioCodiceAutista() {
     if (!id) return;
     setLoading(true);
     try {
-      const [a, pResp] = await Promise.all([
+      const [a, pResp, noteResp] = await Promise.all([
         codiciAutistaApi.detail(id),
         padronciniApi.list({ limit: '200' }),
+        noteApi.list('codice_autista', id, 100),
       ]);
       setAutista(a);
       setFormState(a);
       setDirty(false);
       setPadroncini(pResp.data);
+      setNoteList(noteResp);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -55,6 +63,25 @@ export default function DettaglioCodiceAutista() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleAddNota = async () => {
+    if (!id || !notaTesto.trim()) return;
+    setNotaSaving(true);
+    try {
+      await noteApi.create({ entityType: 'codice_autista', entityId: id, contenuto: notaTesto.trim() });
+      setNotaTesto('');
+      setNoteList(await noteApi.list('codice_autista', id, 100));
+    } catch (e: any) { alert('Errore: ' + e.message); }
+    finally { setNotaSaving(false); }
+  };
+
+  const handleDeleteNota = async (notaId: string) => {
+    if (!confirm('Eliminare questa nota?')) return;
+    try {
+      await noteApi.remove(notaId);
+      setNoteList(prev => prev.filter(n => n.id !== notaId));
+    } catch (e: any) { alert('Errore: ' + e.message); }
+  };
 
   const handleSave = async () => {
     if (!id) return;
@@ -67,6 +94,9 @@ export default function DettaglioCodiceAutista() {
         tariffaFissa: form.tariffaFissa ?? undefined,
         tariffaRitiro: form.tariffaRitiro ?? undefined,
         target: form.target ?? undefined,
+        bonus: form.bonus ?? undefined,
+        malus: form.malus ?? undefined,
+        zone: form.zone ?? undefined,
       });
       setDirty(false);
       await load();
@@ -92,14 +122,14 @@ export default function DettaglioCodiceAutista() {
     }
   };
 
-  const handleChiudiAssegnazione = async (assegnazioneId: string) => {
-    if (!window.confirm('Chiudere l\'assegnazione corrente?')) return;
-    try {
-      await codiciAutistaApi.chiudiAssegnazione(assegnazioneId);
-      await load();
-    } catch (e: any) {
-      alert('Errore: ' + e.message);
-    }
+  const handleChiudiAssegnazione = (assegnazioneId: string, nome: string, dataInizio: string) => {
+    setChiudiTarget({ id: assegnazioneId, nome, dataInizio });
+  };
+
+  const confermaChiusura = async (t: ChiudiAssegnazioneTarget, dataFine: string) => {
+    await codiciAutistaApi.chiudiAssegnazione(t.id, dataFine);
+    setChiudiTarget(null);
+    await load();
   };
 
   if (loading) return (
@@ -122,11 +152,18 @@ export default function DettaglioCodiceAutista() {
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'info', label: 'Dati Autista' },
     { key: 'assegnazioni', label: `Assegnazioni (${autista.assegnazioni?.length ?? 0})` },
+    { key: 'note', label: `📝 Note (${noteList.length})` },
     { key: 'log', label: 'Log' },
   ];
 
   return (
     <div className="fm-page">
+      <ChiudiAssegnazioneModal
+        target={chiudiTarget}
+        oggetto={`Codice ${autista.codice}`}
+        onClose={() => setChiudiTarget(null)}
+        onConfirm={confermaChiusura}
+      />
       {/* ── TOPBAR ── */}
       <div className="dm-topbar">
         <button className="btn-ghost-sm" onClick={() => navigate('/codici-autista')}>← Cod. Autisti</button>
@@ -209,16 +246,18 @@ export default function DettaglioCodiceAutista() {
                   />
                 </div>
               </div>
-              <div className="dm-field dm-field-full">
-                <label>Note</label>
-                <textarea
-                  className="dm-textarea"
-                  rows={3}
-                  value={form.note ?? ''}
-                  onChange={(e) => set('note', e.target.value || null)}
-                  placeholder="Note aggiuntive…"
-                />
+              <div className="dm-section-row">
+                <div className="dm-field dm-field-full">
+                  <label>Zone</label>
+                  <input
+                    className="dm-input"
+                    value={form.zone ?? ''}
+                    onChange={(e) => set('zone', e.target.value || null)}
+                    placeholder="es. Nord, Centro..."
+                  />
+                </div>
               </div>
+
             </div>
           </div>
 
@@ -258,6 +297,28 @@ export default function DettaglioCodiceAutista() {
                   onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
                 />
               </div>
+              <div className="dm-field dm-field-full">
+                <label>Bonus (€, oltre target)</label>
+                <input
+                  className="dm-input"
+                  type="number"
+                  step="0.01"
+                  style={{ color: '#16a34a', fontWeight: 700 }}
+                  value={form.bonus ?? ''}
+                  onChange={(e) => set('bonus', e.target.value ? parseFloat(e.target.value) : null)}
+                />
+              </div>
+              <div className="dm-field dm-field-full">
+                <label>Malus (€, sotto target)</label>
+                <input
+                  className="dm-input"
+                  type="number"
+                  step="0.01"
+                  style={{ color: '#dc2626', fontWeight: 700 }}
+                  value={form.malus ?? ''}
+                  onChange={(e) => set('malus', e.target.value ? parseFloat(e.target.value) : null)}
+                />
+              </div>
             </div>
 
             {/* Assegnazione corrente */}
@@ -273,7 +334,7 @@ export default function DettaglioCodiceAutista() {
                   <button
                     className="btn-outline btn-sm"
                     style={{ color: '#dc2626', borderColor: '#dc2626', marginTop: 8 }}
-                    onClick={() => handleChiudiAssegnazione(attiva.id)}
+                    onClick={() => handleChiudiAssegnazione(attiva.id, attiva.ragioneSociale, attiva.dataInizio)}
                   >
                     🔓 Chiudi assegnazione
                   </button>
@@ -378,7 +439,7 @@ export default function DettaglioCodiceAutista() {
                       <button
                         className="btn-outline btn-sm"
                         style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                        onClick={() => handleChiudiAssegnazione(a.id)}
+                        onClick={() => handleChiudiAssegnazione(a.id, a.ragioneSociale, a.dataInizio)}
                       >
                         🔓 Chiudi
                       </button>
@@ -391,6 +452,44 @@ export default function DettaglioCodiceAutista() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+
+      {/* ── TAB NOTE ── */}
+      {activeTab === 'note' && (
+        <div className="dm-tab-body">
+          <div className="dm-note-add-form">
+            <textarea
+              className="dm-note-textarea"
+              rows={3}
+              placeholder="Aggiungi una nota su questo autista…"
+              value={notaTesto}
+              onChange={e => setNotaTesto(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddNota(); }}
+            />
+            <div className="dm-note-form-footer">
+              <span className="dm-note-hint">Ctrl+Invio per salvare</span>
+              <button className="dm-note-submit" onClick={handleAddNota} disabled={notaSaving || !notaTesto.trim()}>
+                {notaSaving ? 'Salvo…' : '+ Aggiungi nota'}
+              </button>
+            </div>
+          </div>
+          {noteList.length === 0
+            ? <div className="dm-note-empty">Nessuna nota registrata.</div>
+            : noteList.map(n => (
+              <div key={n.id} className={`dm-note-card${n.contenuto.startsWith('[Nota originale]') ? ' dm-note-card-legacy' : ''}`}>
+                <div className="dm-note-card-header">
+                  <span className="dm-note-avatar">{n.user ? (n.user.nome?.[0] ?? '') + (n.user.cognome?.[0] ?? '') : '?'}</span>
+                  <div className="dm-note-card-meta">
+                    <span className="dm-note-author">{n.user ? `${n.user.nome} ${n.user.cognome}` : 'Sistema'}</span>
+                    <span className="dm-note-ts">{new Date(n.createdAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  </div>
+                  <button className="dm-note-del" onClick={() => handleDeleteNota(n.id)} title="Elimina nota">✕</button>
+                </div>
+                <p className="dm-note-body">{n.contenuto}</p>
+              </div>
+            ))}
         </div>
       )}
 

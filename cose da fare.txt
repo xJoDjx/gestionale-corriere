@@ -1,11 +1,12 @@
-4) quando creo un utente devo poter scegliere le sezioni da poter visualizzare e o modificare
-5) nella pagina padroncino nei log dovrebbero essere registrate tutte le operazioni inerenti a quel padroncino.. possiamo "filtrarle" dal log storigo generale e isnerirle..
-6) possibilità di modificare la % di maggiorazione direttamente dalla pagina ricarica , deve essere piu dinamica
+in flotta mezzi inserire la persona che usa auto aziendale
+in ricariche elettri nuovamente problema con la virgola
+riattivare nei conteggi la possibilità di scegliere le voci precomiplate
+controllare import tramite excel di flotta mezzi dati errati
+controllare tariffa in palmari deve essere giornaliera non mensile
+controllare cod autisti sono stati tolti dati bonus malus ecc guardare excel
+controllare nei conteggi le comensazioni non va nuovamente il calcolo - + 
+Nei dettagli del codici in riepilogo mese la data dopo il 03/12 non viene presa sare problemla di lettura invertire gg e mese
+tabelle zebra sia nelle tab di padroncino sia in riepilogo conteggio
 
 
-BACK
-npm run start:dev
-
-
-FRONT
-npm run dev
+Udilizzatore in flotta mezzi va spostato nel campo Assegnazione corrente , e come per assegnazione pda quando è presente un nome il suo stato deve passare in assegnato

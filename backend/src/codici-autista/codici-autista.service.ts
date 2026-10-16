@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { resolveDataFineAssegnazione } from '../common/data-fine-assegnazione.util';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -12,6 +13,8 @@ export interface CreateCodiceAutistaDto {
   tariffaRitiro?: number;
   target?: number;
   bonusMalus?: string;
+  bonus?: number;
+  malus?: number;
   zone?: string;
 }
 
@@ -23,7 +26,10 @@ export interface UpdateCodiceAutistaDto {
   tariffaRitiro?: number;
   target?: number;
   bonusMalus?: string;
+  bonus?: number;
+  malus?: number;
   zone?: string;
+  zonaControllo?: string;
   attivo?: boolean;
 }
 
@@ -250,13 +256,16 @@ export class CodiciAutistaService {
 
   async update(id: string, data: UpdateCodiceAutistaDto, userId: string) {
     const existing = await this.findOne(id);
+    const ragioneSociale = (existing as any).assegnazioni?.find((a: any) => !a.dataFine)?.ragioneSociale ?? null;
     const ca = await this.prisma.codiceAutista.update({
       where: { id },
       data: data as any,
     });
     await this.audit.log({
       userId, entityType: 'codice_autista', entityId: id,
-      azione: 'UPDATE', dataPrima: existing as any, dataDopo: ca as any,
+      azione: 'UPDATE',
+      dataPrima: { ...(existing as any), ragioneSociale } as any,
+      dataDopo:  { ...ca, ragioneSociale } as any,
     });
     return ca;
   }
@@ -269,22 +278,37 @@ export class CodiciAutistaService {
     });
     await this.audit.log({
       userId, entityType: 'codice_autista', entityId: id,
-      azione: 'UPDATE', dataDopo: { attivo: updated.attivo } as any,
+      azione: 'UPDATE',
+      dataPrima: { codice: (ca as any).codice, nome: (ca as any).nome, cognome: (ca as any).cognome, attivo: ca.attivo } as any,
+      dataDopo:  { codice: (ca as any).codice, nome: (ca as any).nome, cognome: (ca as any).cognome, attivo: updated.attivo } as any,
     });
     return updated;
   }
 
   async assegna(codiceAutistaId: string, padroncinoId: string, dataInizio: string, userId: string) {
-    await this.findOne(codiceAutistaId);
+    const caInfo = await this.findOne(codiceAutistaId);
 
     // Chiudi assegnazione attiva
     const attiva = await this.prisma.assegnazioneCodiceAutista.findFirst({
       where: { codiceAutistaId, deletedAt: null, dataFine: null },
+      include: { padroncino: { select: { ragioneSociale: true } } },
     });
     if (attiva) {
-      await this.prisma.assegnazioneCodiceAutista.update({
+      const chiusa = await this.prisma.assegnazioneCodiceAutista.update({
         where: { id: attiva.id },
         data: { dataFine: new Date(dataInizio) },
+      });
+      // Logga la chiusura implicita (riassegnazione), altrimenti sparisce dallo storico
+      await this.audit.log({
+        userId, entityType: 'codice_autista', entityId: codiceAutistaId,
+        azione: 'CHIUDI_ASSEGNAZIONE', dataDopo: {
+          id: attiva.id,
+          codice: (caInfo as any).codice,
+          padroncinoId: attiva.padroncinoId,
+          ragioneSociale: attiva.padroncino?.ragioneSociale,
+          dataInizio: attiva.dataInizio,
+          dataFine: chiusa.dataFine,
+        } as any,
       });
     }
 
@@ -294,13 +318,17 @@ export class CodiciAutistaService {
         padroncinoId,
         dataInizio: new Date(dataInizio),
       },
-      include: { padroncino: { select: { id: true, ragioneSociale: true } } },
+      include: {
+        padroncino: { select: { id: true, ragioneSociale: true } },
+        codiceAutista: { select: { codice: true } },
+      },
     });
 
     await this.audit.log({
       userId, entityType: 'codice_autista', entityId: codiceAutistaId,
       azione: 'ASSEGNA', dataDopo: {
         id: nuova.id,
+        codice: nuova.codiceAutista.codice,
         padroncinoId: nuova.padroncinoId,
         ragioneSociale: nuova.padroncino.ragioneSociale,
         dataInizio: nuova.dataInizio,
@@ -310,22 +338,28 @@ export class CodiciAutistaService {
     return nuova;
   }
 
-  async chiudiAssegnazione(assegnazioneId: string, userId: string) {
+  async chiudiAssegnazione(assegnazioneId: string, userId: string, dataFineStr?: string) {
     const assegnazione = await this.prisma.assegnazioneCodiceAutista.findFirst({
       where: { id: assegnazioneId, deletedAt: null },
-      include: { padroncino: { select: { id: true, ragioneSociale: true } } },
+      include: {
+        padroncino: { select: { id: true, ragioneSociale: true } },
+        codiceAutista: { select: { codice: true } },
+      },
     });
     if (!assegnazione) throw new NotFoundException('Assegnazione non trovata');
 
+    const dataFine = resolveDataFineAssegnazione(dataFineStr, assegnazione.dataInizio);
+
     const updated = await this.prisma.assegnazioneCodiceAutista.update({
       where: { id: assegnazioneId },
-      data: { dataFine: new Date() },
+      data: { dataFine },
     });
 
     await this.audit.log({
       userId, entityType: 'codice_autista', entityId: assegnazione.codiceAutistaId,
       azione: 'CHIUDI_ASSEGNAZIONE', dataDopo: {
         id: assegnazione.id,
+        codice: assegnazione.codiceAutista.codice,
         padroncinoId: assegnazione.padroncinoId,
         ragioneSociale: assegnazione.padroncino.ragioneSociale,
         dataInizio: assegnazione.dataInizio,

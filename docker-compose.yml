@@ -1,16 +1,58 @@
 version: '3.8'
 
 services:
+
+  # ── Database ──────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: gestionale_corriere
-    ports:
-      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Backend NestJS ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/gestionale_corriere?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cambia_questa_chiave_segreta_in_produzione}
+      FRONTEND_URL: http://${SERVER_IP:-localhost}
+      PORT: 3000
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      - "3000:3000"
+    # Applica le migration e avvia
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/main.js"
+
+  # ── Frontend React (nginx) ────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://${SERVER_IP:-localhost}:3000/api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
 
 volumes:
   pgdata:
+  uploads:

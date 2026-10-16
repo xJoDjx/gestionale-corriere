@@ -35,19 +35,251 @@ input, select, textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-elevated);
-  border-radius: 3px;
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-hover);
+  background: var(--text-muted);
 }
+
+/* ─────────────────────────────────────────────
+   UTILITY SHARED: card, badge, table, kpi
+   ───────────────────────────────────────────── */
+
+.gc-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+
+.gc-card--pad {
+  padding: 20px 22px;
+}
+
+/* ── Badge pill ── */
+.gc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.gc-badge--green  { color: var(--badge-green);  background: var(--badge-green-bg); }
+.gc-badge--orange { color: var(--badge-orange); background: var(--badge-orange-bg); }
+.gc-badge--red    { color: var(--badge-red);    background: var(--badge-red-bg); }
+.gc-badge--yellow { color: var(--badge-yellow); background: var(--badge-yellow-bg); }
+.gc-badge--blue   { color: var(--badge-blue);   background: var(--badge-blue-bg); }
+.gc-badge--gray   { color: var(--badge-gray);   background: var(--badge-gray-bg); }
+
+/* ── Tabella zebra ── */
+.gc-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.gc-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.gc-table tbody td {
+  padding: 14px 16px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.gc-table tbody tr:nth-child(even) td {
+  background: var(--table-row-alt);
+}
+
+.gc-table tbody tr:hover td {
+  background: var(--table-row-hover);
+  cursor: pointer;
+}
+
+.gc-table .col-right   { text-align: right; }
+.gc-table .col-center  { text-align: center; }
+
+/* ── KPI card ── */
+.gc-kpi {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  min-height: 104px;
+  box-shadow: var(--card-shadow);
+}
+
+.gc-kpi__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gc-kpi__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.gc-kpi__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.gc-kpi__value {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.gc-kpi__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Varianti tinted */
+.gc-kpi--blue   { background: #eff6ff; }
+.gc-kpi--blue   .gc-kpi__icon { background: var(--badge-blue-bg);  color: var(--badge-blue); }
+.gc-kpi--red    { background: #fef2f2; }
+.gc-kpi--red    .gc-kpi__icon { background: var(--badge-red-bg);   color: var(--badge-red); }
+.gc-kpi--red    .gc-kpi__value { color: var(--badge-red); }
+.gc-kpi--green  { background: #f0fdf4; }
+.gc-kpi--green  .gc-kpi__icon { background: var(--badge-green-bg); color: var(--badge-green); }
+.gc-kpi--green  .gc-kpi__value { color: var(--badge-green); }
+.gc-kpi--orange { background: #fff7ed; }
+.gc-kpi--orange .gc-kpi__icon { background: var(--badge-orange-bg); color: var(--badge-orange); }
+.gc-kpi--orange .gc-kpi__value { color: var(--badge-orange); }
+.gc-kpi--purple { background: #faf5ff; }
+.gc-kpi--purple .gc-kpi__icon { background: var(--badge-purple-bg); color: var(--badge-purple); }
+.gc-kpi--purple .gc-kpi__value { color: var(--badge-purple); }
+.gc-kpi--yellow { background: #fefce8; }
+.gc-kpi--yellow .gc-kpi__icon { background: var(--badge-yellow-bg); color: var(--badge-yellow); }
+.gc-kpi--yellow .gc-kpi__value { color: var(--badge-yellow); }
+
+[data-theme="dark"] .gc-kpi--blue,
+[data-theme="dark"] .gc-kpi--red,
+[data-theme="dark"] .gc-kpi--green,
+[data-theme="dark"] .gc-kpi--orange,
+[data-theme="dark"] .gc-kpi--purple,
+[data-theme="dark"] .gc-kpi--yellow {
+  background: var(--card-bg);
+}
+
+/* ── Bottoni generici ── */
+.gc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.gc-btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+.gc-btn--primary:hover { background: var(--primary-hover); }
+
+.gc-btn--ghost {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.gc-btn--ghost:hover { background: var(--bg-hover); }
+
+.gc-btn--danger {
+  background: var(--card-bg);
+  color: var(--danger);
+  border-color: var(--border);
+}
+.gc-btn--danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+
+/* ── Bottoni utilitari (btn-*) — sistema unificato ──────────────────────── */
+/* Usato in tutte le feature page. Centralizzato qui per evitare duplicati
+   nei CSS dei singoli moduli e garantire supporto dark-mode via variabili. */
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px;
+  background: var(--primary); color: #fff;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.12s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px;
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn-outline:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-hover); color: var(--text-primary); }
+.btn-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px;
+  background: var(--danger-bg); color: var(--danger);
+  border: 1px solid var(--danger); border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.12s;
+}
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-sm { padding: 5px 12px !important; font-size: 12px !important; }

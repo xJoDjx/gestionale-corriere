@@ -302,32 +302,16 @@ export class RicaricheService {
     const fineMese   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
     console.log(`   📅 inizioMese=${inizioMese.toISOString()} fineMese=${fineMese.toISOString()}`);
 
-    // 1. Mezzi assegnati a questo padroncino durante il mese (filtro rigoroso)
-    let assegnazioni = await this.prisma.assegnazioneMezzo.findMany({
-      where: {
-        padroncinoId,
-        deletedAt: null,
-        dataInizio: { lte: fineMese },
-        OR: [{ dataFine: null }, { dataFine: { gte: inizioMese } }],
-      },
+    // 1. TUTTI i mezzi mai assegnati a questo padroncino (senza filtro data).
+    // Le ricariche devono essere caricate anche se il periodo di assegnazione
+    // formale non coincide col mese del conteggio (import anticipato, assegnazione
+    // retrodatata, cambio mezzo in corso, ecc.). Il filtro reale avviene poi sulle
+    // ricariche del mese tramite mezzoId / targa / padroncinoId.
+    const assegnazioni = await this.prisma.assegnazioneMezzo.findMany({
+      where: { padroncinoId, deletedAt: null },
       include: { mezzo: { select: { id: true, targa: true } } },
     });
-    console.log(`   🚚 Assegnazioni (filtro mese) trovate: ${assegnazioni.length}`);
-
-    // 1b. FALLBACK: se nessuna assegnazione copre il mese, usa quelle ATTUALMENTE ATTIVE
-    // Utile quando i dati storici (ricariche) sono di un mese precedente all'attivazione
-    // formale dell'assegnazione nel sistema.
-    if (assegnazioni.length === 0) {
-      assegnazioni = await this.prisma.assegnazioneMezzo.findMany({
-        where: {
-          padroncinoId,
-          deletedAt: null,
-          dataFine: null, // solo assegnazioni ancora aperte
-        },
-        include: { mezzo: { select: { id: true, targa: true } } },
-      });
-      console.log(`   ↪️  FALLBACK: usate ${assegnazioni.length} assegnazioni attualmente attive (nessuna copriva il mese)`);
-    }
+    console.log(`   🚚 Assegnazioni (tutte, senza filtro data) trovate: ${assegnazioni.length}`);
 
     assegnazioni.forEach((a) =>
       console.log(`      - mezzoId=${a.mezzoId} targa=${a.mezzo?.targa} dal ${a.dataInizio.toISOString()} al ${a.dataFine?.toISOString() ?? 'in corso'}`)
@@ -387,6 +371,45 @@ export class RicaricheService {
     console.log(`   ✅ RESULT: totale=${totale} mezzi=${JSON.stringify(mezzi)}\n`);
 
     return { padroncinoId, mese, totale, mezzi };
+  }
+
+  /**
+   * Aggiorna la % maggiorazione per tutte le sessioni di una targa in un mese,
+   * aggiornando anche il valore predefinito sul mezzo (per import futuri).
+   * Ricalcola importo = costoBase * (1 + maggiorazione/100).
+   */
+  async aggiornaMaggiorazioneTarga(mese: string, targaRaw: string, maggiorazione: number) {
+    const targaNorm = normalizeTarga(targaRaw);
+    if (!targaNorm) return { aggiornate: 0 };
+
+    const mag = Number(maggiorazione) || 0;
+
+    // Aggiorna valore predefinito sul mezzo
+    const mezzo = await this.prisma.mezzo.findFirst({
+      where: { targa: targaNorm, deletedAt: null },
+      select: { id: true },
+    });
+    if (mezzo) {
+      await this.prisma.mezzo.update({
+        where: { id: mezzo.id },
+        data: { maggiorazioneRicarica: mag },
+      });
+    }
+
+    // Ricalcola tutte le sessioni del mese per quella targa
+    const sessioni = await this.prisma.ricaricaElettrica.findMany({
+      where: { mese, deletedAt: null, targa: targaNorm },
+    });
+    for (const s of sessioni) {
+      const base = Number(s.costoBase);
+      const nuovoImporto = base * (1 + mag / 100);
+      await this.prisma.ricaricaElettrica.update({
+        where: { id: s.id },
+        data: { maggiorazione: mag, importo: nuovoImporto },
+      });
+    }
+
+    return { aggiornate: sessioni.length, mese, targa: targaNorm, maggiorazione: mag };
   }
 
   /**

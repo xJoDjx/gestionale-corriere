@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreatePadroncinoDto, UpdatePadroncinoDto, QueryPadronciniDto } from './padroncini.dto';
 import { randomUUID } from 'crypto';
+import { calcolaTotaliConteggio } from '../conteggi/conteggi-calc.utils';
 
 @Injectable()
 export class PadronciniService {
@@ -102,11 +103,12 @@ export class PadronciniService {
   // ─── STATS ───────────────────────────────────────────────────────
 
   async getStats() {
-    const [attivi, dismissi, palmariTot, palmariAss, mezziDisp, alertDocs] = await Promise.all([
+    const [attivi, dismissi, palmariTot, palmariAss, mezziTot, mezziDisp, alertDocs] = await Promise.all([
       this.prisma.padroncino.count({ where: { deletedAt: null, attivo: true } }),
       this.prisma.padroncino.count({ where: { deletedAt: null, attivo: false } }),
       this.prisma.palmare.count({ where: { deletedAt: null } }),
       this.prisma.palmare.count({ where: { deletedAt: null, stato: 'ASSEGNATO' } }),
+      this.prisma.mezzo.count({ where: { deletedAt: null } }),
       this.prisma.mezzo.count({ where: { deletedAt: null, stato: 'DISPONIBILE' } }),
       this.prisma.padroncino.count({
         where: {
@@ -125,7 +127,7 @@ export class PadronciniService {
       dismissi,
       totali: attivi + dismissi,
       alertDocumenti: alertDocs,
-      flottaMezzi: 0,
+      flottaMezzi: mezziTot,
       flottaDisponibili: mezziDisp,
       palmariAttivi: palmariAss,
       palmariTotali: palmariTot,
@@ -144,7 +146,7 @@ export class PadronciniService {
             mezzo: {
               select: {
                 id: true, targa: true, marca: true, modello: true,
-                alimentazione: true, canoneNoleggio: true,
+                alimentazione: true, canoneNoleggio: true, rataNoleggio: true,
               },
             },
           },
@@ -158,7 +160,7 @@ export class PadronciniService {
         codiciAutista: {
           where: { deletedAt: null },
           include: {
-            codiceAutista: { select: { id: true, codice: true, nome: true, cognome: true } },
+            codiceAutista: { select: { id: true, codice: true, nome: true, cognome: true, tariffaFissa: true, tariffaRitiro: true, target: true, bonus: true, malus: true, note: true, zone: true } },
           },
           orderBy: { dataInizio: 'desc' },
         },
@@ -171,9 +173,43 @@ export class PadronciniService {
 
     const documenti = await this.getDocumenti(id);
 
+    // ─── Calcolo KPI finanziari da ConteggiRiga ────────────────
+    const aggRows: Array<{ tipo: string; totale: string }> = await this.prisma.$queryRaw`
+      SELECT cr.tipo AS "tipo", SUM(cr.importo)::text AS "totale"
+      FROM   conteggi_righe cr
+      JOIN   conteggi_mensili cm ON cr.conteggio_mensile_id = cm.id
+      WHERE  cm.padroncino_id = ${id}
+        AND  cm.deleted_at IS NULL
+      GROUP  BY cr.tipo
+    `;
+    const meseRows: Array<{ mesi: string }> = await this.prisma.$queryRaw`
+      SELECT COUNT(DISTINCT cm.mese)::text AS "mesi"
+      FROM   conteggi_mensili cm
+      WHERE  cm.padroncino_id = ${id}
+        AND  cm.deleted_at IS NULL
+    `;
+
+    let fattImponibile = 0;
+    let addebitiTotali = 0;
+    for (const r of aggRows) {
+      const v = Number(r.totale) || 0;
+      if (r.tipo === 'FATTURATO') fattImponibile += v;
+      else addebitiTotali += v;
+    }
+    const fatturatoTotale = Math.round(fattImponibile * 1.22 * 100) / 100;
+    const daBonificare = Math.round((fatturatoTotale - addebitiTotali) * 100) / 100;
+    const nMesi = Number(meseRows[0]?.mesi ?? 0);
+    const mediaMensile = nMesi > 0
+      ? Math.round((fatturatoTotale / nMesi) * 100) / 100
+      : 0;
+
     return {
       ...padroncino,
       documenti,
+      fatturatoTotale,
+      addebitiTotali: Math.round(addebitiTotali * 100) / 100,
+      daBonificare,
+      mediaMensile,
       mezziAssegnati: padroncino.assegnazioniMezzi.map((a) => ({
         id: a.id,
         mezzoId: a.mezzo.id,
@@ -183,8 +219,8 @@ export class PadronciniService {
         alimentazione: a.mezzo.alimentazione,
         dataInizio: a.dataInizio,
         dataFine: a.dataFine,
-        tariffa: a.mezzo.canoneNoleggio ? Number(a.mezzo.canoneNoleggio) : null,
-        tariffaIvata: a.mezzo.canoneNoleggio ? Number(a.mezzo.canoneNoleggio) * 1.22 : null,
+        tariffa: a.mezzo.rataNoleggio ? Number(a.mezzo.rataNoleggio) : null,
+        tariffaIvata: a.mezzo.rataNoleggio ? Number(a.mezzo.rataNoleggio) * 1.22 : null,
       })),
       palmariAssegnati: padroncino.assegnazioniPalmari.map((a) => ({
         id: a.id,
@@ -200,6 +236,13 @@ export class PadronciniService {
         codice: a.codiceAutista.codice,
         nome: a.codiceAutista.nome,
         cognome: a.codiceAutista.cognome,
+        tariffaFissa: a.codiceAutista.tariffaFissa ? Number(a.codiceAutista.tariffaFissa) : null,
+        tariffaRitiro: a.codiceAutista.tariffaRitiro ? Number(a.codiceAutista.tariffaRitiro) : null,
+        target: a.codiceAutista.target,
+        bonus: a.codiceAutista.bonus ? Number(a.codiceAutista.bonus) : null,
+        malus: a.codiceAutista.malus ? Number(a.codiceAutista.malus) : null,
+        note: a.codiceAutista.note,
+        zone: a.codiceAutista.zone,
         dataInizio: a.dataInizio,
         dataFine: a.dataFine,
       })),
@@ -278,7 +321,10 @@ export class PadronciniService {
   // ─── CRUD ────────────────────────────────────────────────────────
 
   async create(dto: CreatePadroncinoDto, userId: string) {
-    const p = await this.prisma.padroncino.create({ data: dto as any });
+    const data: any = { ...dto };
+    if (data.scadenzaDurc) data.scadenzaDurc = new Date(data.scadenzaDurc);
+    if (data.scadenzaDvr)  data.scadenzaDvr  = new Date(data.scadenzaDvr);
+    const p = await this.prisma.padroncino.create({ data });
     await this.audit.log({ userId, entityType: 'padroncino', entityId: p.id, azione: 'CREATE', dataDopo: p as any });
     return p;
   }
@@ -286,7 +332,15 @@ export class PadronciniService {
   async update(id: string, dto: UpdatePadroncinoDto, userId: string) {
     const ex = await this.prisma.padroncino.findFirst({ where: { id, deletedAt: null } });
     if (!ex) throw new NotFoundException('Padroncino non trovato');
-    const up = await this.prisma.padroncino.update({ where: { id }, data: dto as any });
+
+    // Converte i campi data da stringa "YYYY-MM-DD" a Date per Prisma
+    const data: any = { ...dto };
+    if (data.scadenzaDurc) data.scadenzaDurc = new Date(data.scadenzaDurc);
+    else if (data.scadenzaDurc === '') data.scadenzaDurc = null;
+    if (data.scadenzaDvr)  data.scadenzaDvr  = new Date(data.scadenzaDvr);
+    else if (data.scadenzaDvr === '')  data.scadenzaDvr  = null;
+
+    const up = await this.prisma.padroncino.update({ where: { id }, data });
     await this.audit.log({ userId, entityType: 'padroncino', entityId: id, azione: 'UPDATE', dataPrima: ex as any, dataDopo: up as any });
     return up;
   }
@@ -295,8 +349,43 @@ export class PadronciniService {
     const ex = await this.prisma.padroncino.findFirst({ where: { id, deletedAt: null } });
     if (!ex) throw new NotFoundException('Padroncino non trovato');
     await this.prisma.padroncino.update({ where: { id }, data: { deletedAt: new Date() } });
-    await this.audit.log({ userId, entityType: 'padroncino', entityId: id, azione: 'DELETE' });
+    await this.audit.log({ userId, entityType: 'padroncino', entityId: id, azione: 'DELETE', dataPrima: { ragioneSociale: ex.ragioneSociale, partitaIva: ex.partitaIva } as any });
     return { deleted: true };
+  }
+
+  // ─── ANDAMENTO FATTURATO (per grafico dettaglio) ──────────────────
+  // Usa calcolaComponenti() per ogni conteggio: garantisce PALMARE×1.22,
+  // bollo virtuale, ACCONTO_FATTURA escluso dal lordo e nettoSalvato come
+  // fonte di verità — senza dipendere dall'aggregazione SQL che non ha percIva.
+  async getAndamento(
+    padroncinoId: string,
+    dal?: string, // formato "YYYY-MM"
+    al?: string,  // formato "YYYY-MM"
+  ) {
+    const conteggi = await this.prisma.conteggioMensile.findMany({
+      where: {
+        padroncinoId,
+        deletedAt: null,
+        ...(dal ? { mese: { gte: dal } } : {}),
+        ...(al  ? { mese: { lte: al  } } : {}),
+      },
+      include: { righe: true },
+      orderBy: { mese: 'asc' },
+    });
+
+    return conteggi.map((c) => {
+      const comp = this.calcolaComponenti(c.righe as any);
+      // nettoSalvato è la fonte di verità (valore salvato dal detail al salvataggio)
+      const netto = (c as any).nettoSalvato != null
+        ? Math.round(Number((c as any).nettoSalvato) * 100) / 100
+        : comp.netto;
+      return {
+        mese:          c.mese,
+        fatturato:     comp.fatturatoLordoConIva, // lordo senza acconti, con IVA
+        addebiti:      comp.addebiti,             // PALMARE×1.22 + già ivati + bollo
+        daBonificare:  netto,
+      };
+    });
   }
 
   async listForSelect() {
@@ -328,18 +417,18 @@ export class PadronciniService {
     const mezzo = await this.prisma.mezzo.findFirst({ where: { id: mezzoId, deletedAt: null } });
     if (!mezzo) throw new NotFoundException('Mezzo non trovato');
 
-    const attiva = await this.prisma.assegnazioneMezzo.findFirst({ where: { mezzoId, deletedAt: null, dataFine: null } });
-    if (attiva) {
-      await this.prisma.assegnazioneMezzo.update({ where: { id: attiva.id }, data: { dataFine: new Date(dataInizio) } });
-    }
-
-    const nuova = await this.prisma.assegnazioneMezzo.create({
-      data: { mezzoId, padroncinoId, dataInizio: new Date(dataInizio) },
-      include: { mezzo: { select: { targa: true } } },
+    const nuova = await this.prisma.$transaction(async (tx) => {
+      const attiva = await tx.assegnazioneMezzo.findFirst({ where: { mezzoId, deletedAt: null, dataFine: null } });
+      if (attiva) {
+        await tx.assegnazioneMezzo.update({ where: { id: attiva.id }, data: { dataFine: new Date(dataInizio) } });
+      }
+      const nuova = await tx.assegnazioneMezzo.create({
+        data: { mezzoId, padroncinoId, dataInizio: new Date(dataInizio) },
+        include: { mezzo: { select: { targa: true } } },
+      });
+      await tx.mezzo.update({ where: { id: mezzoId }, data: { stato: 'ASSEGNATO' } });
+      return nuova;
     });
-
-    // ✅ Stato mezzo → ASSEGNATO
-    await this.prisma.mezzo.update({ where: { id: mezzoId }, data: { stato: 'ASSEGNATO' } });
 
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: nuova.id, azione: 'ASSEGNA',
@@ -359,18 +448,18 @@ export class PadronciniService {
     });
     if (!ass) throw new NotFoundException('Assegnazione non trovata');
 
-    await this.prisma.assegnazioneMezzo.update({
-      where: { id: assegnazioneId },
-      data: { dataFine: new Date(), deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assegnazioneMezzo.update({
+        where: { id: assegnazioneId },
+        data: { dataFine: new Date(), deletedAt: new Date() },
+      });
+      const altre = await tx.assegnazioneMezzo.count({
+        where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
+      });
+      if (altre === 0) {
+        await tx.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
+      }
     });
-
-    // ✅ Stato mezzo → DISPONIBILE se nessuna altra assegnazione attiva
-    const altre = await this.prisma.assegnazioneMezzo.count({
-      where: { mezzoId: ass.mezzo.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
-    });
-    if (altre === 0) {
-      await this.prisma.mezzo.update({ where: { id: ass.mezzo.id }, data: { stato: 'DISPONIBILE' } });
-    }
 
     await this.audit.log({
       userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId, azione: 'CHIUDI_ASSEGNAZIONE',
@@ -392,18 +481,18 @@ export class PadronciniService {
     const palmare = await this.prisma.palmare.findFirst({ where: { id: palmareId, deletedAt: null } });
     if (!palmare) throw new NotFoundException('Palmare non trovato');
 
-    const attiva = await this.prisma.assegnazionePalmare.findFirst({ where: { palmareId, deletedAt: null, dataFine: null } });
-    if (attiva) {
-      await this.prisma.assegnazionePalmare.update({ where: { id: attiva.id }, data: { dataFine: new Date(dataInizio) } });
-    }
-
-    const nuova = await this.prisma.assegnazionePalmare.create({
-      data: { palmareId, padroncinoId, dataInizio: new Date(dataInizio) },
-      include: { palmare: { select: { codice: true } } },
+    const nuova = await this.prisma.$transaction(async (tx) => {
+      const attiva = await tx.assegnazionePalmare.findFirst({ where: { palmareId, deletedAt: null, dataFine: null } });
+      if (attiva) {
+        await tx.assegnazionePalmare.update({ where: { id: attiva.id }, data: { dataFine: new Date(dataInizio) } });
+      }
+      const nuova = await tx.assegnazionePalmare.create({
+        data: { palmareId, padroncinoId, dataInizio: new Date(dataInizio) },
+        include: { palmare: { select: { codice: true } } },
+      });
+      await tx.palmare.update({ where: { id: palmareId }, data: { stato: 'ASSEGNATO' } });
+      return nuova;
     });
-
-    // ✅ Stato palmare → ASSEGNATO
-    await this.prisma.palmare.update({ where: { id: palmareId }, data: { stato: 'ASSEGNATO' } });
 
     await this.audit.log({
       userId, entityType: 'assegnazione_palmare', entityId: nuova.id, azione: 'ASSEGNA',
@@ -423,18 +512,18 @@ export class PadronciniService {
     });
     if (!ass) throw new NotFoundException('Assegnazione palmare non trovata');
 
-    await this.prisma.assegnazionePalmare.update({
-      where: { id: assegnazioneId },
-      data: { dataFine: new Date(), deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assegnazionePalmare.update({
+        where: { id: assegnazioneId },
+        data: { dataFine: new Date(), deletedAt: new Date() },
+      });
+      const altre = await tx.assegnazionePalmare.count({
+        where: { palmareId: ass.palmare.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
+      });
+      if (altre === 0) {
+        await tx.palmare.update({ where: { id: ass.palmare.id }, data: { stato: 'DISPONIBILE' } });
+      }
     });
-
-    // ✅ Stato palmare → DISPONIBILE se nessuna altra assegnazione attiva
-    const altre = await this.prisma.assegnazionePalmare.count({
-      where: { palmareId: ass.palmare.id, deletedAt: null, dataFine: null, id: { not: assegnazioneId } },
-    });
-    if (altre === 0) {
-      await this.prisma.palmare.update({ where: { id: ass.palmare.id }, data: { stato: 'DISPONIBILE' } });
-    }
 
     await this.audit.log({
       userId, entityType: 'assegnazione_palmare', entityId: assegnazioneId, azione: 'CHIUDI_ASSEGNAZIONE',
@@ -461,20 +550,21 @@ export class PadronciniService {
     const ca = await this.prisma.codiceAutista.findFirst({ where: { id: codiceAutistaId, deletedAt: null } });
     if (!ca) throw new NotFoundException('Codice autista non trovato');
 
-    // Chiudi eventuale assegnazione attiva del codice (anche se ad altro padroncino)
-    const attiva = await this.prisma.assegnazioneCodiceAutista.findFirst({
-      where: { codiceAutistaId, deletedAt: null, dataFine: null },
-    });
-    if (attiva) {
-      await this.prisma.assegnazioneCodiceAutista.update({
-        where: { id: attiva.id },
-        data: { dataFine: new Date(dataInizio) },
+    const nuova = await this.prisma.$transaction(async (tx) => {
+      // Chiudi eventuale assegnazione attiva del codice (anche se ad altro padroncino)
+      const attiva = await tx.assegnazioneCodiceAutista.findFirst({
+        where: { codiceAutistaId, deletedAt: null, dataFine: null },
       });
-    }
-
-    const nuova = await this.prisma.assegnazioneCodiceAutista.create({
-      data: { codiceAutistaId, padroncinoId, dataInizio: new Date(dataInizio) },
-      include: { codiceAutista: { select: { codice: true } } },
+      if (attiva) {
+        await tx.assegnazioneCodiceAutista.update({
+          where: { id: attiva.id },
+          data: { dataFine: new Date(dataInizio) },
+        });
+      }
+      return tx.assegnazioneCodiceAutista.create({
+        data: { codiceAutistaId, padroncinoId, dataInizio: new Date(dataInizio) },
+        include: { codiceAutista: { select: { codice: true } } },
+      });
     });
 
     await this.audit.log({
@@ -495,9 +585,11 @@ export class PadronciniService {
     });
     if (!ass) throw new NotFoundException('Assegnazione codice autista non trovata');
 
-    await this.prisma.assegnazioneCodiceAutista.update({
-      where: { id: assegnazioneId },
-      data: { dataFine: new Date(), deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assegnazioneCodiceAutista.update({
+        where: { id: assegnazioneId },
+        data: { dataFine: new Date(), deletedAt: new Date() },
+      });
     });
 
     await this.audit.log({
@@ -587,7 +679,7 @@ export class PadronciniService {
 
     await this.audit.log({
       userId, entityType: 'documento', entityId: newId, azione: 'CREATE',
-      dataDopo: { nome: data.nome, tipo: data.tipo, padroncinoId } as any,
+      dataDopo: { nome: data.nome, tipo: data.tipo, padroncinoId, ragioneSociale: padroncino.ragioneSociale } as any,
     });
 
     return {
@@ -600,6 +692,11 @@ export class PadronciniService {
       scadenza: data.scadenza ?? null,
       createdAt: now.toISOString(),
     };
+  }
+
+  // Delegato a conteggi-calc.utils (logica canonica condivisa)
+  private calcolaComponenti(righe: Array<{ tipo: string; importo: any; percIva?: any }>) {
+    return calcolaTotaliConteggio(righe);
   }
 
   // ─── STORICO CONTEGGI ───────────────────────────────────────────
@@ -616,20 +713,13 @@ export class PadronciniService {
       orderBy: { mese: 'desc' },
     });
 
-    const ADDEBITI = ['NOLEGGIO', 'PALMARE', 'RICARICA', 'ADDEBITO'];
-    const COMPENSAZIONI = ['ACCREDITO', 'BONUS', 'FINE_MESE', 'ACCONTO'];
-
     return conteggi.map((c) => {
-      const fatturato = c.righe
-        .filter((r) => r.tipo === 'FATTURATO')
-        .reduce((s, r) => s + Number(r.importo), 0);
-      const addebiti = c.righe
-        .filter((r) => ADDEBITI.includes(r.tipo))
-        .reduce((s, r) => s + Number(r.importo), 0);
-      const compensazioni = c.righe
-        .filter((r) => COMPENSAZIONI.includes(r.tipo))
-        .reduce((s, r) => s + Number(r.importo), 0);
-      const netto = Math.round((fatturato * 1.22 - addebiti - compensazioni) * 100) / 100;
+      const comp = this.calcolaComponenti(c.righe as any);
+
+      // Usa nettoSalvato se disponibile (fonte di verità = valore salvato dal detail)
+      const netto = (c as any).nettoSalvato != null
+        ? Math.round(Number((c as any).nettoSalvato) * 100) / 100
+        : comp.netto;
 
       const dist = c.distribuzioneJson as any;
       const riepilogo = dist?.riepilogo;
@@ -641,13 +731,114 @@ export class PadronciniService {
         id: c.id,
         mese: c.mese,
         stato: c.stato,
-        fatturato,
-        addebiti,
-        compensazioni,
+        fatturato: comp.fatturatoConIva,       // netto da acconti, con IVA
+        fatturatoLordo: comp.fatturatoLordoConIva, // lordo senza acconti, con IVA
+        addebiti: comp.addebiti,               // PALMARE×1.22 + già ivati + bollo
+        compensazioni: comp.compensazioni,
         netto,
         nSpedizioni,
       };
     });
+  }
+
+  async updateDocumento(
+    padroncinoId: string,
+    documentoId: string,
+    data: { nome?: string; tipo?: string; scadenza?: string; note?: string },
+    userId: string,
+  ) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT id, nome, tipo, scadenza FROM documenti
+      WHERE id          = ${documentoId}
+        AND entity_id   = ${padroncinoId}
+        AND entity_type = 'padroncino'
+        AND deleted_at IS NULL
+    `;
+    if (!rows || rows.length === 0) throw new NotFoundException('Documento non trovato');
+
+    const now  = new Date();
+    const scad = data.scadenza !== undefined ? (data.scadenza ? new Date(data.scadenza) : null) : undefined;
+
+    await this.prisma.$executeRaw`
+      UPDATE documenti
+      SET
+        nome       = COALESCE(${data.nome       ?? null}, nome),
+        tipo       = COALESCE(${data.tipo       ?? null}, tipo),
+        scadenza   = CASE WHEN ${scad !== undefined} THEN ${scad ?? null} ELSE scadenza END,
+        note       = CASE WHEN ${data.note !== undefined} THEN ${data.note ?? null} ELSE note END,
+        updated_at = ${now}
+      WHERE id = ${documentoId}
+    `;
+
+    // Se il tipo è cambiato a DURC o DVR, aggiorna le scadenze del padroncino
+    const newTipo = (data.tipo ?? rows[0].tipo)?.toUpperCase?.();
+    const newScad = scad !== undefined ? scad : (rows[0].scadenza ? new Date(rows[0].scadenza) : null);
+    if (data.tipo || data.scadenza !== undefined) {
+      if (newTipo === 'DURC') {
+        await this.prisma.padroncino.update({ where: { id: padroncinoId }, data: { scadenzaDurc: newScad } });
+      } else if (newTipo === 'DVR') {
+        await this.prisma.padroncino.update({ where: { id: padroncinoId }, data: { scadenzaDvr: newScad, dvrEsente: false } });
+      }
+    }
+
+    const padroncinoInfo = await this.prisma.padroncino.findFirst({ where: { id: padroncinoId, deletedAt: null }, select: { ragioneSociale: true } });
+    await this.audit.log({
+      userId, entityType: 'documento', entityId: documentoId, azione: 'UPDATE',
+      dataPrima: { nome: rows[0].nome, tipo: rows[0].tipo, scadenza: rows[0].scadenza, ragioneSociale: padroncinoInfo?.ragioneSociale } as any,
+      dataDopo:  { nome: data.nome ?? rows[0].nome, tipo: data.tipo ?? rows[0].tipo, scadenza: data.scadenza, note: data.note, ragioneSociale: padroncinoInfo?.ragioneSociale } as any,
+    });
+
+    const updated = await this.prisma.$queryRaw<any[]>`
+      SELECT id, nome, tipo, file_path, mime_type, dimensione, scadenza, note, created_at
+      FROM documenti WHERE id = ${documentoId}
+    `;
+    const r = updated[0];
+    return {
+      id:         r.id,
+      nome:       r.nome,
+      tipo:       r.tipo,
+      filePath:   r.file_path,
+      mimeType:   r.mime_type,
+      dimensione: r.dimensione != null ? Number(r.dimensione) : null,
+      scadenza:   r.scadenza ? new Date(r.scadenza).toISOString() : null,
+      note:       r.note ?? null,
+      createdAt:  r.created_at ? new Date(r.created_at).toISOString() : null,
+    };
+  }
+
+  async getPadroncinoLog(padroncinoId: string) {
+    const rows = await this.prisma.$queryRaw<any[]>`
+      SELECT
+        al.id,
+        al.entity_type  AS "entityType",
+        al.entity_id    AS "entityId",
+        al.azione,
+        al.data_prima   AS "dataPrima",
+        al.data_dopo    AS "dataDopo",
+        al.created_at   AS "createdAt",
+        u.nome          AS "userNome",
+        u.cognome       AS "userCognome"
+      FROM audit_logs al
+      LEFT JOIN users u ON u.id = al.user_id
+      WHERE (al.entity_type = 'padroncino' AND al.entity_id = ${padroncinoId})
+         OR (al.data_dopo  IS NOT NULL AND al.data_dopo  ->>'padroncinoId' = ${padroncinoId})
+         OR (al.data_prima IS NOT NULL AND al.data_prima ->>'padroncinoId' = ${padroncinoId})
+      ORDER BY al.created_at DESC
+      LIMIT 300
+    `;
+
+    return rows.map((r) => ({
+      id:         r.id,
+      entityType: r.entityType,
+      entityId:   r.entityId,
+      azione:     r.azione,
+      dataPrima:  r.dataPrima,
+      dataDopo:   r.dataDopo,
+      createdAt:  r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+      user:       (r.userNome || r.userCognome)
+                    ? { nome: r.userNome ?? '', cognome: r.userCognome ?? '' }
+                    : null,
+    }));
   }
 
   async removeDocumento(padroncinoId: string, documentoId: string, userId: string) {

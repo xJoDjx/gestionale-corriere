@@ -53,6 +53,7 @@
   color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
+  min-width: 160px;
 }
 
 /* Tabella */
@@ -91,9 +92,7 @@
   font-size: 13px;
 }
 
-.log-table thead tr {
-  background: var(--bg-secondary);
-}
+.log-table thead tr { background: #eff6ff; }
 
 .log-table th {
   padding: 10px 14px;
@@ -101,9 +100,17 @@
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
+  letter-spacing: .08em;
+  color: #66758A;
+  background: #f2f5f7;
+  border-bottom: 1px solid #e0e5eb;
+}
+
+[data-theme="dark"] .log-table thead tr,
+[data-theme="dark"] .log-table th {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--badge-blue);
+  border-bottom-color: var(--border);
 }
 
 .log-row {
@@ -112,7 +119,8 @@
   border-bottom: 1px solid var(--border);
 }
 
-.log-row:hover { background: var(--bg-hover, rgba(99,102,241,.04)); }
+.log-table tbody tr.log-row:nth-child(even) td { background: var(--table-row-alt); }
+.log-row:hover td { background: var(--table-row-hover); }
 .log-row-expanded { background: var(--bg-secondary); }
 
 .log-row td {
@@ -126,6 +134,14 @@
 .log-system { color: var(--text-muted); font-style: italic; font-weight: 400; }
 .log-entity-id { font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-muted); }
 .log-expand-btn { color: var(--text-muted); font-size: 11px; text-align: right; }
+.log-col-expand { width: 28px; }
+
+/* Descrizione leggibile nella colonna principale */
+.log-desc {
+  font-size: 13px;
+  color: var(--text-primary);
+  max-width: 520px;
+}
 .log-empty { text-align: center; padding: 32px; color: var(--text-muted); }
 
 /* Badges */
@@ -151,8 +167,11 @@
 .log-action-create  { background: rgba(34,197,94,.12);  color: #16a34a; }
 .log-action-update  { background: rgba(99,102,241,.12); color: var(--primary); }
 .log-action-delete  { background: rgba(239,68,68,.12);  color: #dc2626; }
+.log-action-restore { background: rgba(8,145,178,.12);  color: #0891b2; }
 .log-action-assegna { background: rgba(59,130,246,.12); color: #2563eb; }
-.log-action-chiudi  { background: rgba(234,179,8,.12);  color: #ca8a04; }
+.log-action-chiudi    { background: rgba(234,179,8,.12);  color: #ca8a04; }
+.log-action-contratto { background: rgba(168,85,247,.12); color: #9333ea; }
+.log-action-login     { background: rgba(20,184,166,.12); color: #0d9488; }
 
 /* Detail row */
 .log-detail-row td {

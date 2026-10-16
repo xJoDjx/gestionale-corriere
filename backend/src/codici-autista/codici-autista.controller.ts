@@ -74,9 +74,13 @@ export class CodiciAutistaController {
   }
 
   @Put('assegnazioni/:assegnazioneId/chiudi')
-  chiudiAssegnazione(@Param('assegnazioneId') id: string, @Req() req: any) {
+  chiudiAssegnazione(
+    @Param('assegnazioneId') id: string,
+    @Body() body: { dataFine?: string },
+    @Req() req: any,
+  ) {
     const userId: string = req.user?.id ?? 'system';
-    return this.service.chiudiAssegnazione(id, userId);
+    return this.service.chiudiAssegnazione(id, userId, body?.dataFine);
   }
 
   @Delete(':id')

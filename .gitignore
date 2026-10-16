@@ -1,21 +1,33 @@
-# Ignora la cartella node_modules
+# --- Dipendenze e build ---
 node_modules/
-
-# Ignora la cartella dist (build)
 dist/
+backend/public/
+*.tsbuildinfo
 
-# Ignora eventuali file log o configurazioni locali
-.DS_Store
+# --- Configurazione e segreti (MAI su git) ---
 .env
-.pdf
-MARZO_FatturaProforma_20260408_151031.xlsx
-SCADENZE AUTOMEZZI -GLS-6.0.xlsx
-backend/uploads/padroncini/1775656437808-383894148.pdf
-cose da fare.txt
-.gitignore
-Ricarica MARZO 2026 - CSV.csv
-Codici.xlsx
-Palmari.xlsx
-cose da fare.txt
-Lovable/frontend/src/features/conteggi/ConteggiPage.tsx
-.gitignore
+.env.*
+!env.example
+*password*
+*.txt
+!backend/**/*.txt
+
+# --- Dati reali: Excel, CSV, PDF, upload ---
+*.xlsx
+*.xls
+*.csv
+*.pdf
+backend/uploads/
+
+# --- Pacchetti di deploy ---
+_deploy/
+_deploy.rar
+*.rar
+*.zip
+
+# --- Strumenti locali ---
+.claude/worktrees/
+.claude/settings.local.json
+Lovable/
+.DS_Store
+vite.config.ts.timestamp-*

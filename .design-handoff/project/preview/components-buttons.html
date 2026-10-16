@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',sans-serif; background:#f7f8fa; padding:20px; }
+.label { font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; }
+.row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; font-size:13px; font-weight:600; border-radius:8px; border:1px solid transparent; cursor:pointer; font-family:'DM Sans',sans-serif; }
+.btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+.btn-ghost { background:#fff; color:#0f172a; border-color:#e5e7eb; }
+.btn-danger { background:#fff; color:#dc2626; border-color:#e5e7eb; }
+.btn-sm { padding:5px 10px; font-size:12px; }
+.btn-outline { background:transparent; color:#475569; border-color:#e5e7eb; }
+</style>
+</head>
+<body>
+<div class="label">Primary Actions</div>
+<div class="row">
+  <button class="btn btn-primary">⚡ Genera conteggi mese</button>
+  <button class="btn btn-primary">➕ Nuovo Padroncino</button>
+  <button class="btn btn-primary btn-sm">💾 Salva Modifiche</button>
+  <button class="btn btn-primary btn-sm">✅ Crea Padroncino</button>
+</div>
+<div class="label">Ghost / Secondary</div>
+<div class="row">
+  <button class="btn btn-ghost">Annulla</button>
+  <button class="btn btn-ghost btn-sm">🔗 Assegna Mezzo</button>
+  <button class="btn btn-ghost btn-sm">📎 Carica Documento</button>
+  <button class="btn btn-outline btn-sm">Annulla</button>
+</div>
+<div class="label">Danger</div>
+<div class="row">
+  <button class="btn btn-danger">Elimina Padroncino</button>
+  <button class="btn btn-danger btn-sm">Rimuovi</button>
+</div>
+</body>
+</html>

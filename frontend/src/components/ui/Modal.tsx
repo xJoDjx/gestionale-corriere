@@ -26,7 +26,7 @@ export default function Modal({ open, onClose, title, subtitle, children, width 
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div
         className="modal-panel"
         style={{ maxWidth: width }}

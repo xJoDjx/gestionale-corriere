@@ -1,9 +1,11 @@
 // src/features/palmari/DettaglioPalmare.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { palmariApi, padronciniApi } from '../../lib/api';
-import type { Palmare, Padroncino } from '../../lib/api';
+import { palmariApi, padronciniApi, noteApi } from '../../lib/api';
+import type { Palmare, Padroncino, Nota } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import ChiudiAssegnazioneModal from '../../components/ui/ChiudiAssegnazioneModal';
+import type { ChiudiAssegnazioneTarget } from '../../components/ui/ChiudiAssegnazioneModal';
 import '../mezzi/FlottaMezzi.css';
 
 const fmt = (d: string | null | undefined) =>
@@ -19,7 +21,7 @@ const STATO_META: Record<string, { label: string; cls: string }> = {
   DISMESSO:    { label: 'Dismesso',    cls: 'fm-badge-gray' },
 };
 
-type TabKey = 'info' | 'assegnazioni' | 'log';
+type TabKey = 'info' | 'assegnazioni' | 'note' | 'log';
 
 export default function DettaglioPalmare() {
   const { id } = useParams<{ id: string }>();
@@ -32,10 +34,14 @@ export default function DettaglioPalmare() {
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [assegnaForm, setAssegnaForm] = useState({ padroncinoId: '', dataInizio: '' });
   const [showAssegna, setShowAssegna] = useState(false);
+  const [chiudiTarget, setChiudiTarget] = useState<ChiudiAssegnazioneTarget | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [form, setFormState] = useState<Partial<Palmare>>({});
   const [dirty, setDirty] = useState(false);
+  const [noteList, setNoteList]     = useState<Nota[]>([]);
+  const [notaTesto, setNotaTesto]   = useState('');
+  const [notaSaving, setNotaSaving] = useState(false);
 
   const set = (k: keyof Palmare, v: any) => {
     setFormState((f) => ({ ...f, [k]: v }));
@@ -46,14 +52,16 @@ export default function DettaglioPalmare() {
     if (!id) return;
     setLoading(true);
     try {
-      const [p, pResp] = await Promise.all([
+      const [p, pResp, noteResp] = await Promise.all([
         palmariApi.detail(id),
         padronciniApi.list({ limit: '200' }),
+        noteApi.list('palmare', id, 100),
       ]);
       setPalmare(p);
       setFormState(p);
       setDirty(false);
       setPadroncini(pResp.data);
+      setNoteList(noteResp);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -62,6 +70,25 @@ export default function DettaglioPalmare() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleAddNota = async () => {
+    if (!id || !notaTesto.trim()) return;
+    setNotaSaving(true);
+    try {
+      await noteApi.create({ entityType: 'palmare', entityId: id, contenuto: notaTesto.trim() });
+      setNotaTesto('');
+      setNoteList(await noteApi.list('palmare', id, 100));
+    } catch (e: any) { alert('Errore: ' + e.message); }
+    finally { setNotaSaving(false); }
+  };
+
+  const handleDeleteNota = async (notaId: string) => {
+    if (!confirm('Eliminare questa nota?')) return;
+    try {
+      await noteApi.remove(notaId);
+      setNoteList(prev => prev.filter(n => n.id !== notaId));
+    } catch (e: any) { alert('Errore: ' + e.message); }
+  };
 
   const handleSave = async () => {
     if (!id) return;
@@ -101,14 +128,14 @@ export default function DettaglioPalmare() {
     }
   };
 
-  const handleChiudiAssegnazione = async (assegnazioneId: string) => {
-    if (!window.confirm('Chiudere l\'assegnazione corrente?')) return;
-    try {
-      await palmariApi.chiudiAssegnazione(assegnazioneId);
-      await load();
-    } catch (e: any) {
-      alert('Errore: ' + e.message);
-    }
+  const handleChiudiAssegnazione = (assegnazioneId: string, nome: string, dataInizio: string) => {
+    setChiudiTarget({ id: assegnazioneId, nome, dataInizio });
+  };
+
+  const confermaChiusura = async (t: ChiudiAssegnazioneTarget, dataFine: string) => {
+    await palmariApi.chiudiAssegnazione(t.id, dataFine);
+    setChiudiTarget(null);
+    await load();
   };
 
   if (loading) return (
@@ -131,11 +158,18 @@ export default function DettaglioPalmare() {
   const TABS: { key: TabKey; label: string }[] = [
     { key: 'info', label: 'Dati Palmare' },
     { key: 'assegnazioni', label: `Assegnazioni (${palmare.assegnazioni?.length ?? 0})` },
+    { key: 'note', label: `📝 Note (${noteList.length})` },
     { key: 'log', label: 'Log' },
   ];
 
   return (
     <div className="fm-page">
+      <ChiudiAssegnazioneModal
+        target={chiudiTarget}
+        oggetto={`Palmare ${palmare.codice}`}
+        onClose={() => setChiudiTarget(null)}
+        onConfirm={confermaChiusura}
+      />
       {/* ── TOPBAR ── */}
       <div className="dm-topbar">
         <button className="btn-ghost-sm" onClick={() => navigate('/palmari')}>← Palmari</button>
@@ -248,16 +282,7 @@ export default function DettaglioPalmare() {
                   placeholder="—"
                 />
               </div>
-              <div className="dm-field dm-field-full">
-                <label>Note</label>
-                <textarea
-                  className="dm-textarea"
-                  rows={3}
-                  value={form.note ?? ''}
-                  onChange={(e) => set('note', e.target.value)}
-                  placeholder="Note aggiuntive…"
-                />
-              </div>
+
             </div>
           </div>
 
@@ -296,7 +321,7 @@ export default function DettaglioPalmare() {
                   <button
                     className="btn-outline btn-sm"
                     style={{ color: '#dc2626', borderColor: '#dc2626', marginTop: 8 }}
-                    onClick={() => handleChiudiAssegnazione(attiva.id)}
+                    onClick={() => handleChiudiAssegnazione(attiva.id, attiva.ragioneSociale, attiva.dataInizio)}
                   >
                     🔓 Chiudi assegnazione
                   </button>
@@ -407,7 +432,7 @@ export default function DettaglioPalmare() {
                       <button
                         className="btn-outline btn-sm"
                         style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                        onClick={() => handleChiudiAssegnazione(a.id)}
+                        onClick={() => handleChiudiAssegnazione(a.id, a.ragioneSociale, a.dataInizio)}
                       >
                         🔓 Chiudi
                       </button>
@@ -420,6 +445,44 @@ export default function DettaglioPalmare() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+
+      {/* ── TAB NOTE ── */}
+      {activeTab === 'note' && (
+        <div className="dm-tab-body">
+          <div className="dm-note-add-form">
+            <textarea
+              className="dm-note-textarea"
+              rows={3}
+              placeholder="Aggiungi una nota su questo palmare…"
+              value={notaTesto}
+              onChange={e => setNotaTesto(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddNota(); }}
+            />
+            <div className="dm-note-form-footer">
+              <span className="dm-note-hint">Ctrl+Invio per salvare</span>
+              <button className="dm-note-submit" onClick={handleAddNota} disabled={notaSaving || !notaTesto.trim()}>
+                {notaSaving ? 'Salvo…' : '+ Aggiungi nota'}
+              </button>
+            </div>
+          </div>
+          {noteList.length === 0
+            ? <div className="dm-note-empty">Nessuna nota registrata.</div>
+            : noteList.map(n => (
+              <div key={n.id} className={`dm-note-card${n.contenuto.startsWith('[Nota originale]') ? ' dm-note-card-legacy' : ''}`}>
+                <div className="dm-note-card-header">
+                  <span className="dm-note-avatar">{n.user ? (n.user.nome?.[0] ?? '') + (n.user.cognome?.[0] ?? '') : '?'}</span>
+                  <div className="dm-note-card-meta">
+                    <span className="dm-note-author">{n.user ? `${n.user.nome} ${n.user.cognome}` : 'Sistema'}</span>
+                    <span className="dm-note-ts">{new Date(n.createdAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  </div>
+                  <button className="dm-note-del" onClick={() => handleDeleteNota(n.id)} title="Elimina nota">✕</button>
+                </div>
+                <p className="dm-note-body">{n.contenuto}</p>
+              </div>
+            ))}
         </div>
       )}
 

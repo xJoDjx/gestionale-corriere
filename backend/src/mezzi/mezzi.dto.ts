@@ -48,8 +48,11 @@ export class CreateMezzoDto {
 
   // ── Scadenze ────────────────────────────────────────
   @IsDateString() @IsOptional() scadenzaAssicurazione?: string;
+  @IsNumber() @IsOptional() @Type(() => Number) costoAssicurazione?: number;
   @IsDateString() @IsOptional() scadenzaRevisione?: string;
+  @IsNumber() @IsOptional() @Type(() => Number) costoRevisione?: number;
   @IsDateString() @IsOptional() scadenzaBollo?: string;
+  @IsNumber() @IsOptional() @Type(() => Number) costoBollo?: number;
   @IsDateString() @IsOptional() scadenzaTagliando?: string;
   @IsDateString() @IsOptional() scadenzaTachigrafo?: string;
 
@@ -82,4 +85,16 @@ export class CreateAssegnazioneMezzoDto {
   @IsDateString() dataInizio: string;
   @IsDateString() @IsOptional() dataFine?: string;
   @IsString() @IsOptional() note?: string;
+}
+
+export class GeneraContrattoPdaDto {
+  @IsString() padroncinoId: string;
+  @IsString() @IsOptional() nomeRapp?: string;
+  @IsString() @IsOptional() cognomeRapp?: string;
+  @IsString() @IsOptional() cfRapp?: string;
+  @IsString() @IsOptional() qualificaRapp?: string;
+  @IsString() @IsOptional() dataFirma?: string;
+  @IsNumber() @IsOptional() @Type(() => Number) rataNoleggio?: number;
+  @IsNumber() @IsOptional() @Type(() => Number) kmInclusi?: number;
+  @IsNumber() @IsOptional() @Type(() => Number) eccedenzaKm?: number;
 }

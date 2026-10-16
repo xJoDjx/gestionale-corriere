@@ -1,0 +1,72 @@
+/* ══════════════════════════════════════════════════════
+   TASK MODAL + shared "cose da fare" list-item styles
+══════════════════════════════════════════════════════ */
+
+.taskm-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; backdrop-filter: blur(2px);
+}
+.taskm-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); width: 520px; max-width: calc(100vw - 32px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.taskm-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);
+}
+.taskm-header h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.taskm-close {
+  background: none; border: none; cursor: pointer; font-size: 16px;
+  color: var(--text-secondary); padding: 4px; border-radius: 4px; line-height: 1; transition: color .15s;
+}
+.taskm-close:hover { color: var(--text-primary); }
+
+.taskm-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.taskm-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.taskm-row .taskm-field { flex: 1; min-width: 140px; }
+.taskm-field { display: flex; flex-direction: column; gap: 6px; }
+.taskm-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .4px; }
+.taskm-input, .taskm-textarea {
+  width: 100%; box-sizing: border-box; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 13px; font-family: inherit; background: var(--bg-primary); color: var(--text-primary); outline: none;
+  transition: border-color .15s;
+}
+.taskm-input:focus, .taskm-textarea:focus { border-color: var(--primary); }
+.taskm-textarea { resize: vertical; }
+
+.taskm-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 22px; border-top: 1px solid var(--border); background: var(--bg-secondary);
+}
+
+/* ── Shared "cose da fare" list item ── */
+.task-list-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-bottom: 1px solid #f8fafc;
+  cursor: pointer;
+}
+.task-list-item:last-child { border-bottom: none; }
+.task-list-item:hover { background: #f8fafc; }
+.task-list-item:hover .task-remove { opacity: 1; }
+.task-checkbox { cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
+.task-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.task-text {
+  font-size: 12px; font-weight: 500; color: #0f172a; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.task-done .task-text { color: #94a3b8; text-decoration: line-through; }
+.task-tag {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+  background: #eff6ff; color: #2563eb; flex-shrink: 0; white-space: nowrap;
+}
+.task-tag-pad { background: #f5f3ff; color: #7c3aed; }
+.task-remove {
+  background: none; border: none; cursor: pointer; color: #cbd5e1;
+  font-size: 12px; padding: 2px 4px; border-radius: 4px; opacity: 0; transition: opacity .12s, color .12s;
+  flex-shrink: 0;
+}
+.task-remove:hover { color: #dc2626; background: #fef2f2; }

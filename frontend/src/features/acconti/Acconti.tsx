@@ -1,5 +1,6 @@
 // src/features/acconti/Acconti.tsx
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { api } from '../../lib/api';
 import './Acconti.css';
 
@@ -95,10 +96,15 @@ export default function Acconti() {
     descrizione: '',
     mese: getCurrentMonth(),
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Partial<Record<keyof NuovoAccontoForm, string>>>({});
   const [verifica, setVerifica] = useState<CodiceVerifica | null>(null);
   const [verificando, setVerificando] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Import Excel
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,34 +193,180 @@ export default function Acconti() {
     return Object.keys(e).length === 0;
   };
 
+  const resetForm = () => {
+    setForm({
+      codiceAutista: '',
+      importo: '',
+      tipo: 'ACCONTO',
+      data: new Date().toISOString().split('T')[0],
+      descrizione: '',
+      mese: getCurrentMonth(),
+    });
+    setEditingId(null);
+    setVerifica(null);
+    setErrors({});
+  };
+
   const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
     try {
-      await api.post('/acconti', {
+      const payload = {
         codiceAutista: form.codiceAutista.trim().toUpperCase(),
         importo: parseFloat(form.importo),
         tipo: form.tipo,
         data: form.data,
         descrizione: form.descrizione || undefined,
         mese: form.mese || form.data.substring(0, 7),
-      });
+      };
+      if (editingId) {
+        await api.put(`/acconti/${editingId}`, payload);
+      } else {
+        await api.post('/acconti', payload);
+      }
       setShowForm(false);
-      setForm({
-        codiceAutista: '',
-        importo: '',
-        tipo: 'ACCONTO',
-        data: new Date().toISOString().split('T')[0],
-        descrizione: '',
-        mese: getCurrentMonth(),
-      });
-      setVerifica(null);
+      resetForm();
       await load();
     } catch (e: any) {
       alert('Errore: ' + (e.message ?? 'Salvataggio fallito'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEdit = (a: Acconto) => {
+    setEditingId(a.id);
+    setForm({
+      codiceAutista: a.codice,
+      importo: String(a.importo),
+      tipo: a.tipo,
+      data: a.data,
+      descrizione: a.descrizione
+        ? a.descrizione.replace(/^\[RESTITUZIONE\]\s*/, '')
+        : '',
+      mese: a.mese ?? getCurrentMonth(),
+    });
+    setVerifica(null);
+    setErrors({});
+    setShowForm(true);
+    // Lookup immediato del codice per mostrare feedback autista/padroncino
+    if (a.codice && a.codice !== '—') {
+      (async () => {
+        try {
+          const res = await api.get<CodiceVerifica>(`/acconti/verifica-codice/${a.codice}`);
+          setVerifica(res);
+        } catch {
+          /* ignora */
+        }
+      })();
+    }
+  };
+
+  const handleImportClick = () => {
+    const suggerito = mese || getCurrentMonth();
+    const meseScelto = window.prompt(
+      'Mese di competenza per gli acconti importati (formato YYYY-MM):',
+      suggerito,
+    );
+    if (!meseScelto) return;
+    if (!/^\d{4}-\d{2}$/.test(meseScelto.trim())) {
+      alert('Formato mese non valido. Usa YYYY-MM (es. 2026-04).');
+      return;
+    }
+    // Salva il mese scelto nell'input per passarlo al handler del file
+    importFileRef.current?.setAttribute('data-mese', meseScelto.trim());
+    importFileRef.current?.click();
+  };
+
+  const handleImportFile = async (file: File) => {
+    const meseScelto = importFileRef.current?.getAttribute('data-mese') || getCurrentMonth();
+    setImporting(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || '/api';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('mese', meseScelto);
+      const res = await fetch(`${API_BASE}/acconti/importa`, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Errore import');
+      }
+      const data = await res.json() as {
+        creati: number; saltati: number; totaleRighe: number;
+        esiti: { riga: number; codice?: string; importo?: number; azione: 'creato' | 'saltato'; motivo?: string }[];
+      };
+      const saltatiDett = data.esiti
+        .filter((e) => e.azione === 'saltato')
+        .slice(0, 10)
+        .map((e) => `• Riga ${e.riga}${e.codice ? ` (${e.codice})` : ''}: ${e.motivo ?? '—'}`)
+        .join('\n');
+      let msg = `✅ Import completato (mese ${meseScelto})\n\n`
+        + `Creati: ${data.creati}\nSaltati: ${data.saltati}\nTotale righe: ${data.totaleRighe}`;
+      if (saltatiDett) msg += `\n\nDettaglio saltati (max 10):\n${saltatiDett}`;
+      alert(msg);
+      await load();
+    } catch (e: any) {
+      alert('Errore import: ' + (e.message ?? 'Errore sconosciuto'));
+    } finally {
+      setImporting(false);
+      if (importFileRef.current) importFileRef.current.value = '';
+    }
+  };
+
+  const handleExport = () => {
+    const meseLabel = mese ? formatMeseLabel(mese) : 'Tutti i mesi';
+    const fileName = mese
+      ? `Acconti_${mese}.xlsx`
+      : `Acconti_completo.xlsx`;
+
+    // Righe dati
+    const rows = filtered.map((a) => ({
+      Tipo: a.tipo === 'RESTITUZIONE' ? 'Restituzione' : 'Acconto',
+      Codice: a.codice,
+      Autista: a.nomeAutista,
+      Padroncino: a.ragioneSociale,
+      Descrizione: a.descrizione
+        ? a.descrizione.replace('[RESTITUZIONE] ', '')
+        : '',
+      Data: fmt(a.data),
+      'Mese competenza': a.mese ?? '',
+      'Addebitato in': a.addebitatoIn
+        ? `${a.addebitatoIn.ragioneSociale} – ${formatMeseLabel(a.addebitatoIn.mese)}`
+        : '',
+      'Importo (€)': a.tipo === 'RESTITUZIONE' ? -a.importo : a.importo,
+    }));
+
+    // Riga totali
+    rows.push({
+      Tipo: '',
+      Codice: '',
+      Autista: '',
+      Padroncino: '',
+      Descrizione: '',
+      Data: '',
+      'Mese competenza': '',
+      'Addebitato in': `TOTALE (${filtered.length} movimenti) – Netto`,
+      'Importo (€)': stats.netto,
+    } as any);
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Larghezze colonne
+    ws['!cols'] = [
+      { wch: 14 }, // Tipo
+      { wch: 10 }, // Codice
+      { wch: 22 }, // Autista
+      { wch: 28 }, // Padroncino
+      { wch: 30 }, // Descrizione
+      { wch: 12 }, // Data
+      { wch: 16 }, // Mese competenza
+      { wch: 38 }, // Addebitato in
+      { wch: 14 }, // Importo
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, meseLabel.substring(0, 31));
+    XLSX.writeFile(wb, fileName);
   };
 
   const handleDelete = async (id: string) => {
@@ -247,7 +399,35 @@ export default function Acconti() {
           <h1>💰 Acconti Autisti</h1>
           <span className="acc-sub">Gestione acconti e restituzioni per codice autista</span>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>+ Nuovo Acconto</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImportFile(f);
+            }}
+          />
+          <button
+            className="btn-outline"
+            onClick={handleImportClick}
+            disabled={importing}
+            title="Importa acconti da file Excel (col A data, col B codice, col D importo, col E descrizione)"
+          >
+            {importing ? '⏳ Importando...' : '📂 Import Excel'}
+          </button>
+          <button
+            className="btn-outline"
+            onClick={handleExport}
+            disabled={filtered.length === 0}
+            title={mese ? `Esporta report acconti di ${formatMeseLabel(mese)}` : 'Esporta tutti gli acconti'}
+          >
+            📊 Esporta Report
+          </button>
+          <button className="btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuovo Acconto</button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -300,8 +480,12 @@ export default function Acconti() {
       {showForm && (
         <div className="acc-form-panel">
           <div className="acc-form-header">
-            <h3>{form.tipo === 'RESTITUZIONE' ? '↩️ Restituzione' : '💰 Nuovo Acconto'}</h3>
-            <button className="acc-form-close" onClick={() => { setShowForm(false); setVerifica(null); }}>✕</button>
+            <h3>
+              {editingId
+                ? (form.tipo === 'RESTITUZIONE' ? '↩️ Modifica Restituzione' : '✏️ Modifica Acconto')
+                : (form.tipo === 'RESTITUZIONE' ? '↩️ Restituzione' : '💰 Nuovo Acconto')}
+            </h3>
+            <button className="acc-form-close" onClick={() => { setShowForm(false); resetForm(); }}>✕</button>
           </div>
           <div className="acc-form-grid">
             {/* Tipo */}
@@ -402,9 +586,15 @@ export default function Acconti() {
             </div>
           </div>
           <div className="acc-form-actions">
-            <button className="btn-outline" onClick={() => { setShowForm(false); setVerifica(null); }}>Annulla</button>
+            <button className="btn-outline" onClick={() => { setShowForm(false); resetForm(); }}>Annulla</button>
             <button className="btn-primary" onClick={handleSave} disabled={saving}>
-              {saving ? 'Salvataggio…' : form.tipo === 'RESTITUZIONE' ? '↩️ Registra Restituzione' : '💾 Salva Acconto'}
+              {saving
+                ? 'Salvataggio…'
+                : editingId
+                ? '💾 Salva Modifiche'
+                : form.tipo === 'RESTITUZIONE'
+                ? '↩️ Registra Restituzione'
+                : '💾 Salva Acconto'}
             </button>
           </div>
         </div>
@@ -475,6 +665,11 @@ export default function Acconti() {
                   </td>
                   <td>
                     <div className="acc-actions">
+                      <button
+                        className="acc-edit-btn"
+                        onClick={() => handleEdit(a)}
+                        title="Modifica acconto"
+                      >✏️</button>
                       <button className="acc-del-btn" onClick={() => handleDelete(a.id)} title="Elimina">✕</button>
                     </div>
                   </td>
