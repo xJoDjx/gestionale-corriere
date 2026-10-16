@@ -53,57 +53,42 @@ export class DbAdminService {
     return user;
   }
 
+  /**
+   * Backup completo: esporta TUTTE le tabelle del database.
+   *
+   * L'elenco delle tabelle viene letto dallo schema Prisma (Prisma.dmmf), quindi
+   * una tabella aggiunta in futuro entra nel backup automaticamente.
+   * Prima l'elenco era scritto a mano e ne mancavano 13 (addebiti sospesi,
+   * carte Eni, manutenzioni, task, statistiche, competenze attive, ...).
+   *
+   * Le tabelle vengono lette una alla volta per non saturare le connessioni
+   * al database durante l'export.
+   */
   async backup(email: string, password: string) {
     await this.verifyAdmin(email, password);
-    const p = this.prisma;
-    const [
-      users, permessi, auditLogs,
-      mezzi, assegnazioniMezzi,
-      padroncini,
-      palmari, assegnazioniPalmari,
-      codiciAutisti, assegnazioniCodiciAutisti,
-      acconti,
-      conteggiMensili, conteggiRighe,
-      documenti, tags, note,
-      ricaricheElettriche,
-      vociConteggio,
-    ] = await Promise.all([
-      p.user.findMany(),
-      p.permesso.findMany(),
-      p.auditLog.findMany(),
-      p.mezzo.findMany(),
-      p.assegnazioneMezzo.findMany(),
-      p.padroncino.findMany(),
-      p.palmare.findMany(),
-      p.assegnazionePalmare.findMany(),
-      p.codiceAutista.findMany(),
-      p.assegnazioneCodiceAutista.findMany(),
-      p.acconto.findMany(),
-      p.conteggioMensile.findMany(),
-      p.conteggiRiga.findMany(),
-      p.documento.findMany(),
-      p.tag.findMany(),
-      p.nota.findMany(),
-      p.ricaricaElettrica.findMany(),
-      p.voceConteggio.findMany(),
-    ]);
+
+    const data: Record<string, unknown[]> = {};
+    const conteggi: Record<string, number> = {};
+
+    for (const model of Prisma.dmmf.datamodel.models) {
+      // Nome del delegate Prisma: "AssegnazioneMezzo" → prisma.assegnazioneMezzo
+      const delegateName = model.name.charAt(0).toLowerCase() + model.name.slice(1);
+      const delegate = (this.prisma as any)[delegateName];
+      if (!delegate?.findMany) continue;
+      const rows: unknown[] = await delegate.findMany();
+      data[model.name] = rows;
+      conteggi[model.name] = rows.length;
+    }
+
     return {
       meta: {
         generatedAt: new Date().toISOString(),
-        version: 1,
+        // v2: chiavi = nome del modello Prisma, tutte le tabelle incluse
+        version: 2,
+        tabelle: Object.keys(data).length,
+        righe: conteggi,
       },
-      data: {
-        users, permessi, auditLogs,
-        mezzi, assegnazioniMezzi,
-        padroncini,
-        palmari, assegnazioniPalmari,
-        codiciAutisti, assegnazioniCodiciAutisti,
-        acconti,
-        conteggiMensili, conteggiRighe,
-        documenti, tags, note,
-        ricaricheElettriche,
-        vociConteggio,
-      },
+      data,
     };
   }
 

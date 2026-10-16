@@ -2,6 +2,16 @@
 
 Tutte le modifiche rilevanti al gestionale corriere sono documentate in questo file.
 
+## 2026-10-16 (2)
+
+### Corretto
+
+- **Impostazioni → Gestione DB → Scarica backup**: il backup esportava solo 18 tabelle su 31. Mancavano addebiti sospesi, carte Eni (carte, stazioni, transazioni, prezzi), manutenzioni, task, analisi Conta Doppi, statistiche margini/consegne e competenze attive. Ora l'elenco delle tabelle viene letto dallo schema del database, quindi sono incluse tutte, anche quelle che verranno aggiunte in futuro. Il file riporta in `meta.righe` quante righe contiene ogni tabella (formato `version: 2`, chiavi = nome del modello).
+
+### File modificati
+
+- `backend/src/db-admin/db-admin.service.ts`
+
 ## 2026-10-16
 
 ### Corretto
