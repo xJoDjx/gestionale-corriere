@@ -904,6 +904,28 @@ function TabAddebiti({
 }
 
 // ─── TAB COMPENSAZIONI ─────────────────────────────────────────────────────────
+/** Mostra sotto il valore che effetto ha sul netto: le compensazioni positive
+ *  vengono TRATTENUTE al padroncino, quelle negative gli vengono RESTITUITE. */
+function EffettoNetto({ valore }: { valore: number | null | undefined }) {
+  if (valore == null || valore === 0 || Number.isNaN(valore)) return null;
+  const trattiene = valore > 0;
+  return (
+    <div style={{ fontSize: 10.5, fontWeight: 600, textAlign: 'right', marginTop: 2,
+      color: trattiene ? 'var(--danger)' : 'var(--success)' }}>
+      {trattiene ? `− ${eur(valore)} dal netto` : `+ ${eur(Math.abs(valore))} al netto`}
+    </div>
+  );
+}
+
+function SegnoHint() {
+  return (
+    <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
+      <strong>Valore positivo</strong> = trattenuto al padroncino (riduce il netto) ·{' '}
+      <strong>valore negativo</strong> = restituito al padroncino (es. restituzione banconota sospetta, aumenta il netto)
+    </div>
+  );
+}
+
 function TabCompensazioni({
   accrediti, onAccreditiChange, onAccreditiAdd, onAccreditiDelete,
   fineMese, onFineMeseChange, onFineMeseAdd, onFineMeseDelete,
@@ -937,6 +959,7 @@ function TabCompensazioni({
       {/* ── ACCREDITI E STORNI ── */}
       <SectionBlock title="Accrediti e Storni" icon="↩️" onAdd={onAccreditiAdd}
         totaleLabel="Totale Accrediti/Storni" totale={totAccrediti}>
+        <SegnoHint />
         <ExcelTable
           headers={['#', 'Voce', 'Descrizione', 'Conto', 'Valore (€)', 'Nota', 'Mod.', '']}
           colWidths={['32px','130px','','85px','120px','','60px','36px']}
@@ -960,7 +983,7 @@ function TabCompensazioni({
                 onChange={(e) => onAccreditiChange(r.id, 'contoVoce', e.target.value)} placeholder="—" /></td>
               <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
                 onChange={(e) => onAccreditiChange(r.id, 'valore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                placeholder="0,00" /></td>
+                placeholder="0,00" /><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onAccreditiChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
               <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
@@ -973,6 +996,7 @@ function TabCompensazioni({
       {/* ── FATTURA FINE MESE ── */}
       <SectionBlock title="Fattura Fine Mese" icon="🧾" onAdd={onFineMeseAdd}
         totaleLabel="Totale Fattura Fine Mese" totale={totFineMese}>
+        <SegnoHint />
         <ExcelTable
           headers={['#', 'Voce', 'Descrizione', 'Conto', 'Valore (€)', 'Nota', 'Mod.', '']}
           colWidths={['32px','130px','','85px','120px','','60px','36px']}
@@ -996,7 +1020,7 @@ function TabCompensazioni({
                 onChange={(e) => onFineMeseChange(r.id, 'contoVoce', e.target.value)} placeholder="—" /></td>
               <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
                 onChange={(e) => onFineMeseChange(r.id, 'valore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                placeholder="0,00" /></td>
+                placeholder="0,00" /><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onFineMeseChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
               <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
@@ -1076,7 +1100,7 @@ function TabCompensazioni({
           </div>
           <div className="dc-compen-separator" />
           <div className="dc-compen-row dc-compen-saldo">
-            <span>Compensati su distribuzione</span>
+            <span>Compensati su distribuzione {compensatiSuDistribuzione >= 0 ? '(trattenuti dal netto)' : '(restituiti nel netto)'}</span>
             <span className={compensatiSuDistribuzione >= 0 ? 'dc-val-neg' : 'dc-val-pos'}>{eur(compensatiSuDistribuzione)}</span>
           </div>
           <div className="dc-compen-note" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
