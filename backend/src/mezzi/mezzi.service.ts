@@ -199,7 +199,10 @@ export class MezziService {
 
   // ─── IMPORTA EXCEL ──────────────────────────────────
 async importaExcel(buffer: Buffer) {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // cellDates:false → le date arrivano come numero seriale Excel e le convertiamo noi in UTC.
+  // (Con cellDates:true SheetJS crea Date nel fuso del server e, sul server Windows in ora
+  // italiana, le date potevano slittare di un giorno.)
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
 
   const risultati: { creati: number; aggiornati: number; errori: string[] } = {
     creati: 0,
@@ -242,22 +245,48 @@ async importaExcel(buffer: Buffer) {
     },
   ];
 
-  const parseDate = (val: any): Date | null => {
-    if (!val) return null;
-    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
-    const s = String(val).trim();
-    if (!s || s === 'null') return null;
-    const itMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-    if (itMatch) return new Date(`${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}T00:00:00.000Z`);
-    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) return new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+  /** Data sempre a mezzanotte UTC, senza dipendere dal fuso orario del server. */
+  const utcDate = (y: number, m: number, d: number): Date | null => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return isNaN(dt.getTime()) || dt.getUTCDate() !== d ? null : dt;
   };
 
+  const parseDate = (val: any): Date | null => {
+    if (val === null || val === undefined || val === '' || val === 0) return null;
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? null : utcDate(val.getFullYear(), val.getMonth() + 1, val.getDate());
+    }
+    if (typeof val === 'number') {
+      // Solo l'anno (es. 2021 nella colonna immatricolazione)
+      if (val >= 1900 && val <= 2100 && Number.isInteger(val)) return utcDate(val, 1, 1);
+      // Numero seriale Excel
+      const p = XLSX.SSF.parse_date_code(val);
+      return p ? utcDate(p.y, p.m, p.d) : null;
+    }
+    const s = String(val).trim();
+    if (!s || s.toLowerCase() === 'null') return null;
+    // Testo in formato italiano: gg/mm/aaaa oppure gg/mm/aa
+    const it = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2}|\d{4})$/);
+    if (it) {
+      const y = it[3].length === 2 ? 2000 + Number(it[3]) : Number(it[3]);
+      return utcDate(y, Number(it[2]), Number(it[1]));
+    }
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return utcDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    return null; // formato non riconosciuto: meglio vuoto che una data sbagliata
+  };
+
+  /** Accetta 1250 / "1250,50" / "1.250,50" / "1,250.50" / "€ 845,00". */
   const parseNum = (val: any): number | null => {
     if (val === null || val === undefined || val === '') return null;
-    const n = parseFloat(String(val).replace(',', '.').replace(/[^\d.-]/g, ''));
+    if (typeof val === 'number') return isNaN(val) ? null : val;
+    let t = String(val).replace(/[^\d.,-]/g, '');
+    if (!t) return null;
+    const lc = t.lastIndexOf(','), ld = t.lastIndexOf('.');
+    if (lc !== -1 && ld !== -1) t = lc > ld ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+    else if (lc !== -1) t = t.replace(/,/g, '.');
+    else if ((t.match(/\./g) || []).length > 1) t = t.replace(/\./g, '');
+    const n = parseFloat(t);
     return isNaN(n) ? null : n;
   };
 
@@ -265,7 +294,9 @@ async importaExcel(buffer: Buffer) {
     const ws = wb.Sheets[foglio.nome];
     if (!ws) continue;
 
-    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false, dateNF: 'yyyy-mm-dd' });
+    // raw:true → numeri e date come valori veri, non come testo formattato
+    // (il testo formattato usava il formato americano m/g/aa, es. "6/23/23").
+    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
     let kmAttualiAl: Date | null = null;
     if (foglio.colKmAttuali !== null && rows[0]) {
@@ -306,7 +337,7 @@ async importaExcel(buffer: Buffer) {
           kmLimite: foglio.colKmLimite !== null ? parseNum(row[foglio.colKmLimite]) : null,
           kmAttuali: foglio.colKmAttuali !== null ? parseNum(row[foglio.colKmAttuali]) : null,
           km_attuali_al: kmAttualiAl,
-          annoImmatricolazione: foglio.colImmatric !== null ? parseDate(row[foglio.colImmatric])?.getFullYear() : null,
+          annoImmatricolazione: foglio.colImmatric !== null ? parseDate(row[foglio.colImmatric])?.getUTCFullYear() ?? null : null,
           note: foglio.colNote !== null && row[foglio.colNote] ? String(row[foglio.colNote]).trim() : null,
         };
 
@@ -319,6 +350,9 @@ async importaExcel(buffer: Buffer) {
         let mezzo = await this.prisma.mezzo.findFirst({ where: { targa, deletedAt: null } });
 
         if (mezzo) {
+          // Lo stato NON va sovrascritto in aggiornamento: prima ogni reimport
+          // riportava a DISPONIBILE anche i mezzi assegnati.
+          delete dataPayload.stato;
           mezzo = await this.prisma.mezzo.update({ where: { id: mezzo.id }, data: dataPayload });
           risultati.aggiornati++;
         } else {
@@ -337,6 +371,12 @@ async importaExcel(buffer: Buffer) {
             const attiva = await this.prisma.assegnazioneMezzo.findFirst({
               where: { mezzoId: mezzo.id, deletedAt: null, dataFine: null },
             });
+
+            // Già assegnato allo stesso padroncino: ci assicuriamo solo che lo stato sia coerente
+            // (ripara i mezzi rimessi a DISPONIBILE dai vecchi import).
+            if (attiva && attiva.padroncinoId === padroncino.id && mezzo.stato === 'DISPONIBILE') {
+              await this.prisma.mezzo.update({ where: { id: mezzo.id }, data: { stato: 'ASSEGNATO' } });
+            }
 
             // Se non c'è un'assegnazione attiva, o se è assegnato a un padroncino DIVERSO
             if (!attiva || attiva.padroncinoId !== padroncino.id) {
@@ -377,6 +417,7 @@ async importaExcel(buffer: Buffer) {
 }
 
   private mapAlimentazione(raw: string): string {
+    raw = (raw ?? '').toUpperCase();
     if (raw.includes('ELETTR')) return 'ELETTRICO';
     if (raw.includes('IBRIDO') || raw.includes('HYBRID')) return 'IBRIDO';
     if (raw.includes('MHEV') || raw.includes('MILD')) return 'GASOLIO_MHEV';
