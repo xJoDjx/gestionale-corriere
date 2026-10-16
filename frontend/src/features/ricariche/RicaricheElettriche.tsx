@@ -2,6 +2,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import { api, mezziApi } from '../../lib/api';
+import { parseDecimale, parseDecimaleOr } from '../../lib/numeri';
 import './RicaricheElettriche.css';
 
 type SortDir = 'asc' | 'desc';
@@ -68,7 +69,7 @@ function normalizeTarga(value?: string | null): string {
 
 function parseEnergy(raw: string): number {
   if (!raw || raw.trim() === '0') return 0;
-  return parseFloat(raw.replace(',', '.')) || 0;
+  return parseDecimaleOr(raw, 0);
 }
 function isInterna(stazione: string): boolean {
   return stazione.toLowerCase().includes('juice');
@@ -270,8 +271,8 @@ export default function RicaricheElettriche() {
   useEffect(() => { if (mesiDisp.length > 0) caricaSommari(mesiDisp); }, [mesiDisp, caricaSommari]);
 
   const costoInternoKwh = useMemo(() => {
-    const imp = parseFloat(fatturaImporto.replace(',', '.'));
-    const kwh = parseFloat(fatturaKwh.replace(',', '.'));
+    const imp = parseDecimale(fatturaImporto);
+    const kwh = parseDecimale(fatturaKwh);
     if (!imp || !kwh || kwh === 0) return null;
     return imp / kwh;
   }, [fatturaImporto, fatturaKwh]);
@@ -281,9 +282,9 @@ export default function RicaricheElettriche() {
     setSaving(true);
     try {
       await api.put(`/ricariche/${mese}/tariffe`, {
-        fatturaImporto: parseFloat(fatturaImporto.replace(',', '.')),
-        fatturaKwh: parseFloat(fatturaKwh.replace(',', '.')),
-        costoEsternoKwh: parseFloat(costoEsterno.replace(',', '.')),
+        fatturaImporto: parseDecimale(fatturaImporto),
+        fatturaKwh: parseDecimale(fatturaKwh),
+        costoEsternoKwh: parseDecimaleOr(costoEsterno, 0),
       });
       await caricaMese(mese);
       alert('Tariffe aggiornate e sessioni ricalcolate con successo!');
@@ -319,10 +320,10 @@ export default function RicaricheElettriche() {
     setSaving(true);
     try {
       const costoInt = costoInternoKwh;
-      const costoExt = parseFloat(costoEsterno.replace(',', '.')) || 0;
-      const magDef   = parseFloat(magDefault) || 20;
-      const fatImp   = parseFloat(fatturaImporto.replace(',', '.')) || 0;
-      const fatKwh   = parseFloat(fatturaKwh.replace(',', '.')) || 0;
+      const costoExt = parseDecimaleOr(costoEsterno, 0);
+      const magDef   = parseDecimaleOr(magDefault, 20);
+      const fatImp   = parseDecimaleOr(fatturaImporto, 0);
+      const fatKwh   = parseDecimaleOr(fatturaKwh, 0);
 
       const sess = righeAnteprima.map((r) => {
         const targaNorm = normalizeTarga(r.targa);
@@ -835,17 +836,17 @@ export default function RicaricheElettriche() {
               <div className="ric-edit-grid">
                 <div className="ric-config-field">
                   <label>Importo fattura (€)</label>
-                  <input className="ric-input" type="number" step="0.01" placeholder="1250.00"
+                  <input className="ric-input" type="text" inputMode="decimal" placeholder="1.250,00"
                     value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
                 </div>
                 <div className="ric-config-field">
                   <label>kWh fatturati</label>
-                  <input className="ric-input" type="number" step="0.001" placeholder="2850"
+                  <input className="ric-input" type="text" inputMode="decimal" placeholder="2850"
                     value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
                 </div>
                 <div className="ric-config-field">
                   <label>€/kWh esterno</label>
-                  <input className="ric-input" type="number" step="0.001" placeholder="0.840"
+                  <input className="ric-input" type="text" inputMode="decimal" placeholder="0,840"
                     value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
                 </div>
                 <div className="ric-config-field" style={{ justifyContent: 'flex-end' }}>
@@ -895,12 +896,12 @@ export default function RicaricheElettriche() {
                       <div className="ric-config-row">
                         <div className="ric-config-field">
                           <label>Importo fattura (€)</label>
-                          <input className="ric-input" type="number" step="0.01" placeholder="1250.00"
+                          <input className="ric-input" type="text" inputMode="decimal" placeholder="1.250,00"
                             value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
                         </div>
                         <div className="ric-config-field">
                           <label>kWh fatturati</label>
-                          <input className="ric-input" type="number" step="0.001" placeholder="2850"
+                          <input className="ric-input" type="text" inputMode="decimal" placeholder="2850"
                             value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
                         </div>
                       </div>
@@ -914,7 +915,7 @@ export default function RicaricheElettriche() {
                       <div className="ric-config-sub">🔌 Ricariche Esterne</div>
                       <div className="ric-config-field">
                         <label>Costo kWh esterno (€)</label>
-                        <input className="ric-input" type="number" step="0.001" placeholder="0.840"
+                        <input className="ric-input" type="text" inputMode="decimal" placeholder="0,840"
                           value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
                       </div>
                     </div>
@@ -923,7 +924,7 @@ export default function RicaricheElettriche() {
                       <div className="ric-config-field">
                         <label>% default (se non impostata sul mezzo)</label>
                         <div className="ric-input-suffix-wrap">
-                          <input className="ric-input" type="number" step="1" min="0"
+                          <input className="ric-input" type="text" inputMode="decimal"
                             value={magDefault} onChange={(e) => setMagDefault(e.target.value)} />
                           <span className="ric-input-suffix">%</span>
                         </div>
@@ -1076,10 +1077,10 @@ export default function RicaricheElettriche() {
                               <td style={{ textAlign: 'right' }} className="ric-num ric-td-amber">{r.costoExt > 0 ? <span className="ric-badge-ext-sm">{fmtE(r.costoExt)} €</span> : '—'}</td>
                               <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                                 {editMagTarga === r.targa ? (
-                                  <input className="ric-mag-input" type="number" step="0.01" autoFocus disabled={savingMag}
+                                  <input className="ric-mag-input" type="text" inputMode="decimal" autoFocus disabled={savingMag}
                                     value={editMagVal} onChange={(e) => setEditMagVal(e.target.value)}
                                     onBlur={() => {
-                                      const v = parseFloat(editMagVal.replace(',', '.'));
+                                      const v = parseDecimale(editMagVal);
                                       if (!isNaN(v) && r.sessioni.length > 0 && v !== r.sessioni[0].maggiorazione) salvaMaggiorazione(r.targa, v);
                                       else setEditMagTarga(null);
                                     }}
