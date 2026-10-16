@@ -452,8 +452,7 @@ export default function CodiciAutisti() {
               <SortTh label="TARIFFA FISSA"  col="tariffaFissa"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="ca-th-sort ca-th-purple" />
               <SortTh label="TARIFFA RITIRO" col="tariffaRitiro" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="ca-th-sort ca-th-amber" />
               <SortTh label="TARGET"         col="target"        sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="ca-th">BONUS</th>
-              <th className="ca-th">MALUS</th>
+              <th className="ca-th">BONUS / MALUS</th>
               <SortTh label="ZONE" col="zone" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortTh label="NOTE" col="note" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th className="ca-th"></th>
@@ -462,7 +461,7 @@ export default function CodiciAutisti() {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="ca-empty-row">Nessun codice autista trovato</td>
+                <td colSpan={10} className="ca-empty-row">Nessun codice autista trovato</td>
               </tr>
             )}
             {filtered.map(c => {
@@ -509,16 +508,19 @@ export default function CodiciAutisti() {
                     }
                   </td>
                   <td className="ca-td">
-                    {c.bonus != null
-                      ? <span style={{ fontWeight: 600, color: '#16a34a' }}>{fmtEur(c.bonus)}</span>
-                      : <span className="ca-empty">—</span>
-                    }
-                  </td>
-                  <td className="ca-td">
-                    {c.malus != null
-                      ? <span style={{ fontWeight: 600, color: '#dc2626' }}>-{fmtEur(c.malus)}</span>
-                      : <span className="ca-empty">—</span>
-                    }
+                    {/* Accordo testuale importato da Excel (es. "+1€-1€ per Target"), poi gli importi numerici */}
+                    {c.bonusMalus || c.bonus != null || c.malus != null ? (
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {c.bonusMalus && <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{c.bonusMalus}</span>}
+                        {(c.bonus != null || c.malus != null) && (
+                          <span style={{ fontSize: 12 }}>
+                            {c.bonus != null && <span style={{ fontWeight: 600, color: '#16a34a' }}>+{fmtEur(c.bonus)}</span>}
+                            {c.bonus != null && c.malus != null && ' / '}
+                            {c.malus != null && <span style={{ fontWeight: 600, color: '#dc2626' }}>-{fmtEur(c.malus)}</span>}
+                          </span>
+                        )}
+                      </span>
+                    ) : <span className="ca-empty">—</span>}
                   </td>
                   <td className="ca-td">
                     {c.zone

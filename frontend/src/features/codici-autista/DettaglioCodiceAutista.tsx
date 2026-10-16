@@ -94,6 +94,7 @@ export default function DettaglioCodiceAutista() {
         tariffaFissa: form.tariffaFissa ?? undefined,
         tariffaRitiro: form.tariffaRitiro ?? undefined,
         target: form.target ?? undefined,
+        bonusMalus: form.bonusMalus ?? undefined,
         bonus: form.bonus ?? undefined,
         malus: form.malus ?? undefined,
         zone: form.zone ?? undefined,
@@ -295,6 +296,15 @@ export default function DettaglioCodiceAutista() {
                   step="1"
                   value={form.target ?? ''}
                   onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
+                />
+              </div>
+              <div className="dm-field dm-field-full">
+                <label>Accordo bonus/malus</label>
+                <input
+                  className="dm-input"
+                  placeholder="es. +1€ -1€ per target"
+                  value={form.bonusMalus ?? ''}
+                  onChange={(e) => set('bonusMalus', e.target.value || null)}
                 />
               </div>
               <div className="dm-field dm-field-full">
