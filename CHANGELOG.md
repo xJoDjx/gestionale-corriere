@@ -2,6 +2,29 @@
 
 Tutte le modifiche rilevanti al gestionale corriere sono documentate in questo file.
 
+## 2026-10-16
+
+### Corretto
+
+- **Ricariche elettriche — numeri con la virgola**: i campi importo bolletta, kWh, costo kWh esterno e maggiorazione erano campi numerici del browser, che svuotava i valori scritti con il separatore delle migliaia (es. `1.250,50`); inoltre veniva sostituita solo la prima virgola. Ora sono campi di testo che accettano sia `1.250,50` sia `1250.50` (nuovo helper `lib/numeri.ts`).
+- **Flotta Mezzi — import Excel**:
+  - reimportare il file riportava a "Disponibile" tutti i mezzi, anche quelli assegnati: ora lo stato non viene più sovrascritto e i mezzi già assegnati allo stesso padroncino tornano "Assegnato";
+  - le date venivano lette dal testo formattato in stile americano (`6/23/23`) e potevano slittare di un giorno sul server: ora sono lette dal valore della cella e salvate in UTC;
+  - canoni/km con separatore delle migliaia ora letti correttamente; alimentazione riconosciuta anche in minuscolo.
+- **Palmari — tariffa giornaliera**: le schermate indicavano "Tariffa mensile" e una stima annuale ×12, anche se il valore è giornaliero (i conteggi lo usavano già come €/giorno). Etichette corrette (€/gg), stima mese/anno corretta, KPI "Entrate mensili" ora = tariffe giornaliere × giorni del mese.
+- **Codici Autista — bonus/malus**: l'accordo bonus/malus importato da Excel (es. "+1€-1€ per Target") veniva salvato ma non mostrato. Ora è visibile nella lista (colonna "Bonus / Malus") e modificabile nel dettaglio.
+- **Conteggi → Compensazioni — segno dei valori**: in "Accrediti e Storni" e "Fattura Fine Mese" un valore positivo viene trattenuto al padroncino e uno negativo gli viene restituito, ma la schermata non lo diceva (per le restituzioni si scriveva -65 / -100 "a intuito"). Il calcolo non cambia; ora sotto ogni valore compare l'effetto sul netto ("− 50,00 dal netto" / "+ 100,00 al netto") e una legenda in testa alle sezioni.
+- **Tabelle zebra**: aggiunte nelle tabelle della scheda Padroncino e nella lista padroncini; il colore delle righe alterne è ora distinguibile dal bianco.
+
+### File modificati
+
+- `frontend/src/lib/numeri.ts` (nuovo), `frontend/src/features/ricariche/RicaricheElettriche.tsx`
+- `backend/src/mezzi/mezzi.service.ts`
+- `backend/src/palmari/palmari.service.ts`, `frontend/src/features/palmari/DettaglioPalmare.tsx`, `Palmari.tsx`, `NuovoPalmareModal.tsx`, `frontend/src/lib/auditFormat.ts`
+- `frontend/src/features/codici-autista/CodiciAutisti.tsx`, `DettaglioCodiceAutista.tsx`
+- `frontend/src/features/padroncini/Padroncini.tsx`, `Padroncini.css`, `frontend/src/styles/variables.css`
+- `frontend/src/features/conteggi/DettaglioConteggio.tsx`
+
 ## 2026-08-18
 
 ### Aggiunto

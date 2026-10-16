@@ -888,7 +888,7 @@ function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
         <div className="pd-items-table-wrap">
           <table className="pd-items-table">
             <thead>
-              <tr><th>CODICE</th><th>TARIFFA</th><th>DATA INIZIO</th><th></th></tr>
+              <tr><th>CODICE</th><th>TARIFFA €/GG</th><th>DATA INIZIO</th><th></th></tr>
             </thead>
             <tbody>
               {attivi.map((pal) => (
