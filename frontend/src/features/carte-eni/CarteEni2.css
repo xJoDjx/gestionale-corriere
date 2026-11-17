@@ -1,0 +1,25 @@
+/* Carte Eni — ricalcata sul mockup */
+.ce2-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid #FBDDC4; background: #FFF7ED; }
+.ce2-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 999px; background: #EA6A2A; }
+.ce2-list { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.ce2-prod { display: flex; flex-direction: column; gap: 5px; }
+.ce2-prod-top { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.ce2-bar { height: 6px; border-radius: 999px; background: #EEEEF0; overflow: hidden; }
+.ce2-bar > div { height: 100%; border-radius: 999px; }
+.ce2-hint { margin: 4px 0 10px; color: #52525B; font-size: 12.5px; line-height: 1.5; max-width: 980px; }
+.ce2-listino { max-height: 360px; overflow-y: auto; border-top: 1px solid #F0F0F2; }
+.ce2-prezzo { width: 110px; min-height: 30px; text-align: right; margin-left: auto; }
+.ce2-pbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 8px; border-radius: 6px; border: 1px dashed transparent; background: transparent; font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums; cursor: pointer; color: #0B0B0C; }
+.ce2-pbtn:hover { border-color: #C9C9D1; background: #FFFFFF; }
+.ce2-pbtn.is-warn { color: #C2410C; }
+.ce2-pbtn i { width: 6px; height: 6px; border-radius: 999px; background: #EA6A2A; }
+.ce2-table td { vertical-align: middle; font-size: 12.5px; white-space: nowrap; }
+.ce2-table tr.is-open td { background: #F3F6FF; }
+.ce2-ell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ce2-cell { min-height: 32px; font-size: 12.5px; }
+.ce2-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #E4E4E7; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; color: #52525B; }
+.ce2-toggle i { width: 6px; height: 6px; border-radius: 999px; background: #A1A1AA; }
+.ce2-toggle.is-on { color: #15803D; border-color: #CDEBDD; background: #F0FAF5; }
+.ce2-toggle.is-on i { background: #15A06A; }
+.ce2-toggle.is-off { color: #C2410C; border-color: #FBDDC4; background: #FFF7ED; }
+.ce2-toggle.is-off i { background: #EA6A2A; }
