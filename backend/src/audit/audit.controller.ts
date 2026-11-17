@@ -22,7 +22,11 @@ export class AuditController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('dal') dal?: string,
+    @Query('al') al?: string,
   ) {
+    const dalD = dal ? new Date(dal) : undefined;
+    const alD  = al  ? new Date(al)  : undefined;
     const pageN  = page  ? parseInt(page)  : 1;
     const limitN = limit ? parseInt(limit) : 50;
 
@@ -33,6 +37,8 @@ export class AuditController {
         entityType,
         azione,
         userId,
+        dal: dalD,
+        al: alD,
         page: pageN,
         limit: limitN,
       });
@@ -49,6 +55,7 @@ export class AuditController {
     if (entityId)   where.entityId   = entityId;
     if (azione)     where.azione     = azione;
     if (userId)     where.userId     = userId;
+    if (dalD || alD) where.createdAt = { ...(dalD ? { gte: dalD } : {}), ...(alD ? { lt: alD } : {}) };
 
     const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
@@ -64,6 +71,12 @@ export class AuditController {
     ]);
 
     return { data, total, page: pageN, limit: limitN, totalPages: Math.ceil(total / limitN) };
+  }
+
+  /** Riepilogo conteggi per lo Storico modifiche */
+  @Get('stats')
+  async stats() {
+    return this.auditService.stats();
   }
 
   /**

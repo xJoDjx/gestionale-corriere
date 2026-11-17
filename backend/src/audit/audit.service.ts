@@ -154,10 +154,12 @@ export class AuditService {
     entityType?: string;
     azione?: string;
     userId?: string;
+    dal?: Date;
+    al?: Date;
     page: number;
     limit: number;
   }) {
-    const { search, entityType, azione, userId, page, limit } = opts;
+    const { search, entityType, azione, userId, page, limit, dal, al: alData } = opts;
     const s = `%${search}%`;
     const offset = (page - 1) * limit;
 
@@ -172,6 +174,7 @@ export class AuditService {
     const userIdFilter = userId
       ? Prisma.sql`AND al.user_id = ${userId}`
       : Prisma.empty;
+    const dateFilter = Prisma.sql`${dal ? Prisma.sql`AND al.created_at >= ${dal}` : Prisma.empty} ${alData ? Prisma.sql`AND al.created_at < ${alData}` : Prisma.empty}`;
 
     const [rawData, countResult] = await Promise.all([
       this.prisma.$queryRaw<any[]>(Prisma.sql`
@@ -197,6 +200,7 @@ export class AuditService {
         ${entityTypeFilter}
         ${azioneFilter}
         ${userIdFilter}
+        ${dateFilter}
         ORDER BY al.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `),
@@ -211,10 +215,39 @@ export class AuditService {
         ${entityTypeFilter}
         ${azioneFilter}
         ${userIdFilter}
+        ${dateFilter}
       `),
     ]);
 
     const total = Number(countResult[0].count);
     return { data: rawData, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  /** Riepilogo per lo Storico modifiche: conteggi per tipo, azione, utente e mese (solo lettura). */
+  async stats() {
+    const now = new Date();
+    const inizioMese = new Date(now.getFullYear(), now.getMonth(), 1);
+    const inizioPrec = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const ultimi30 = new Date(now.getTime() - 30 * 86400000);
+    const [perTipo, perAzione, perUtente, meseCorr, mesePrec, ult30, primo, totale] = await Promise.all([
+      this.prisma.auditLog.groupBy({ by: ['entityType'], _count: { _all: true } }),
+      this.prisma.auditLog.groupBy({ by: ['azione'], _count: { _all: true } }),
+      this.prisma.auditLog.groupBy({ by: ['userId'], _count: { _all: true } }),
+      this.prisma.auditLog.count({ where: { createdAt: { gte: inizioMese } } }),
+      this.prisma.auditLog.count({ where: { createdAt: { gte: inizioPrec, lt: inizioMese } } }),
+      this.prisma.auditLog.count({ where: { createdAt: { gte: ultimi30 } } }),
+      this.prisma.auditLog.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
+      this.prisma.auditLog.count(),
+    ]);
+    const ids = perUtente.map((u) => u.userId).filter((x): x is string => !!x);
+    const users = ids.length ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true, cognome: true } }) : [];
+    const nome = new Map(users.map((u) => [u.id, `${u.nome} ${u.cognome}`.trim()]));
+    return {
+      totale, meseCorrente: meseCorr, mesePrecedente: mesePrec, ultimi30Giorni: ult30,
+      primoEvento: primo?.createdAt ?? null,
+      perTipo: Object.fromEntries(perTipo.map((x) => [x.entityType, x._count._all])),
+      perAzione: Object.fromEntries(perAzione.map((x) => [x.azione, x._count._all])),
+      perUtente: perUtente.map((x) => ({ userId: x.userId, nome: x.userId ? nome.get(x.userId) ?? '—' : 'Sistema', count: x._count._all })).sort((a, b) => b.count - a.count),
+    };
   }
 }
