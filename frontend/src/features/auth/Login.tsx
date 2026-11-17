@@ -2,6 +2,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth.store';
+import { Icon } from '../../components/ds';
 import './Login.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -41,59 +42,36 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-container">
-        {/* Logo / Brand */}
-        <div className="login-brand">
-          <div className="login-brand-icon">🚚</div>
-          <h1 className="login-brand-title">GLS Padroncini</h1>
-          <p className="login-brand-sub">Gestionale Corriere</p>
+    <main className="lg-page">
+      <div className="lg-box">
+        <div className="lg-brand">
+          <span className="lg-tile"><Icon name="mezzi" size={18} /></span>
+          <div><strong>Gestionale</strong><span>Corriere · padroncini, flotta e conteggi</span></div>
         </div>
 
-        {/* Card */}
-        <div className="login-card">
-          <h2 className="login-card-title">Accedi</h2>
+        <form className="lg-card" onSubmit={handleSubmit} noValidate>
+          <h1>Accedi</h1>
+          <p className="lg-sub">Usa il tuo utente personale: ogni modifica resta registrata a tuo nome.</p>
 
-          <form onSubmit={handleSubmit}>
-            <div className="login-field">
-              <label className="login-label">Email / Username</label>
-              <input
-                type="text"
-                className="login-input"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="admin@gestionale.it"
-                autoFocus
-              />
-            </div>
+          <label className="lg-field">
+            <span>Email o nome utente</span>
+            <input type="text" className="ds-input" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="nome@azienda.it" autoFocus autoComplete="username" />
+          </label>
 
-            <div className="login-field">
-              <label className="login-label">Password</label>
-              <input
-                type="password"
-                className="login-input"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
+          <label className="lg-field">
+            <span>Password</span>
+            <input type="password" className="ds-input" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Password" autoComplete="current-password" />
+          </label>
 
-            {error && (
-              <div className="login-error">
-                ⚠️ {error}
-              </div>
-            )}
+          {error && <div className="lg-error" role="alert"><Icon name="alert" size={14} />{error}</div>}
 
-            <button
-              type="submit"
-              className="login-submit"
-              disabled={loading}
-            >
-              {loading ? 'Accesso in corso...' : 'Accedi'}
-            </button>
-          </form>
-        </div>
+          <button type="submit" className="lg-submit" disabled={loading}>
+            {loading ? 'Accesso in corso…' : 'Accedi'}
+          </button>
+        </form>
       </div>
-    </div>
+    </main>
   );
 }

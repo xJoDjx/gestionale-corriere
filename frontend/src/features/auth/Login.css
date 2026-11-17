@@ -1,134 +1,17 @@
-/* src/features/auth/Login.css */
-
-.login-page {
-  min-height: 100vh;
-  background: var(--bg-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.login-container {
-  width: 100%;
-  max-width: 380px;
-}
-
-/* Brand / Logo */
-.login-brand {
-  text-align: center;
-  margin-bottom: 36px;
-}
-
-.login-brand-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: var(--accent-orange, #f97316);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  margin: 0 auto 14px;
-  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
-}
-
-.login-brand-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.login-brand-sub {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-/* Card */
-.login-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 28px 28px 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-
-.login-card-title {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 22px;
-  color: var(--text-primary);
-}
-
-/* Form fields */
-.login-field {
-  margin-bottom: 14px;
-}
-
-.login-field:last-of-type {
-  margin-bottom: 20px;
-}
-
-.login-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: 6px;
-}
-
-.login-input {
-  width: 100%;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 13px;
-  box-sizing: border-box;
-  outline: none;
-  transition: border-color 0.15s;
-  font-family: var(--font-sans);
-}
-
-.login-input:focus {
-  border-color: var(--primary);
-}
-
-/* Error banner */
-.login-error {
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  color: var(--danger, #f87171);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* Submit button */
-.login-submit {
-  width: 100%;
-  padding: 10px;
-  border-radius: 9px;
-  border: none;
-  background: var(--primary);
-  color: #fff;
-  font-weight: 700;
-  font-size: 14px;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
-}
-
-.login-submit:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.login-submit:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
+.lg-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#F4F4F5;font-family:var(--font-body, Inter, system-ui, sans-serif);color:#0B0B0C}
+.lg-box{width:min(400px,100%);display:flex;flex-direction:column;gap:20px}
+.lg-brand{display:flex;align-items:center;gap:12px}
+.lg-tile{flex:0 0 40px;height:40px;border-radius:10px;background:#0B0B0C;color:#fff;display:flex;align-items:center;justify-content:center}
+.lg-brand div{display:flex;flex-direction:column;gap:1px}
+.lg-brand strong{font-family:'Inter Tight',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.01em}
+.lg-brand span{font-size:12.5px;color:#6B6B73}
+.lg-card{background:#fff;border:1px solid #E4E4E7;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 2px rgba(11,11,12,.04)}
+.lg-card h1{margin:0;font-family:'Inter Tight',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.01em}
+.lg-sub{margin:-8px 0 4px;font-size:13px;color:#6B6B73}
+.lg-field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#52525B}
+.lg-field .ds-input{min-height:42px;font-size:14px;width:100%;box-sizing:border-box}
+.lg-error{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:#FDECEC;border:1px solid #F5C2C2;color:#B91C1C;font-size:13px}
+.lg-submit{min-height:42px;border:0;border-radius:8px;background:#0B0B0C;color:#fff;font:inherit;font-weight:600;font-size:14px;cursor:pointer;margin-top:4px}
+.lg-submit:hover{background:#27272A}
+.lg-submit:disabled{opacity:.6;cursor:default}
+.lg-tile svg{stroke:#fff;color:#fff}
