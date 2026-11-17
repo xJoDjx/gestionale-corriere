@@ -411,8 +411,8 @@ export default function Palmari() {
                   ))}
                 </dl>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 18px 14px' }}>
-                  <Button size="sm" style={{ flex: '1 1 110px' }} onClick={() => navigate('/palmari/' + sel.id)}>Cambia stato</Button>
-                  <Button size="sm" variant="primary" style={{ flex: '1 1 150px' }} onClick={() => navigate('/palmari/' + sel.id)}>{attiva ? 'Chiudi assegnazione' : 'Assegna'}</Button>
+                  <Button size="sm" style={{ flex: '1 1 110px', justifyContent: 'center' }} onClick={() => navigate('/palmari/' + sel.id)}>Cambia stato</Button>
+                  <Button size="sm" variant="primary" style={{ flex: '1 1 150px', justifyContent: 'center' }} onClick={() => navigate('/palmari/' + sel.id)}>{attiva ? 'Chiudi assegnazione' : 'Assegna'}</Button>
                 </div>
                 <div className="pm2-side-sec">Storico assegnazioni</div>
                 {storico.length === 0
