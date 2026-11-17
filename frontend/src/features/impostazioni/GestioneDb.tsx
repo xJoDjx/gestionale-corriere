@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../../stores/auth.store';
+import { Card, CardHead, Button, IconButton, Alert, Empty, Icon, C } from '../../components/ds';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -17,21 +18,21 @@ type Action =
 const RESET_ITEMS: { section: Section; label: string; icon: string; danger?: 'high' | 'critical' }[] = [
   { section: 'all', label: 'Azzera TUTTO il database', icon: '💥', danger: 'critical' },
   { section: 'padroncini', label: 'Azzera Padroncini', icon: '👷', danger: 'high' },
-  { section: 'mezzi', label: 'Azzera Flotta Mezzi', icon: '🚚', danger: 'high' },
+  { section: 'mezzi', label: 'Azzera Flotta mezzi', icon: '🚚', danger: 'high' },
   { section: 'palmari', label: 'Azzera Palmari', icon: '📱', danger: 'high' },
-  { section: 'codici-autisti', label: 'Azzera Codici Autisti', icon: '🆔', danger: 'high' },
+  { section: 'codici-autisti', label: 'Azzera Codici autista', icon: '🆔', danger: 'high' },
   { section: 'acconti', label: 'Azzera Acconti', icon: '💰' },
-  { section: 'ricariche', label: 'Azzera Ricariche Mezzi', icon: '⚡' },
-  { section: 'conteggi', label: 'Azzera Conteggi Mensili', icon: '📋', danger: 'high' },
+  { section: 'ricariche', label: 'Azzera Ricariche mezzi', icon: '⚡' },
+  { section: 'conteggi', label: 'Azzera Conteggi mensili', icon: '📋', danger: 'high' },
 ];
 
 const RESTORE_ENTITY_TYPES: { entityType: EntityRestoreType; label: string; icon: string }[] = [
   { entityType: 'mezzo', label: 'Mezzi', icon: '🚚' },
   { entityType: 'padroncino', label: 'Padroncini', icon: '👷' },
   { entityType: 'palmare', label: 'Palmari', icon: '📱' },
-  { entityType: 'codice_autista', label: 'Codici Autista', icon: '🆔' },
+  { entityType: 'codice_autista', label: 'Codici autista', icon: '🆔' },
   { entityType: 'acconto', label: 'Acconti', icon: '💰' },
-  { entityType: 'conteggio_mensile', label: 'Conteggi Mensili', icon: '📋' },
+  { entityType: 'conteggio_mensile', label: 'Conteggi mensili', icon: '📋' },
 ];
 
 /** Estrae titolo + sottotitolo leggibili da un record eliminato, a seconda del tipo. */
@@ -164,7 +165,7 @@ export default function GestioneDb() {
           throw new Error(e.message || 'Errore pulizia log');
         }
         const data = await res.json();
-        alert(`✅ Eliminati ${data.eliminati} log più vecchi di ${pending.giorni} giorni.`);
+        alert(`Eliminati ${data.eliminati} log più vecchi di ${pending.giorni} giorni.`);
         // Aggiorna le statistiche
         const statsRes = await fetch(`${API_BASE}/db-admin/log-stats`);
         if (statsRes.ok) setLogStats(await statsRes.json());
@@ -194,7 +195,7 @@ export default function GestioneDb() {
           throw new Error(e.message || 'Errore ripristino');
         }
         setDeletedList((list) => list?.filter((x) => x.id !== pending.entityId) ?? null);
-        alert(`✅ ${pending.label} ripristinato con successo.`);
+        alert(`${pending.label} ripristinato con successo.`);
 
       } else {
         const res = await fetch(`${API_BASE}/db-admin/reset`, {
@@ -245,211 +246,105 @@ export default function GestioneDb() {
     }
   };
 
+  const RESET_SUB: Record<Section, string> = {
+    all: 'Tutti i dati operativi, utenti esclusi', padroncini: 'Padroncini e relativi collegamenti', mezzi: 'Mezzi e assegnazioni',
+    palmari: 'Palmari e assegnazioni', 'codici-autisti': 'Codici e assegnazioni', acconti: 'Tutti gli acconti',
+    ricariche: 'Sessioni di ricarica', conteggi: 'Conteggi e righe',
+  };
+  const dangerBtn = pending && (pending.kind === 'reset' || pending.kind === 'cleanup-logs');
+
   return (
-    <div className="db-admin">
-      <div className="db-admin-intro">
-        <h2>🗄️ Gestione Database</h2>
-        <p>
-          Area riservata agli amministratori. Le operazioni di azzeramento sono <strong>irreversibili</strong>.
-          Esegui sempre un backup prima di procedere.
-        </p>
-      </div>
-
-      {/* ── SEZIONE LOG ── */}
-      <div className="db-admin-section-title">📋 Gestione Log Storici</div>
-      <div className="db-admin-log-card">
-        <div className="db-admin-log-stats">
-          <div className="db-admin-log-stat">
-            <span className="db-admin-log-stat-val">{logStats?.totale?.toLocaleString('it-IT') ?? '…'}</span>
-            <span className="db-admin-log-stat-label">Log totali</span>
-          </div>
-          <div className="db-admin-log-stat">
-            <span className="db-admin-log-stat-val">{fmtDate(logStats?.oldest ?? null)}</span>
-            <span className="db-admin-log-stat-label">Log più vecchio</span>
-          </div>
-          <div className="db-admin-log-stat">
-            <span className="db-admin-log-stat-val" style={{ color: eliminabiliCount > 0 ? 'var(--warning, #f59e0b)' : 'var(--text-muted)' }}>
-              {eliminabiliCount.toLocaleString('it-IT')}
-            </span>
-            <span className="db-admin-log-stat-label">Eliminabili ora</span>
-          </div>
-        </div>
-
-        <div className="db-admin-log-controls">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Mantieni:</span>
+    <div className="db2">
+      <div className="ds-g3">
+        <Card pad className="db2-card">
+          <div className="db2-h"><span className="db2-ic" style={{ background: C.blue }}><Icon name="db" size={13} /></span><CardHead title="Backup" sub="Copia completa in un file JSON" /></div>
+          <div className="db2-kv"><span>Contenuto</span><b>Tutti i dati del database</b></div>
+          <div className="db2-kv"><span>Conferma</span><b>Email e password admin</b></div>
+          <Button variant="primary" icon="download" onClick={() => open({ kind: 'backup' })}>Scarica backup</Button>
+        </Card>
+        <Card pad className="db2-card">
+          <div className="db2-h"><span className="db2-ic" style={{ background: C.purple }}><Icon name="clock" size={13} /></span><CardHead title="Pulizia storico modifiche" sub="Elimina gli eventi più vecchi del periodo scelto" /></div>
+          <div className="db2-kv"><span>Eventi totali · dal</span><b>{logStats ? Number(logStats.totale).toLocaleString('it-IT') : '…'} · {fmtDate(logStats?.oldest ?? null)}</b></div>
+          <div role="group" aria-label="Conserva" className="db2-ret">
             {RETENTION_OPTIONS.map((opt) => (
-              <button
-                key={opt.giorni}
-                className={`fm-filter-btn ${retentionDays === opt.giorni ? 'fm-filter-active' : ''}`}
-                onClick={() => setRetentionDays(opt.giorni)}
-              >
-                {opt.label}
+              <button key={opt.giorni} type="button" aria-pressed={retentionDays === opt.giorni} className={retentionDays === opt.giorni ? 'is-on' : ''} onClick={() => setRetentionDays(opt.giorni)}>
+                Conserva {opt.label.replace(/^Ultim[io] /, '')}
               </button>
             ))}
           </div>
-          <button
-            className="btn-warning"
-            disabled={eliminabiliCount === 0}
-            onClick={() => open({ kind: 'cleanup-logs', giorni: retentionDays })}
-            style={{ marginTop: 12 }}
-          >
-            🧹 Elimina {eliminabiliCount > 0 ? `${eliminabiliCount.toLocaleString('it-IT')} log` : 'log'} più vecchi di {retentionDays} giorni
-          </button>
-        </div>
+          <div className="db2-kv"><span>Eliminabili ora</span><b style={{ color: eliminabiliCount > 0 ? '#B91C1C' : '#A1A1AA' }}>{eliminabiliCount > 0 ? `${Number(eliminabiliCount).toLocaleString('it-IT')} eventi` : 'nessuno'}</b></div>
+          <Button size="sm" icon="trash" disabled={eliminabiliCount === 0} onClick={() => open({ kind: 'cleanup-logs', giorni: retentionDays })}>Elimina eventi più vecchi</Button>
+        </Card>
+        <Card pad className="db2-card">
+          <div className="db2-h"><span className="db2-ic" style={{ background: C.green }}><Icon name="restore" size={13} /></span><CardHead title="Record eliminati" sub="Si possono ripristinare uno per uno" /></div>
+          <div className="db2-del">
+            {RESTORE_ENTITY_TYPES.map((t) => {
+              const on = !!deletedList && deletedType === t.entityType;
+              return (
+                <button key={t.entityType} type="button" className={on ? 'is-on' : ''} onClick={() => open({ kind: 'list-deleted', entityType: t.entityType })}>
+                  <span>{t.label}</span>
+                  <em>{on ? `${deletedList!.length} eliminati` : 'Cerca'}</em>
+                  <Icon name="chevRight" size={12} />
+                </button>
+              );
+            })}
+          </div>
+        </Card>
       </div>
 
-      {/* ── SEZIONE BACKUP / RESET ── */}
-      <div className="db-admin-section-title">⚙️ Backup e Reset</div>
-      <div className="db-admin-grid">
-        <div className="db-admin-card db-admin-card-safe">
-          <div className="db-admin-card-head">
-            <span className="db-admin-icon">💾</span>
-            <h3>Backup database</h3>
-          </div>
-          <p>Scarica un file JSON con tutti i dati del database.</p>
-          <button className="btn-primary" onClick={() => open({ kind: 'backup' })}>
-            Scarica backup
-          </button>
-        </div>
-
-        {RESET_ITEMS.map((it) => (
-          <div
-            key={it.section}
-            className={`db-admin-card ${
-              it.danger === 'critical' ? 'db-admin-card-critical' : 'db-admin-card-danger'
-            }`}
-          >
-            <div className="db-admin-card-head">
-              <span className="db-admin-icon">{it.icon}</span>
-              <h3>{it.label}</h3>
-            </div>
-            <p>
-              {it.section === 'all'
-                ? 'Cancella completamente tutti i dati operativi (utenti esclusi).'
-                : 'Cancellazione permanente dei record correlati.'}
-            </p>
-            <button
-              className={it.danger === 'critical' ? 'btn-critical' : 'btn-warning'}
-              onClick={() => open({ kind: 'reset', section: it.section })}
-            >
-              Azzera
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* ── SEZIONE RIPRISTINO EMERGENZA ── */}
-      <div className="db-admin-section-title">🆘 Ripristino Emergenza</div>
-      <div className="db-admin-restore-card">
-        <p className="db-admin-restore-intro">
-          Le eliminazioni nel gestionale sono <strong>reversibili</strong>: il record resta nel database,
-          solo nascosto dalle liste. Scegli un tipo per cercare gli elementi eliminati e ripristinarli.
-        </p>
-        <div className="db-admin-restore-types">
-          {RESTORE_ENTITY_TYPES.map((t) => (
-            <button
-              key={t.entityType}
-              className={`fm-filter-btn ${deletedList && deletedType === t.entityType ? 'fm-filter-active' : ''}`}
-              onClick={() => open({ kind: 'list-deleted', entityType: t.entityType })}
-            >
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
-
-        {deletedList && (
-          <div className="db-admin-restore-list">
-            {deletedList.length === 0 ? (
-              <div className="db-admin-restore-empty">
-                Nessun elemento eliminato trovato in questa categoria.
-              </div>
-            ) : (
-              deletedList.map((item) => {
+      {deletedList && (
+        <Card>
+          <div style={{ padding: '14px 18px 10px' }}><CardHead title={`${RESTORE_ENTITY_TYPES.find((t) => t.entityType === deletedType)?.label ?? ''} eliminati`} sub="Il record torna visibile in tutte le liste e i conteggi" actions={<IconButton icon="close" label="Chiudi" onClick={() => setDeletedList(null)} />} /></div>
+          {deletedList.length === 0 ? <Empty>Nessun elemento eliminato trovato in questa categoria.</Empty> : (
+            <div className="db2-list">
+              {deletedList.map((item) => {
                 const { title, subtitle } = describeDeleted(deletedType, item);
                 return (
-                  <div key={item.id} className="db-admin-restore-item">
-                    <div className="db-admin-restore-info">
-                      <span className="db-admin-restore-title">{title}</span>
-                      {subtitle && <span className="db-admin-restore-subtitle">{subtitle}</span>}
-                      <span className="db-admin-restore-meta">Eliminato il {fmtDate(item.deletedAt)}</span>
-                    </div>
-                    <button
-                      className="btn-success"
-                      onClick={() => open({ kind: 'restore', entityType: deletedType, entityId: item.id, label: title })}
-                    >
-                      ♻️ Ripristina
-                    </button>
+                  <div key={item.id} className="db2-item">
+                    <div><b>{title}</b>{subtitle && <span>{subtitle}</span>}</div>
+                    <span className="ds-cardsub">Eliminato il {fmtDate(item.deletedAt)}</span>
+                    <Button size="sm" icon="restore" onClick={() => open({ kind: 'restore', entityType: deletedType, entityId: item.id, label: title })}>Ripristina</Button>
                   </div>
                 );
-              })
-            )}
-          </div>
-        )}
-      </div>
+              })}
+            </div>
+          )}
+        </Card>
+      )}
 
-      {/* ── MODALE CONFERMA ── */}
+      <section className="db2-danger">
+        <div className="db2-dh"><CardHead title="Zona pericolosa" sub="Azzera un archivio. Operazione irreversibile: scarica prima un backup. Serve la conferma con email e password admin." /></div>
+        {RESET_ITEMS.map((it) => (
+          <div key={it.section} className="db2-row">
+            <i style={{ background: it.danger === 'critical' ? C.red : C.orange }} />
+            <span style={{ fontWeight: it.section === 'all' ? 600 : 400 }}>{it.section === 'all' ? 'Tutto il database' : it.label.replace(/^Azzera /, '')}</span>
+            <em>{RESET_SUB[it.section]}</em>
+            <button type="button" className={it.section === 'all' ? 'is-crit' : ''} onClick={() => open({ kind: 'reset', section: it.section })}>Azzera</button>
+          </div>
+        ))}
+      </section>
+
       {pending && (
-        <div className="imp-modal-backdrop" onClick={close}>
-          <div className="imp-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>{titleLabel()}</h2>
+        <div className="ds-modal-backdrop db2-backdrop" onClick={close}>
+          <div className="ds-card db2-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <h2>{titleLabel().replace(/^[^\p{L}]+/u, '')}</h2>
             {pending.kind === 'cleanup-logs' && (
-              <div className="db-admin-warning">
-                Verranno eliminati <strong>{eliminabiliCount.toLocaleString('it-IT')} log</strong> precedenti al{' '}
-                {fmtDate(new Date(Date.now() - pending.giorni * 86400000).toISOString())}.
-                I log più recenti ({pending.giorni} giorni) saranno conservati.
-              </div>
+              <Alert tone="warn">Verranno eliminati <strong>{eliminabiliCount.toLocaleString('it-IT')} eventi</strong> precedenti al {fmtDate(new Date(Date.now() - pending.giorni * 86400000).toISOString())}. Quelli degli ultimi {pending.giorni} giorni restano.</Alert>
             )}
-            {pending.kind === 'reset' && (
-              <div className="db-admin-warning">
-                ⚠️ Questa operazione è <strong>irreversibile</strong>. Tutti i record verranno eliminati.
-              </div>
-            )}
-            {pending.kind === 'list-deleted' && (
-              <div className="db-admin-info">
-                Verranno mostrati gli ultimi elementi eliminati in questa categoria, con la data di eliminazione.
-              </div>
-            )}
-            {pending.kind === 'restore' && (
-              <div className="db-admin-info">
-                ♻️ <strong>{pending.label}</strong> tornerà visibile in tutte le liste e i conteggi, come prima
-                dell'eliminazione.
-              </div>
-            )}
-            <div className="imp-field">
-              <label>Email admin</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@gestionale.it"
-                autoComplete="username"
-              />
-            </div>
-            <div className="imp-field">
-              <label>Password admin</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') execute(); }}
-                placeholder="Password"
-                autoComplete="current-password"
-              />
-            </div>
-            {err && <div className="db-admin-error">{err}</div>}
-            <div className="imp-modal-actions">
-              <button className="btn-outline" onClick={close} disabled={busy}>
-                Annulla
-              </button>
-              <button
-                className={confirmBtnClass()}
-                onClick={execute}
-                disabled={busy}
-              >
-                {busy ? 'Attendere...' : confirmLabel()}
-              </button>
+            {pending.kind === 'reset' && <Alert tone="ko">Questa operazione è <strong>irreversibile</strong>. Tutti i record verranno eliminati.</Alert>}
+            {pending.kind === 'list-deleted' && <Alert tone="info">Verranno mostrati gli ultimi elementi eliminati in questa categoria, con la data di eliminazione.</Alert>}
+            {pending.kind === 'restore' && <Alert tone="info"><strong>{pending.label}</strong> tornerà visibile in tutte le liste e i conteggi, come prima dell'eliminazione.</Alert>}
+            <label className="db2-field"><span>Email admin</span>
+              <input className="ds-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@gestionale.it" autoComplete="username" />
+            </label>
+            <label className="db2-field"><span>Password admin</span>
+              <input className="ds-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') execute(); }} placeholder="Password" autoComplete="current-password" />
+            </label>
+            {err && <Alert tone="ko">{err}</Alert>}
+            <div className="db2-actions">
+              <Button onClick={close} disabled={busy}>Annulla</Button>
+              <Button variant={dangerBtn ? 'danger' : 'primary'} onClick={execute} disabled={busy}>{busy ? 'Attendere…' : confirmLabel()}</Button>
             </div>
           </div>
         </div>

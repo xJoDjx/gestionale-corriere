@@ -8,14 +8,17 @@ import {
 import { useAuthStore } from '../../stores/auth.store';
 import GestioneDb from './GestioneDb';
 import './Impostazioni.css';
+import './Impostazioni2.css';
+import { Page, PageHeader, Card, Tabs, SegTabs, SearchBox, Button, IconButton, Empty, Th, useSort, C, fmtEur } from '../../components/ds';
 
 type TabKey = 'voci-conteggio' | 'gestione-db';
 
-const CATEGORIE: { value: CategoriaVoceConteggio; label: string; icon: string }[] = [
-  { value: 'ADDEBITO', label: 'Addebiti', icon: '📝' },
-  { value: 'FATTURATO', label: 'Fatture FM', icon: '💶' },
-  { value: 'COMPENSAZIONE', label: 'Compensazioni', icon: '🔄' },
+const CATEGORIE: { value: CategoriaVoceConteggio; label: string }[] = [
+  { value: 'ADDEBITO', label: 'Addebiti' },
+  { value: 'FATTURATO', label: 'Fatture FM' },
+  { value: 'COMPENSAZIONE', label: 'Compensazioni' },
 ];
+const CAT_COLOR: Record<CategoriaVoceConteggio, string> = { ADDEBITO: C.red, FATTURATO: C.green, COMPENSAZIONE: C.blue };
 
 const emptyForm: CreateVoceConteggioInput = {
   descrizione: '',
@@ -116,118 +119,81 @@ export default function Impostazioni() {
     }
   };
 
+  const toggleAttivo = async (v: VoceConteggio) => {
+    try { await vociConteggioApi.update(v.id, { attivo: !v.attivo }); await load(); }
+    catch (e: any) { alert('Errore: ' + e.message); }
+  };
+  type SK = 'c' | 'd' | 'k' | 'i' | 'v' | 's';
+  const catLabel = (c: CategoriaVoceConteggio) => CATEGORIE.find((x) => x.value === c)?.label ?? c;
+  const { sorted, sort, toggle } = useSort<VoceConteggio, SK>(filtered, (v, k) =>
+    k === 'c' ? catLabel(v.categoria) : k === 'd' ? v.descrizione : k === 'k' ? (v.contoVoce ?? '') : k === 'i' ? Number(v.percIva)
+      : k === 'v' ? (v.valoreDefault != null ? Number(v.valoreDefault) : null) : (v.attivo ? 0 : 1), { key: 'c', dir: 'asc' });
+
   return (
-    <div className="imp-page">
-      <div className="imp-header">
-        <h1>⚙️ Impostazioni</h1>
-      </div>
+    <Page>
+      <PageHeader eyebrow="Sistema" title="Impostazioni" sub="Voci dei conteggi e manutenzione del database" />
 
-      <div className="imp-tabs">
-        <button
-          className={`imp-tab ${tab === 'voci-conteggio' ? 'imp-tab-active' : ''}`}
-          onClick={() => setTab('voci-conteggio')}
-        >
-          📋 Voci Conteggio
-        </button>
-        {isAdmin && (
-          <button
-            className={`imp-tab ${tab === 'gestione-db' ? 'imp-tab-active' : ''}`}
-            onClick={() => setTab('gestione-db')}
-          >
-            🗄️ Gestione DB
-          </button>
-        )}
-      </div>
+      <Tabs label="Sezioni" value={tab} onChange={setTab} items={[
+        { value: 'voci-conteggio' as TabKey, label: 'Voci conteggio', count: voci.length, icon: 'cont', color: C.blue },
+        ...(isAdmin ? [{ value: 'gestione-db' as TabKey, label: 'Database', icon: 'db' as const, color: C.teal }] : []),
+      ]} />
 
-      {tab === 'gestione-db' && isAdmin && (
-        <div className="imp-section">
-          <GestioneDb />
-        </div>
-      )}
+      {tab === 'gestione-db' && isAdmin && <GestioneDb />}
 
       {tab === 'voci-conteggio' && (
-        <div className="imp-section">
-          <div className="imp-toolbar">
-            <div className="imp-search-wrap">
-              <span>🔍</span>
-              <input
-                className="imp-search"
-                placeholder="Cerca descrizione o conto voce..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+        <Card>
+          <div className="imp2-tools">
+            <SegTabs label="Categoria" value={filtroCat} onChange={setFiltroCat} items={[
+              { value: 'TUTTE' as const, label: 'Tutte', count: voci.length },
+              ...CATEGORIE.map((c) => ({ value: c.value, label: c.label, count: voci.filter((v) => v.categoria === c.value).length })),
+            ]} />
+            <div className="imp2-right">
+              <SearchBox value={search} onChange={setSearch} placeholder="Cerca voce o conto…" width={240} />
+              <Button variant="primary" size="sm" icon="plus" onClick={openNew}>Nuova voce</Button>
             </div>
-            <div className="imp-filters">
-              <button
-                className={`imp-filter-btn ${filtroCat === 'TUTTE' ? 'imp-filter-active' : ''}`}
-                onClick={() => setFiltroCat('TUTTE')}
-              >
-                Tutte
-              </button>
-              {CATEGORIE.map((c) => (
-                <button
-                  key={c.value}
-                  className={`imp-filter-btn ${filtroCat === c.value ? 'imp-filter-active' : ''}`}
-                  onClick={() => setFiltroCat(c.value)}
-                >
-                  {c.icon} {c.label}
-                </button>
-              ))}
-            </div>
-            <button className="btn-primary" onClick={openNew}>+ Nuova Voce</button>
           </div>
-
-          <div className="imp-table-wrap">
-            {loading ? (
-              <div className="imp-loading">Caricamento...</div>
-            ) : (
-              <table className="imp-table">
-                <thead>
-                  <tr>
-                    <th>Categoria</th>
-                    <th>Descrizione</th>
-                    <th>Conto Voce</th>
-                    <th>IVA</th>
-                    <th>Valore default</th>
-                    <th>Stato</th>
-                    <th></th>
-                  </tr>
-                </thead>
+          {loading ? <Empty>Caricamento…</Empty> : (
+            <div className="ds-tablewrap">
+              <table className="ds-table imp2-table">
+                <colgroup><col style={{ width: 150 }} /><col /><col style={{ width: 110 }} /><col style={{ width: 70 }} /><col style={{ width: 150 }} /><col style={{ width: 110 }} /><col style={{ width: 84 }} /></colgroup>
+                <thead><tr>
+                  <Th k="c" sort={sort} onSort={toggle}>Categoria</Th>
+                  <Th k="d" sort={sort} onSort={toggle}>Descrizione</Th>
+                  <Th k="k" sort={sort} onSort={toggle}>Conto voce</Th>
+                  <Th k="i" sort={sort} onSort={toggle} right>IVA</Th>
+                  <Th k="v" sort={sort} onSort={toggle} right>Valore predefinito</Th>
+                  <Th k="s" sort={sort} onSort={toggle}>Stato</Th>
+                  <th />
+                </tr></thead>
                 <tbody>
-                  {filtered.length === 0 ? (
-                    <tr><td colSpan={7} className="imp-empty-row">Nessuna voce trovata</td></tr>
-                  ) : filtered.map((v) => {
-                    const cat = CATEGORIE.find((c) => c.value === v.categoria);
-                    return (
-                      <tr key={v.id} className="imp-row">
-                        <td>
-                          <span className={`imp-cat-badge imp-cat-${v.categoria.toLowerCase()}`}>
-                            {cat?.icon} {cat?.label}
-                          </span>
-                        </td>
-                        <td className="imp-desc">{v.descrizione}</td>
-                        <td className="imp-conto">{v.contoVoce ?? '—'}</td>
-                        <td>{Number(v.percIva)}%</td>
-                        <td>{v.valoreDefault != null ? `€ ${Number(v.valoreDefault).toFixed(2)}` : '—'}</td>
-                        <td>
-                          <span className={`imp-stato ${v.attivo ? 'imp-stato-attivo' : 'imp-stato-disattivo'}`}>
-                            {v.attivo ? 'Attiva' : 'Disattiva'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="imp-row-actions">
-                            <button className="imp-edit-btn" onClick={() => openEdit(v)}>✏️</button>
-                            <button className="imp-del-btn" onClick={() => handleDelete(v)}>🗑</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {sorted.length === 0 ? (
+                    <tr><td colSpan={7}><Empty>Nessuna voce trovata</Empty></td></tr>
+                  ) : sorted.map((v) => (
+                    <tr key={v.id}>
+                      <td><span className="imp2-cat"><i style={{ background: CAT_COLOR[v.categoria] }} />{catLabel(v.categoria)}</span></td>
+                      <td>{v.descrizione}</td>
+                      <td className="imp2-mono" style={{ color: v.contoVoce ? undefined : '#A1A1AA' }}>{v.contoVoce ?? '—'}</td>
+                      <td className="r">{Number(v.percIva)}%</td>
+                      <td className="r" style={{ color: v.valoreDefault != null ? undefined : '#A1A1AA' }}>{v.valoreDefault != null ? fmtEur(Number(v.valoreDefault)) : '—'}</td>
+                      <td>
+                        <button type="button" role="switch" aria-checked={v.attivo} className={`imp2-tog${v.attivo ? ' is-on' : ''}`} onClick={() => toggleAttivo(v)}>
+                          <i />{v.attivo ? 'Attiva' : 'Disattiva'}
+                        </button>
+                      </td>
+                      <td className="r">
+                        <span className="imp2-acts">
+                          <IconButton icon="edit" label="Modifica voce" onClick={() => openEdit(v)} />
+                          <IconButton icon="trash" danger label="Elimina voce" onClick={() => handleDelete(v)} />
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+          <div className="imp2-foot">La descrizione è il prefisso proposto quando si aggiunge una riga al conteggio: i campi XXXX si completano a mano. Le voci non cambiano il calcolo del netto.</div>
+        </Card>
       )}
 
       {modalOpen && (
@@ -241,7 +207,7 @@ export default function Impostazioni() {
                 value={form.categoria}
                 onChange={(e) => setForm({ ...form, categoria: e.target.value as CategoriaVoceConteggio })}
               >
-                {CATEGORIE.map((c) => <option key={c.value} value={c.value}>{c.icon} {c.label}</option>)}
+                {CATEGORIE.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
 
@@ -307,6 +273,6 @@ export default function Impostazioni() {
           </div>
         </div>
       )}
-    </div>
+    </Page>
   );
 }
