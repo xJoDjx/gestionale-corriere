@@ -69,3 +69,4 @@
 .pdx-drop { padding: 18px 16px; border-radius: 8px; border: 1px dashed #D4D4D8; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .pdx-drop:hover { border-color: #3D63F0; }
 .pdx-drop.is-done { border-style: solid; border-color: #3D63F0; }
+.pl2-toolbar .ds-select { flex: 0 0 auto; width: auto; }

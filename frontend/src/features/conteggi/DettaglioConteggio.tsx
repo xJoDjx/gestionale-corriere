@@ -2559,7 +2559,7 @@ export default function DettaglioConteggio() {
                 setAddebitivSospesi(prev => prev.filter(x => x.id !== a.id));
               }}
             >{memo ? 'Fatto' : 'Evadi'}</button>
-            <button type="button" className="dc2-btn dc2-btn-xs" onClick={() => navigate('/sospesi')}>Vai ai sospesi</button>
+            <button type="button" className="dc2-btn dc2-btn-xs" onClick={() => navigate('/addebiti-sospesi')}>Vai ai sospesi</button>
           </div>
         );
       })}
