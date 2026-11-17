@@ -128,9 +128,8 @@ export default function Sidebar() {
         <div className="sb-foot">
           {!collapsed && scadenze !== null && scadenze > 0 && (
             <Link to="/flotta" className="sb-alert">
-              <span className="ds-dot ds-dot-warn">Scadenze</span>
-              <strong>{scadenze} {scadenze === 1 ? 'scadenza imminente' : 'scadenze imminenti'}</strong>
-              <span className="sb-alert-sub">Assicurazioni, revisioni, bolli, fine noleggio</span>
+              <span className="ds-dot ds-dot-warn">Scadenze mezzi</span>
+              <strong>{scadenze} entro 30 giorni</strong>
               <span className="sb-alert-link">Vedi in Flotta ↗</span>
             </Link>
           )}

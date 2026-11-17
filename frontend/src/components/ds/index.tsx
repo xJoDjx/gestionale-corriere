@@ -295,10 +295,15 @@ export function SegBar({ parts, height = 8 }: { parts: { value: number; color: s
 }
 
 // ─── Formattazione (solo visualizzazione) ──────
+/** Numero all'italiana con separatore delle migliaia anche sotto 10.000 (1.234,56). */
+export const fmtNum = (n: number | null | undefined, dec = 0) => {
+  if (n === null || n === undefined || isNaN(Number(n))) return '—';
+  const v = Number(n);
+  const [i, d] = Math.abs(v).toFixed(dec).split('.');
+  return (v < 0 && Number(Math.abs(v).toFixed(dec)) !== 0 ? '−' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (d ? ',' + d : '');
+};
 export const fmtEur = (n: number | null | undefined, dec = 2) =>
-  n === null || n === undefined || isNaN(Number(n)) ? '—' : (Number(n) < 0 ? '−' : '') + '€ ' + Math.abs(Number(n)).toLocaleString('it-IT', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-export const fmtNum = (n: number | null | undefined, dec = 0) =>
-  n === null || n === undefined || isNaN(Number(n)) ? '—' : Number(n).toLocaleString('it-IT', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  n === null || n === undefined || isNaN(Number(n)) ? '—' : (Number(n) < 0 && Math.abs(Number(n)) >= 0.005 ? '−' : '') + '€ ' + fmtNum(Math.abs(Number(n)), dec);
 export const fmtDate = (d: string | Date | null | undefined) => {
   if (!d) return '—';
   const x = typeof d === 'string' ? new Date(d) : d;

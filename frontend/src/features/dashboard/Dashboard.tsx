@@ -2,17 +2,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from 'recharts';
-import {
   mezziApi,
   padronciniApi,
   palmariApi,
@@ -30,6 +19,10 @@ import {
   type Mezzo,
 } from '../../lib/api';
 import { MEZZO_FIELD_PRIORITY } from '../../lib/auditFormat';
+import {
+  Page, PageHeader, Card, CardHead, Kpis, Button, SegTabs, Dot, Empty, BarStrip, SegBar,
+  Th, useSort, Icon, C, fmtEur, type KpiItem, type Tone, type IconName,
+} from '../../components/ds';
 import './Dashboard.css';
 
 // ─── Helpers ──────────────────────────────────────────
@@ -317,10 +310,28 @@ interface ScadenzaRow {
 
 const SCAD_TABS = ['Noleggio', 'Revisione', 'Assicurazione'] as const;
 
+const formatMeseLungo = (mese: string) => {
+  const [y, m] = mese.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+};
+
+const STATO_TONE: Record<string, Tone> = { BOZZA: 'na', CONFERMATO: 'ok', CHIUSO: 'info' };
+const STATO_LABEL: Record<string, string> = { BOZZA: 'Bozza', CONFERMATO: 'Confermato', CHIUSO: 'Chiuso' };
+
+/** Ultimi 12 mesi fino al mese attuale, per il selettore. */
+const ultimiMesi = (n = 12): string[] => {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = 0; i < n; i++) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    d.setMonth(d.getMonth() - 1);
+  }
+  return out;
+};
+
 // ─── Component ────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const meseAttuale = meseCorrente();
   const [meseKpi, setMeseKpi] = useState<string>(mesePrecedente);
   const [scadTab, setScadTab] = useState<typeof SCAD_TABS[number]>('Noleggio');
 
@@ -419,327 +430,221 @@ export default function Dashboard() {
   );
 
   const alerts = useMemo(() => {
-    const out: Array<{ id: string; tipo: 'danger' | 'warning' | 'info'; icona: string; titolo: string; desc: string; to: string; cta: string }> = [];
+    const out: Array<{ id: string; tone: Tone; color: string; icon: IconName; titolo: string; desc: string; to: string; cta: string }> = [];
     if (padronciniStats?.alertDocumenti) {
-      out.push({
-        id: 'durc',
-        tipo: 'danger',
-        icona: '⚠️',
-        titolo: `${padronciniStats.alertDocumenti} documenti padroncini in scadenza`,
-        desc: 'DURC o DVR scaduti / in scadenza',
-        to: '/padroncini',
-        cta: 'Vedi padroncini',
-      });
+      out.push({ id: 'durc', tone: 'ko', color: C.red, icon: 'doc', titolo: `${padronciniStats.alertDocumenti} documenti padroncini in scadenza`, desc: 'DURC o DVR scaduti o in scadenza', to: '/padroncini', cta: 'Padroncini' });
     }
     if (mezziStats?.scadenzeImminenti) {
-      out.push({
-        id: 'mezzi-scad',
-        tipo: 'warning',
-        icona: '🔧',
-        titolo: `${mezziStats.scadenzeImminenti} mezzi con scadenze entro 30gg`,
-        desc: 'Assicurazione, revisione, bollo o tachigrafo in scadenza',
-        to: '/flotta',
-        cta: 'Vedi flotta',
-      });
+      out.push({ id: 'mezzi-scad', tone: 'warn', color: C.orange, icon: 'mezzi', titolo: `${mezziStats.scadenzeImminenti} mezzi con scadenze entro 30 giorni`, desc: 'Assicurazione, revisione, bollo o tachigrafo', to: '/flotta', cta: 'Flotta' });
     }
     if (conteggiStats && conteggiStats.bozza > 0) {
-      out.push({
-        id: 'conteggi-bozza',
-        tipo: 'info',
-        icona: '📋',
-        titolo: `${conteggiStats.bozza} conteggi ancora in bozza`,
-        desc: `${formatMeseShort(meseKpi)} — non ancora chiusi`,
-        to: '/conteggi',
-        cta: 'Vedi conteggi',
-      });
+      out.push({ id: 'conteggi-bozza', tone: 'info', color: C.blue, icon: 'cont', titolo: `${conteggiStats.bozza} conteggi ancora in bozza`, desc: `${formatMeseLungo(meseKpi)}: non ancora chiusi`, to: '/conteggi', cta: 'Conteggi' });
     }
     if (palmariStats && palmariStats.disponibili > 0) {
-      out.push({
-        id: 'palmari',
-        tipo: 'warning',
-        icona: '📱',
-        titolo: `${palmariStats.disponibili} palmari senza assegnazione`,
-        desc: 'Disponibili da assegnare',
-        to: '/palmari',
-        cta: 'Vedi palmari',
-      });
+      out.push({ id: 'palmari', tone: 'warn', color: C.purple, icon: 'palm', titolo: `${palmariStats.disponibili} palmari senza assegnazione`, desc: 'Disponibili da assegnare', to: '/palmari', cta: 'Palmari' });
     }
     return out;
   }, [padronciniStats, mezziStats, conteggiStats, palmariStats, meseKpi]);
 
+  // Grafico: fatturato imponibile e netto (bonificato + da bonificare) per mese
   const chartData = useMemo(
-    () =>
-      andamento.map((a) => ({
-        ...a,
-        meseLabel: formatMeseShort(a.mese),
-      })),
+    () => andamento.map(a => ({
+      label: formatMeseShort(a.mese).replace(/ \d{2}$/, ''),
+      total: Number(a.fatturato || 0),
+      part: Number(a.bonifici || 0) + Number(a.daBonificare || 0),
+      valueLabel: Number(a.fatturato) ? `${Math.round(Number(a.fatturato) / 1000)}k` : '—',
+      tip: `${formatMeseLungo(a.mese)} · imponibile ${fmtEur(a.fatturato)} · netto ${fmtEur(Number(a.bonifici || 0) + Number(a.daBonificare || 0))}`,
+      mese: a.mese,
+    })),
     [andamento],
   );
+  const selIdx = chartData.findIndex(d => d.mese === meseKpi);
+  const prevMese = andamento[andamento.findIndex(a => a.mese === meseKpi) - 1];
+  const deltaFatt = prevMese && Number(prevMese.fatturato) && conteggiStats
+    ? ((conteggiStats.fatturato - Number(prevMese.fatturato)) / Number(prevMese.fatturato)) * 100
+    : null;
 
-  const giorniBadgeClass = (g: number) => (g <= 7 ? 'dash-badge-danger' : g <= 30 ? 'dash-badge-warning' : 'dash-badge-info');
-  const statoBonBadgeClass = (stato: string) => `dash-stato-${stato.toLowerCase()}`;
+  const netto = (conteggiStats?.bonifici ?? 0) + (conteggiStats?.daBonificare ?? 0);
+  const kpis: KpiItem[] = [
+    { label: 'Fatturato imponibile', value: fmtEur(conteggiStats?.fatturato ?? 0), color: C.green, icon: 'trend',
+      delta: deltaFatt === null ? undefined : { text: `${deltaFatt >= 0 ? '+' : ''}${deltaFatt.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`, good: deltaFatt >= 0 },
+      sub: 'IVA esclusa · distribuzione PDA' },
+    { label: 'Da bonificare', value: fmtEur(conteggiStats?.daBonificare ?? 0), color: C.blue, icon: 'euro',
+      sub: `Netto del mese ${fmtEur(netto)} · bonificati ${fmtEur(conteggiStats?.bonifici ?? 0)}` },
+    { label: 'Addebiti', value: fmtEur(conteggiStats?.addebiti ?? 0), color: C.orange, icon: 'cont', sub: 'Noleggi, ricariche, palmari' },
+    { label: 'Compensazioni', value: fmtEur(conteggiStats?.compensazioni ?? 0), color: C.purple, icon: 'swap', sub: 'Acconti, accrediti, bonus' },
+  ];
+
+  const top = useSort(topBonifici, (r, k: 'nome' | 'stato' | 'netto') => (k === 'nome' ? r.ragioneSociale : k === 'stato' ? STATO_LABEL[r.stato] : Number(r.daBonificare)), { key: 'netto', dir: 'desc' });
 
   if (loading && !mezziStats) {
-    return (
-      <div className="dash-page">
-        <div className="dash-loading">Caricamento dashboard…</div>
-      </div>
-    );
+    return <Page><Empty>Caricamento panoramica…</Empty></Page>;
   }
 
+  const tot = conteggiStats?.totali ?? 0;
+
   return (
-    <div className="dash-page">
-      <div className="dash-header">
-        <div>
-          <h1>📊 Dashboard</h1>
-          <span className="dash-date">
-            {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </span>
-        </div>
-        <div className="dash-header-actions">
-          <div className="dash-mese-picker">
-            <span className="dash-mese-label">📅 Mese KPI</span>
-            <input
-              type="month"
-              className="dash-mese-input"
-              value={meseKpi}
-              max={meseAttuale}
-              onChange={(e) => e.target.value && setMeseKpi(e.target.value)}
+    <Page>
+      <PageHeader
+        eyebrow={new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        title="Panoramica"
+        sub={`Dati del mese di ${formatMeseLungo(meseKpi)}${loadingMese ? ' · aggiornamento…' : ''}`}
+        actions={
+          <label className="ds-select">
+            <span>Mese</span>
+            <select value={meseKpi} onChange={e => setMeseKpi(e.target.value)}>
+              {ultimiMesi(13).map(m => <option key={m} value={m}>{formatMeseLungo(m)}</option>)}
+            </select>
+          </label>
+        }
+      />
+
+      {error && <div className="ds-alert ds-alert-ko" role="alert">{error}</div>}
+
+      <Kpis items={kpis} />
+
+      <div className="ds-g4">
+        <Card pad className="ds-s3">
+          <CardHead title="Fatturato e netto" sub="Ultimi 12 mesi · clic su un mese per vederne i dati" />
+          {chartData.length === 0 ? <Empty>Nessun dato</Empty> : (
+            <BarStrip
+              data={chartData}
+              palette="blue"
+              legend={['Fatturato imponibile', 'Netto (bonificato + da bonificare)']}
+              selected={selIdx >= 0 ? selIdx : undefined}
+              onSelect={i => setMeseKpi(chartData[i].mese)}
+              ariaLabel="Fatturato imponibile e netto per mese, ultimi 12 mesi"
             />
-            {loadingMese && <span className="dash-mese-loading">↻</span>}
+          )}
+        </Card>
+        <Card pad>
+          <CardHead title="Altri dati del mese" sub={formatMeseLungo(meseKpi)} />
+          <div className="dash-kv">
+            <span>Competenze attive</span><strong>{competenzeAttive != null ? fmtEur(competenzeAttive) : '—'}</strong>
+            <span>Ricariche PDA</span><strong>{fmtEur(ricaricheTot)}</strong>
+            <span>Acconti</span><strong>{fmtEur(accontiTot)}</strong>
           </div>
-        </div>
-      </div>
-
-      {error && <div className="dash-error">{error}</div>}
-
-      {/* KPI Operativi */}
-      <div className="dash-kpi-section">
-        <span className="dash-kpi-section-label">Operativo</span>
-        <div className="dash-kpi-grid">
-          <KpiCard variant="blue" label="Mezzi Totali" value={mezziStats?.totali ?? 0} sub={`${mezziStats?.assegnati ?? 0} assegnati · ${mezziStats?.disponibili ?? 0} disp.`} />
-          <KpiCard variant="teal" label="Padroncini Attivi" value={padronciniStats?.attivi ?? 0} sub={`${padronciniStats?.totali ?? 0} totali`} />
-          <KpiCard variant="cyan" label="Palmari Assegnati" value={`${palmariStats?.assegnati ?? 0}/${palmariStats?.totali ?? 0}`} sub={`${palmariStats?.disponibili ?? 0} disponibili`} />
-          <KpiCard variant="purple" label={`Conteggi ${formatMeseShort(meseKpi)}`} value={`${(conteggiStats?.confermato ?? 0) + (conteggiStats?.chiuso ?? 0)}/${conteggiStats?.totali ?? 0}`} sub="chiusi+conf. / totali" />
-          <KpiCard variant="orange" label="Scadenze Imminenti" value={mezziStats?.scadenzeImminenti ?? 0} sub="entro 30 giorni" />
-          <KpiCard variant="red" label="Documenti Padroncini" value={padronciniStats?.alertDocumenti ?? 0} sub="DURC/DVR in scadenza" />
-        </div>
-      </div>
-
-      {/* KPI Finanziari */}
-      <div className="dash-kpi-section">
-        <span className="dash-kpi-section-label">Finanziario · {formatMeseShort(meseKpi)}</span>
-        <div className="dash-kpi-grid dash-kpi-grid-fin">
-          <KpiCard variant="green" size="sm" label="Competenze Attive" value={competenzeAttive != null ? `${eur(competenzeAttive)} €` : '—'} sub="inserito in Conteggi" />
-          <KpiCard variant="green" size="sm" label="Fatturato Distribuzione PDA" value={`${eur(conteggiStats?.fatturato ?? 0)} €`} sub="imponibile" />
-          <KpiCard variant="blue" size="sm" label="Da Bonificare" value={`${eur(conteggiStats?.daBonificare ?? 0)} €`} sub={formatMeseShort(meseKpi)} />
-          <KpiCard variant="orange" size="sm" label="Addebiti" value={`${eur(conteggiStats?.addebiti ?? 0)} €`} sub="Noleggi·Ricariche·Palmari" />
-          <KpiCard variant="purple" size="sm" label="Compensazioni" value={`${eur(conteggiStats?.compensazioni ?? 0)} €`} sub="Acconti·Accrediti·Bonus" />
-          <KpiCard variant="purple" size="sm" label="Ricariche PDA" value={`${eur(ricaricheTot)} €`} sub={formatMeseShort(meseKpi)} />
-          <KpiCard variant="purple" size="sm" label="Acconti" value={`${eur(accontiTot)} €`} sub={formatMeseShort(meseKpi)} />
-        </div>
-      </div>
-
-      {/* Chart andamento */}
-      <div className="dash-card dash-chart-card">
-        <div className="dash-card-header">
-          <h3>📈 Andamento ultimi 12 mesi</h3>
-          <div className="dash-chart-legend">
-            <span style={{ color: '#16a34a' }}>■ Fatturato</span>
-            <span style={{ color: '#ea580c' }}>■ Addebiti</span>
-            <span style={{ color: '#7c3aed' }}>● Da bonificare</span>
+          <div className="dash-kv-sep" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontWeight: 500 }}>Stato conteggi</span>
+            <span className="ds-cardsub">{(conteggiStats?.confermato ?? 0) + (conteggiStats?.chiuso ?? 0)} di {tot} chiusi o confermati</span>
           </div>
-        </div>
-        <div className="dash-chart-body">
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="meseLabel" tick={{ fontSize: 11 }} stroke="var(--text-muted)" />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                stroke="var(--text-muted)"
-                tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
-              />
-              <Tooltip
-                formatter={(v: number) => `${eur(v)} €`}
-                contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="fatturato" name="Fatturato" fill="#16a34a" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="addebiti" name="Addebiti" fill="#ea580c" radius={[3, 3, 0, 0]} />
-              <Line type="monotone" dataKey="daBonificare" name="Da bonificare" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+          {tot > 0 ? (
+            <>
+              <SegBar parts={[
+                { value: conteggiStats!.chiuso, color: C.blue },
+                { value: conteggiStats!.confermato, color: C.green },
+                { value: conteggiStats!.bozza, color: '#D4D4D8' },
+              ]} />
+              <div className="dash-legend">
+                <Dot tone="info">Chiusi {conteggiStats!.chiuso}</Dot>
+                <Dot tone="ok">Confermati {conteggiStats!.confermato}</Dot>
+                <Dot tone="na">Bozze {conteggiStats!.bozza}</Dot>
+              </div>
+            </>
+          ) : <span className="ds-cardsub">Nessun conteggio per il mese</span>}
+        </Card>
       </div>
 
-      <div className="dash-grid">
-        {/* ─── Colonna sinistra ─────────────────────── */}
-        <div className="dash-col">
-          {/* Alert */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>⚠️ Problemi e avvisi</h3>
-              <span className="dash-card-count">{alerts.length}</span>
-            </div>
-            <div className="dash-alerts">
-              {alerts.length === 0 && <div className="dash-empty">Nessun avviso 🎉</div>}
-              {alerts.map((a) => (
-                <div key={a.id} className={`dash-alert dash-alert-${a.tipo}`}>
-                  <span className="dash-alert-icon">{a.icona}</span>
-                  <div className="dash-alert-body">
-                    <span className="dash-alert-title">{a.titolo}</span>
-                    <span className="dash-alert-desc">{a.desc}</span>
+      <div className="ds-g4">
+        <Card className="ds-s2">
+          <CardHead bar title="Da gestire" sub={alerts.length ? `${alerts.length} ${alerts.length === 1 ? 'avviso' : 'avvisi'}` : 'Nessun avviso'} />
+          <div className="ds-list">
+            {alerts.length === 0 && <Empty>Tutto in ordine.</Empty>}
+            {alerts.map(a => (
+              <div key={a.id} className="ds-listrow">
+                <span aria-hidden="true" className="ds-tile ds-tile-md" style={{ background: a.color }}><Icon name={a.icon} size={12} stroke={2.4} /></span>
+                <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontWeight: 500 }}>{a.titolo}</span>
+                  <span className="ds-cardsub" style={{ fontSize: 12 }}>{a.desc}</span>
+                </div>
+                <Button size="sm" onClick={() => navigate(a.to)}>{a.cta} <Icon name="chevRight" size={12} /></Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <CardHead bar title="Scadenze mezzi" sub="Prossimi 60 giorni" actions={<Link to="/flotta" className="dash-link">Tutte</Link>} />
+          <div style={{ padding: '0 18px 8px' }}>
+            <SegTabs items={SCAD_TABS.map(t => ({ value: t, label: t, count: scadenzeRows.filter(s => s.tipo === t).length }))} value={scadTab} onChange={setScadTab} />
+          </div>
+          <div className="ds-list dash-scroll">
+            {scadenzeFiltrate.length === 0 && <Empty>Nessuna scadenza di tipo {scadTab.toLowerCase()}</Empty>}
+            {scadenzeFiltrate.map((s, i) => (
+              <button key={i} type="button" className="ds-listrow dash-rowbtn" onClick={() => navigate(`/flotta/${s.mezzoId}`)}>
+                <span className="ds-mono" style={{ fontWeight: 600, fontSize: 12 }}>{s.targa}</span>
+                <span className="ds-cardsub" style={{ flex: '1 1 auto', fontSize: 12 }}>{s.data}</span>
+                <Dot tone={s.giorni < 0 || s.giorni <= 7 ? 'ko' : s.giorni <= 30 ? 'warn' : 'na'}>
+                  {s.giorni < 0 ? `Scaduta da ${-s.giorni} gg` : `Tra ${s.giorni} gg`}
+                </Dot>
+              </button>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <CardHead bar title="Attività recente" actions={<Link to="/log" className="dash-link">Storico</Link>} />
+          <div className="ds-list dash-scroll">
+            {activity.length === 0 && <Empty>Nessuna attività</Empty>}
+            {activity.map(log => {
+              const { azione, dettaglio } = auditLabel(log);
+              const utente = log.user ? log.user.nome || log.user.email.split('@')[0] : 'system';
+              const url = getEntityUrl(log);
+              return (
+                <div key={log.id} className={`ds-listrow dash-act${url ? ' is-link' : ''}`} onClick={url ? () => navigate(url) : undefined} title={url ? 'Vai al dettaglio' : undefined}>
+                  <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontWeight: 500 }}>{azione}</span>
+                    {dettaglio && <span className="dash-act-detail">{dettaglio}</span>}
                   </div>
-                  <button className="dash-alert-btn" onClick={() => navigate(a.to)}>{a.cta} →</button>
+                  <span className="dash-act-meta">{formatRelativeTime(log.createdAt)}<br />{utente}</span>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-
-          {/* Scadenze mezzi */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>🔧 Prossime scadenze mezzi</h3>
-              <Link to="/flotta" className="dash-card-link">Tutte →</Link>
-            </div>
-            <div className="dash-tabs-bar">
-              {SCAD_TABS.map(tb => (
-                <button key={tb} className={`dash-tab ${scadTab === tb ? 'dash-tab-active' : ''}`} onClick={() => setScadTab(tb)}>{tb}</button>
-              ))}
-            </div>
-            {scadenzeFiltrate.length === 0 ? (
-              <div className="dash-empty">Nessuna scadenza di tipo {scadTab} nei prossimi 60 giorni</div>
-            ) : (
-              <>
-                <div className="dash-scad-row dash-scad-head">
-                  <span>TARGA</span><span>TIPO</span><span>DATA</span><span style={{ textAlign: 'right' }}>GIORNI</span>
-                </div>
-                {scadenzeFiltrate.map((s, i) => (
-                  <div key={i} className="dash-scad-row dash-scad-body" onClick={() => navigate(`/flotta/${s.mezzoId}`)}>
-                    <span className="dash-mono">{s.targa}</span>
-                    <span>{s.tipo}</span>
-                    <span className="dash-muted">{s.data}</span>
-                    <span style={{ textAlign: 'right' }}><span className={`dash-badge ${giorniBadgeClass(s.giorni)}`}>{s.giorni}gg</span></span>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-
-          {/* Top da bonificare */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>🏆 Top padroncini da bonificare</h3>
-              <span className="dash-card-sub">{formatMeseShort(meseKpi)}</span>
-            </div>
-            {topBonifici.length === 0 ? (
-              <div className="dash-empty">Nessun importo da bonificare</div>
-            ) : (
-              topBonifici.map((t) => (
-                <div key={t.conteggioId} className="dash-top-row" onClick={() => navigate(`/conteggi/${t.conteggioId}`)}>
-                  <span className="dash-top-name">{t.ragioneSociale}</span>
-                  <span className={`dash-badge ${statoBonBadgeClass(t.stato)}`}>{t.stato}</span>
-                  <span className="dash-top-amount">€ {eur(t.daBonificare)}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* ─── Colonna destra ───────────────────────── */}
-        <div className="dash-col">
-          {/* Attività recente */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>🕓 Attività recente</h3>
-              <Link to="/log" className="dash-card-link">Tutte →</Link>
-            </div>
-            <div className="dash-activity">
-              {activity.length === 0 && <div className="dash-empty">Nessuna attività</div>}
-              {activity.map((log) => {
-                const { azione, dettaglio } = auditLabel(log);
-                const utente = log.user ? log.user.nome || log.user.email.split('@')[0] : 'system';
-                const url = getEntityUrl(log);
-                return (
-                  <div
-                    key={log.id}
-                    className={`dash-act-item${url ? ' dash-act-item--link' : ''}`}
-                    onClick={url ? () => navigate(url) : undefined}
-                    title={url ? 'Vai al dettaglio' : undefined}
-                  >
-                    <span className="dash-act-time">{formatRelativeTime(log.createdAt)}</span>
-                    <span className="dash-act-action">{azione}</span>
-                    {dettaglio && <span className="dash-act-detail">· {dettaglio}</span>}
-                    <span className="dash-act-user">{utente}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Stato conteggi */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>📋 Stato conteggi — {formatMeseShort(meseKpi)}</h3>
-              <span className="dash-card-sub">{conteggiStats?.totali ?? 0} totali</span>
-            </div>
-            {conteggiStats && conteggiStats.totali > 0 ? (
-              <div className="dash-conteggi-body">
-                <div className="dash-conteggi-bar">
-                  {conteggiStats.chiuso > 0 && <div className="dash-cb-segment dash-cb-chiuso" style={{ flex: conteggiStats.chiuso }} title={`Chiusi: ${conteggiStats.chiuso}`} />}
-                  {conteggiStats.confermato > 0 && <div className="dash-cb-segment dash-cb-conf" style={{ flex: conteggiStats.confermato }} title={`Confermati: ${conteggiStats.confermato}`} />}
-                  {conteggiStats.bozza > 0 && <div className="dash-cb-segment dash-cb-bozza" style={{ flex: conteggiStats.bozza }} title={`Bozze: ${conteggiStats.bozza}`} />}
-                </div>
-                <div className="dash-cb-legend">
-                  <span className="dash-cb-leg-item"><span className="dash-cb-dot dash-cb-dot-chiuso"></span>Chiusi ({conteggiStats.chiuso})</span>
-                  <span className="dash-cb-leg-item"><span className="dash-cb-dot dash-cb-dot-conf"></span>Confermati ({conteggiStats.confermato})</span>
-                  <span className="dash-cb-leg-item"><span className="dash-cb-dot dash-cb-dot-bozza"></span>Bozze ({conteggiStats.bozza})</span>
-                </div>
-              </div>
-            ) : (
-              <div className="dash-empty">Nessun conteggio per il mese</div>
-            )}
-          </div>
-
-          {/* Riepilogo flotta */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <h3>🚚 Riepilogo finanziario flotta</h3>
-            </div>
-            <div className="dash-fleet-summary">
-              <div className="dash-fs-row">
-                <span>Entrate noleggio mensili</span>
-                <strong>€ {eur(mezziStats?.entrateNoleggio ?? 0)}</strong>
-              </div>
-              <div className="dash-fs-row">
-                <span>Margine noleggio</span>
-                <strong className={(mezziStats?.margine ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}>€ {eur(mezziStats?.margine ?? 0)}</strong>
-              </div>
-              <div className="dash-fs-row dash-fs-row-sep">
-                <span>Flotta padroncini</span>
-                <strong>{padronciniStats?.flottaMezzi ?? 0} mezzi · {padronciniStats?.flottaDisponibili ?? 0} disp.</strong>
-              </div>
-              <div className="dash-fs-row">
-                <span>Palmari attivi</span>
-                <strong>{padronciniStats?.palmariAttivi ?? 0} / {padronciniStats?.palmariTotali ?? 0}</strong>
-              </div>
-            </div>
-          </div>
-        </div>
+        </Card>
       </div>
-    </div>
-  );
-}
 
-function KpiCard({ label, value, sub, variant, size }: {
-  label: string; value: string | number; sub?: string; variant: string; size?: 'sm';
-}) {
-  return (
-    <div className={`dash-kpi dash-kpi-${variant}`}>
-      <span className="dash-kpi-label">{label}</span>
-      <span className={`dash-kpi-value ${size === 'sm' ? 'dash-kpi-value-sm' : ''}`}>{value}</span>
-      {sub && <span className="dash-kpi-sub">{sub}</span>}
-    </div>
+      <div className="ds-g4">
+        <Card className="ds-s3">
+          <CardHead bar title="Padroncini da bonificare" sub={`I primi 5 di ${formatMeseLungo(meseKpi)}`} actions={<Link to="/conteggi" className="dash-link">Tutti i conteggi</Link>} />
+          {topBonifici.length === 0 ? <Empty>Nessun importo da bonificare</Empty> : (
+            <div className="ds-tablewrap">
+              <table className="ds-table">
+                <thead>
+                  <tr>
+                    <Th k="nome" sort={top.sort} onSort={top.toggle}>Padroncino</Th>
+                    <Th k="stato" sort={top.sort} onSort={top.toggle}>Stato</Th>
+                    <Th k="netto" sort={top.sort} onSort={top.toggle} right>Da bonificare</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.sorted.map(t => (
+                    <tr key={t.conteggioId} className="is-clickable" onClick={() => navigate(`/conteggi/${t.conteggioId}`)}>
+                      <td style={{ fontWeight: 500 }}>{t.ragioneSociale}</td>
+                      <td><Dot tone={STATO_TONE[t.stato] || 'na'}>{STATO_LABEL[t.stato] || t.stato}</Dot></td>
+                      <td className="r" style={{ fontWeight: 600 }}>{fmtEur(t.daBonificare)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+        <Card pad>
+          <CardHead title="Flotta e risorse" />
+          <div className="dash-kv">
+            <span>Mezzi</span><strong>{mezziStats?.totali ?? 0} · {mezziStats?.assegnati ?? 0} assegnati</strong>
+            <span>Entrate noleggio mensili</span><strong>{fmtEur(mezziStats?.entrateNoleggio ?? 0)}</strong>
+            <span>Margine noleggio</span><strong style={{ color: (mezziStats?.margine ?? 0) >= 0 ? '#15803D' : '#B91C1C' }}>{fmtEur(mezziStats?.margine ?? 0)}</strong>
+          </div>
+          <div className="dash-kv-sep" />
+          <div className="dash-kv">
+            <span>Padroncini attivi</span><strong>{padronciniStats?.attivi ?? 0} di {padronciniStats?.totali ?? 0}</strong>
+            <span>Flotta padroncini</span><strong>{padronciniStats?.flottaMezzi ?? 0} mezzi · {padronciniStats?.flottaDisponibili ?? 0} disp.</strong>
+            <span>Palmari assegnati</span><strong>{palmariStats?.assegnati ?? 0} di {palmariStats?.totali ?? 0}</strong>
+            <span>Palmari attivi (padroncini)</span><strong>{padronciniStats?.palmariAttivi ?? 0} di {padronciniStats?.palmariTotali ?? 0}</strong>
+          </div>
+        </Card>
+      </div>
+    </Page>
   );
 }

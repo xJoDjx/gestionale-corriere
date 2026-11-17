@@ -5,16 +5,16 @@
   background: #FFFFFF; border-right: 1px solid var(--border);
   transition: width 0.15s ease;
 }
-.sb-inner { height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; padding: 14px 12px; }
+.sb-inner { height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 14px 12px; }
 .sb-brand { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding-left: 4px; }
 .sb-logo { display: flex; align-items: center; gap: 8px; color: var(--ink); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; }
 .sb-logo-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; }
 .sb-toggle { width: 36px; height: 36px; border-radius: 8px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .sb-toggle:hover { background: #F4F4F5; color: var(--ink); }
-.sb-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px; margin: 0 -4px; padding: 0 4px; }
+.sb-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; margin: 0 -4px; padding: 0 4px; }
 .sb-group { display: flex; flex-direction: column; gap: 1px; }
-.sb-group-title { padding: 6px 8px 4px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
-.sb-item { position: relative; display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 8px; border-radius: 8px; color: var(--ink); font-weight: 500; white-space: nowrap; }
+.sb-group-title { padding: 4px 8px 2px; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.sb-item { position: relative; display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0 8px; border-radius: 8px; color: var(--ink); font-weight: 500; white-space: nowrap; }
 .sb-item:hover { background: #F4F4F5; }
 .sb-item.is-active { background: #F1F1F3; font-weight: 600; }
 .sb-ico { flex: 0 0 20px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); }
@@ -24,7 +24,7 @@
 .sb-count { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .sb-badge-dot { position: absolute; top: 2px; left: 22px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 999px; background: var(--c-red); color: #FFFFFF; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .sb-foot { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; }
-.sb-alert { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); color: var(--ink); }
+.sb-alert { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); color: var(--ink); }
 .sb-alert:hover { background: #FAFAFB; }
 .sb-alert .ds-dot { font-weight: 600; }
 .sb-alert-sub { font-size: 12px; color: var(--text-muted); }
