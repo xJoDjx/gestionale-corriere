@@ -1,0 +1,25 @@
+/* Ricariche — ricalcata sul mockup */
+.ric2-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; margin-top: 4px; }
+@media (max-width: 1100px) { .ric2-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ric2-ro { min-height: 36px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; background: #F4F4F5; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
+.ric2-drop { margin-top: 6px; padding: 26px 16px; border-radius: 10px; border: 1px dashed #D4D4D8; background: #FBFBFB; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #3F3F46; }
+.ric2-drop:hover, .ric2-drop.is-over { border-color: #3D63F0; background: #F3F6FF; }
+.ric2-table td { vertical-align: middle; font-size: 12.5px; white-space: nowrap; }
+.ric2-table tr.is-open td { background: #F3F6FF; }
+.ric2-caret { display: inline-block; width: 14px; color: #6B6B73; font-family: Inter, sans-serif; }
+.ric2-cat { display: inline-flex; align-items: center; gap: 6px; }
+.ric2-cat i { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 999px; }
+.ric2-ell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ric2-magbtn { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border-radius: 6px; border: 1px dashed #C9C9D1; background: #FFFFFF; font: inherit; font-size: 12px; cursor: pointer; color: #0B0B0C; }
+.ric2-magbtn:hover { border-color: #3D63F0; color: #3D63F0; }
+.ric2-mag { width: 70px; min-height: 28px; text-align: right; }
+.ric2-subrow > td { padding: 4px 0 8px !important; background: #FAFAFB !important; border-bottom: 1px solid #EAEAEC; }
+.ric2-sub { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ric2-sub th { padding: 6px 12px; font-size: 11px; font-weight: 500; color: #6B6B73; text-transform: uppercase; letter-spacing: .04em; text-align: left; }
+.ric2-sub th:first-child, .ric2-sub td:first-child { padding-left: 40px; }
+.ric2-sub td { padding: 6px 12px; border-top: 1px solid #F0F0F2; white-space: nowrap; }
+.ric2-sub .r { text-align: right; }
+.ric2-subfoot { display: flex; justify-content: space-between; align-items: center; padding: 8px 18px 0 40px; font-size: 12px; color: #6B6B73; }
+.ric2-table th, .ric2-table td { padding-left: 9px !important; padding-right: 9px !important; }
+.ric2-table th:first-child, .ric2-table td:first-child { padding-left: 18px !important; }
+.ric2-table th:last-child, .ric2-table td:last-child { padding-right: 18px !important; }
