@@ -1,8 +1,9 @@
 // src/features/esportazione/Esportazione.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { api } from '../../lib/api';
-import './Esportazione.css';
+import { Page, PageHeader, Alert, Icon, Select, C, type IconName } from '../../components/ds';
+import './Esportazione2.css';
 
 // ─── helpers ────────────────────────────────────────────────────────
 function fmt(d: string | null | undefined) {
@@ -116,61 +117,54 @@ function meseCorrente() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function mesePrecedente() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // ─── component ────────────────────────────────────────────────────────
 
+const lista = (d: any): any[] => (Array.isArray(d) ? d : d?.items ?? d?.data ?? []);
+const MESI = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+const meseLabel = (m: string) => { const [y, mo] = m.split('-'); return `${MESI[+mo - 1]} ${y}`; };
+
 interface ExportCard {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  hasMese?: boolean;
-  fn: (mese?: string) => Promise<void>;
+  id: string; title: string; description: string; icon: IconName; color: string; cols: string[];
+  hasMese?: boolean; fn: (mese?: string) => Promise<void>;
 }
 
 const CARDS: ExportCard[] = [
-  {
-    id: 'padroncini',
-    title: 'Padroncini',
-    description: 'Anagrafica completa padroncini con scadenze DURC/DVR.',
-    icon: '👤',
-    fn: () => esportaPadroncini(),
-  },
-  {
-    id: 'flotta',
-    title: 'Flotta Mezzi',
-    description: 'Elenco veicoli con assegnazione, scadenze e canone.',
-    icon: '🚛',
-    fn: () => esportaFlotta(),
-  },
-  {
-    id: 'conteggi',
-    title: 'Conteggi Mensili',
-    description: 'Conteggi di un mese con stato e netto da bonificare.',
-    icon: '📋',
-    hasMese: true,
-    fn: (mese) => esportaConteggi(mese!),
-  },
-  {
-    id: 'palmari',
-    title: 'Palmari',
-    description: 'Dispositivi palmari con stato e padroncino assegnato.',
-    icon: '📱',
-    fn: () => esportaPalmari(),
-  },
-  {
-    id: 'codici',
-    title: 'Codici Autista',
-    description: 'Codici autista con assegnazione corrente.',
-    icon: '🏷️',
-    fn: () => esportaCodiciAutista(),
-  },
+  { id: 'padroncini', title: 'Padroncini', description: 'Anagrafica con scadenze DURC e DVR', icon: 'pad', color: C.purple,
+    cols: ['Ragione sociale', 'P.IVA', 'CF', 'Email', 'Telefono', 'Stato', 'DURC', 'DVR', 'Creato il'], fn: () => esportaPadroncini() },
+  { id: 'flotta', title: 'Flotta mezzi', description: 'Veicoli con assegnazione, scadenze e canone', icon: 'mezzi', color: C.green,
+    cols: ['Targa', 'Marca', 'Modello', 'Anno', 'Stato', 'Tipo', 'Padroncino', 'Assegnato dal', 'Revisione', 'Assicurazione', 'Bollo', 'Tassa possesso', 'Canone', 'Note'], fn: () => esportaFlotta() },
+  { id: 'conteggi', title: 'Conteggi mensili', description: 'Conteggi del mese con stato e netto da bonificare', icon: 'cont', color: C.blue,
+    cols: ['Padroncino', 'Mese', 'Stato', 'Netto da bonificare', 'Note', 'Creato il', 'Confermato il'], hasMese: true, fn: (mese) => esportaConteggi(mese!) },
+  { id: 'palmari', title: 'Palmari', description: 'Dispositivi con stato e padroncino assegnato', icon: 'palm', color: C.teal,
+    cols: ['Codice', 'Numero seriale', 'Stato', 'Padroncino', 'Assegnato dal', 'Note'], fn: () => esportaPalmari() },
+  { id: 'codici', title: 'Codici autista', description: 'Codici con assegnazione corrente', icon: 'cod', color: C.orange,
+    cols: ['Codice', 'Autista', 'Padroncino', 'Assegnato dal', 'Note'], fn: () => esportaCodiciAutista() },
 ];
 
 export default function Esportazione() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [mesi, setMesi] = useState<Record<string, string>>({ conteggi: meseCorrente() });
+  const [mesi, setMesi] = useState<Record<string, string>>({ conteggi: mesePrecedente() });
+  const [conta, setConta] = useState<Record<string, { n: number; f: string }>>({});
+
+  // Numero di righe che verranno esportate (stessi endpoint dell'esportazione)
+  useEffect(() => {
+    api.get('/padroncini?limit=9999').then((d) => { const l = lista(d); const att = l.filter((p) => p.attivo).length; setConta((c) => ({ ...c, padroncini: { n: l.length, f: `${att} attivi, ${l.length - att} dismessi` } })); }).catch(() => {});
+    api.get('/mezzi?limit=9999').then((d) => setConta((c) => ({ ...c, flotta: { n: lista(d).length, f: 'Esclusi i mezzi eliminati' } }))).catch(() => {});
+    api.get('/palmari?limit=9999').then((d) => setConta((c) => ({ ...c, palmari: { n: lista(d).length, f: '' } }))).catch(() => {});
+    api.get('/codici-autista?limit=9999').then((d) => setConta((c) => ({ ...c, codici: { n: lista(d).length, f: '' } }))).catch(() => {});
+  }, []);
+  useEffect(() => {
+    const m = mesi.conteggi;
+    if (!m) return;
+    api.get(`/conteggi?mese=${m}&limit=9999`).then((d) => setConta((c) => ({ ...c, conteggi: { n: lista(d).length, f: '' } }))).catch(() => {});
+  }, [mesi.conteggi]);
 
   async function handleExport(card: ExportCard) {
     setError(null);
@@ -186,48 +180,36 @@ export default function Esportazione() {
     }
   }
 
+  const mesiOpts = Array.from({ length: 24 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; })
+    .map((m) => ({ value: m, label: meseLabel(m) }));
+
   return (
-    <div className="esp-page">
-      <div className="esp-header">
-        <h1 className="esp-title">Esportazione Dati</h1>
-        <p className="esp-subtitle">
-          Scarica i dati del gestionale in formato Excel (.xlsx).
-        </p>
-      </div>
+    <Page>
+      <PageHeader eyebrow="Sistema" title="Esportazioni" sub="Scarica i dati in Excel, un foglio per archivio, con le stesse colonne di oggi" />
 
-      {error && <div className="esp-alert esp-alert-error">⚠️ {error}</div>}
-      {success && <div className="esp-alert esp-alert-success">✅ {success}</div>}
+      {error && <Alert tone="ko" title="Errore">{error}</Alert>}
+      {success && <Alert tone="ok" title="Fatto">{success}</Alert>}
 
-      <div className="esp-grid">
+      <section aria-label="Esportazioni disponibili" className="ds-g3">
         {CARDS.map((card) => (
-          <div key={card.id} className="esp-card">
-            <div className="esp-card-icon">{card.icon}</div>
-            <div className="esp-card-body">
-              <h3 className="esp-card-title">{card.title}</h3>
-              <p className="esp-card-desc">{card.description}</p>
-
-              {card.hasMese && (
-                <div className="esp-mese-row">
-                  <label className="esp-mese-label">Mese:</label>
-                  <input
-                    type="month"
-                    className="esp-mese-input"
-                    value={mesi[card.id] ?? meseCorrente()}
-                    onChange={e => setMesi(prev => ({ ...prev, [card.id]: e.target.value }))}
-                  />
-                </div>
-              )}
+          <article key={card.id} className="ds-card esp2-card">
+            <div className="esp2-top">
+              <span className="esp2-ic" style={{ background: card.color }}><Icon name={card.icon} size={17} /></span>
+              <div className="esp2-tt"><h2>{card.title}</h2><span>{card.description}</span></div>
+              <span className="esp2-n">{conta[card.id]?.n ?? '…'}</span>
             </div>
-            <button
-              className="btn-primary esp-btn"
-              disabled={loading === card.id}
-              onClick={() => handleExport(card)}
-            >
-              {loading === card.id ? 'Esportazione...' : '⬇ Scarica Excel'}
-            </button>
-          </div>
+            <div className="esp2-cols">{card.cols.map((c) => <span key={c}>{c}</span>)}</div>
+            <div className="esp2-foot">
+              {card.hasMese
+                ? <Select size="sm" label="Mese" value={mesi[card.id] ?? meseCorrente()} onChange={(v) => setMesi((prev) => ({ ...prev, [card.id]: v }))} options={mesiOpts} />
+                : <span className="esp2-f">{conta[card.id]?.f ?? ''}</span>}
+              <button type="button" className="esp2-btn" disabled={loading === card.id} onClick={() => handleExport(card)}>
+                <Icon name="download" size={13} />{loading === card.id ? 'Esportazione…' : 'Esporta .xlsx'}
+              </button>
+            </div>
+          </article>
         ))}
-      </div>
-    </div>
+      </section>
+    </Page>
   );
 }
