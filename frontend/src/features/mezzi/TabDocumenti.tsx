@@ -193,95 +193,70 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
     }
   };
 
-  return (
-    <div style={{ padding: '20px 24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-          📎 Documenti ({docs.length})
-        </h3>
-        <button className="btn-primary btn-sm" onClick={openUpload}>+ Carica documento</button>
-      </div>
+  const TIPO_LABEL: Record<string, string> = { ASSICURAZIONE: 'Assicurazione', REVISIONE: 'Revisione', BOLLO: 'Bollo', LIBRETTO: 'Libretto', CONTRATTO: 'Contratto', ALTRO: 'Altro' };
+  const D_DOC = 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5';
+  const ico = (d: string, size = 12, sw = 2) => (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+  );
 
-      {/* Lista documenti */}
+  return (
+    <>
       {loading ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Caricamento...</div>
+        <section className="dm2-card dm2-empty"><span className="dm2-muted">Caricamento documenti…</span></section>
       ) : docs.length === 0 ? (
-        <div style={{
-          textAlign: 'center', color: 'var(--text-muted)', padding: 48,
-          border: '1px dashed var(--border)', borderRadius: 10,
-        }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📂</div>
-          <p style={{ margin: 0 }}>Nessun documento caricato</p>
-        </div>
+        <section className="dm2-card dm2-empty">
+          <span aria-hidden="true" className="dm2-tile" style={{ width: 40, height: 40, borderRadius: 10, background: '#7C5CF0' }}>{ico(D_DOC, 18, 2.2)}</span>
+          <span className="dm2-empty-t">Nessun documento caricato</span>
+          <span className="dm2-muted" style={{ maxWidth: 440 }}>Qui vanno contratto di noleggio, libretto, assicurazione e revisione, ognuno con la sua scadenza.</span>
+          <button type="button" className="dm2-btn dm2-btn-primary" onClick={openUpload}>Carica documento</button>
+        </section>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <section className="dm2-card dm2-list">
+          <div className="dm2-lhead">
+            <div className="dm2-col" style={{ gap: 2 }}>
+              <h2 className="dm2-h2">Documenti</h2>
+              <span className="dm2-muted">{docs.length} document{docs.length === 1 ? 'o' : 'i'} caricat{docs.length === 1 ? 'o' : 'i'}</span>
+            </div>
+            <button type="button" className="dm2-btn dm2-btn-sm" onClick={openUpload}>{ico('M12 5v14M5 12h14')}Carica documento</button>
+          </div>
           {docs.map((doc) => {
             const expired = isExpired(doc.scadenza);
             const expiring = !expired && isExpiring(doc.scadenza);
+            const tone = expired ? ['#B91C1C', '#E5484D'] : expiring ? ['#C2410C', '#EA6A2A'] : ['#15803D', '#15A06A'];
             return (
-              <div key={doc.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: '10px 14px',
-              }}>
-                <span style={{ fontSize: 22 }}>
-                  {doc.mimeType?.includes('pdf') ? '📕' :
-                   doc.mimeType?.includes('image') ? '🖼️' : '📄'}
+              <div key={doc.id} className="dm2-ev dm2-ev-doc">
+                <span aria-hidden="true" className="dm2-tile" style={{ width: 26, height: 26, borderRadius: 7, background: doc.tipo === 'CONTRATTO' ? '#7C5CF0' : doc.mimeType?.includes('image') ? '#0E9494' : '#3D63F0' }}>{ico(D_DOC, 12, 2.4)}</span>
+                <span className="dm2-ev-data">{fmtDate(doc.createdAt)}</span>
+                <span className="dm2-small dm2-muted">{doc.tipo ? (TIPO_LABEL[doc.tipo] ?? doc.tipo) : '—'}</span>
+                <span className="dm2-col" style={{ minWidth: 0 }}>
+                  <span className="dm2-ev-tit" style={{ whiteSpace: 'nowrap' }} title={doc.nome}>{doc.nome}</span>
+                  {(doc.note || doc.dimensione) && (
+                    <span className="dm2-small dm2-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={doc.note ?? undefined}>
+                      {[fmtSize(doc.dimensione), doc.note].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                 </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {doc.nome}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
-                    {doc.tipo && <span className="badge-tag">{doc.tipo}</span>}
-                    {doc.dimensione && <span>{fmtSize(doc.dimensione)}</span>}
-                    <span>Caricato {fmtDate(doc.createdAt)}</span>
-                    {doc.note && (
-                      <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }} title={doc.note}>
-                        📝 {doc.note.length > 40 ? doc.note.slice(0, 40) + '…' : doc.note}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {doc.scadenza && (
-                  <div style={{
-                    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                    background: expired ? 'var(--danger-bg)' : expiring ? 'var(--warning-bg)' : 'var(--success-bg)',
-                    color: expired ? 'var(--danger)' : expiring ? 'var(--warning)' : 'var(--success)',
-                  }}>
-                    {expired ? '⚠️' : expiring ? '⏰' : '✅'} Scad. {fmtDate(doc.scadenza)}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button
-                    className="btn-outline btn-sm"
-                    onClick={() => documentiApi.download(doc.id)}
-                    title="Scarica"
-                  >⬇️</button>
-                  <button
-                    className="btn-outline btn-sm"
-                    onClick={() => openEdit(doc)}
-                    title="Modifica nome, tipo, scadenza, note"
-                  >✏️</button>
-                  <button
-                    className="btn-sm"
-                    style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 8px' }}
-                    onClick={() => handleDelete(doc.id, doc.nome)}
-                    title="Elimina"
-                  >🗑️</button>
-                </div>
+                <span>
+                  {doc.scadenza
+                    ? <span className="dm2-tag" style={{ color: tone[0] }}><span aria-hidden="true" className="dm2-dot" style={{ background: tone[1] }} />{expired ? 'Scaduto il' : 'Scade il'} {fmtDate(doc.scadenza)}</span>
+                    : <span className="dm2-small dm2-muted">Senza scadenza</span>}
+                </span>
+                <span className="dm2-row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => documentiApi.download(doc.id)} title="Scarica" aria-label={`Scarica ${doc.nome}`}>{ico('M12 4v12M6 10l6 6 6-6M4 20h16')}</button>
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => openEdit(doc)} title="Modifica nome, tipo, scadenza, note" aria-label={`Modifica ${doc.nome}`}>{ico('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z')}</button>
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon dm2-btn-danger" onClick={() => handleDelete(doc.id, doc.nome)} title="Elimina" aria-label={`Elimina ${doc.nome}`}>{ico('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')}</button>
+                </span>
               </div>
             );
           })}
-        </div>
+        </section>
       )}
 
       {/* ── Modal: Carica nuovo documento ── */}
       <Modal
         open={showUpload}
         onClose={closeUpload}
-        title="📎 Carica documento"
+        title="Carica documento"
         width={520}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -307,8 +282,8 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
               onClick={() => fileRef.current?.click()}
             >
               {file
-                ? `📄 ${file.name} (${fmtSize(file.size)})`
-                : <>📂 <strong>Clicca per scegliere un file</strong><br /><span style={{ fontSize: 11, marginTop: 4, display: 'block' }}>PDF, JPG, PNG, DOC, XLS</span></>}
+                ? `${file.name} (${fmtSize(file.size)})`
+                : <><strong>Clicca per scegliere un file</strong><br /><span style={{ fontSize: 11, marginTop: 4, display: 'block' }}>PDF, JPG, PNG, DOC, XLS</span></>}
             </div>
             <input
               ref={fileRef}
@@ -326,7 +301,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
               disabled={!file || !nome.trim() || uploading}
               onClick={handleUpload}
             >
-              {uploading ? '⏳ Caricamento...' : '⬆️ Carica'}
+              {uploading ? 'Caricamento…' : 'Carica'}
             </button>
           </div>
         </div>
@@ -336,7 +311,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
       <Modal
         open={!!editDoc}
         onClose={closeEdit}
-        title="✏️ Modifica documento"
+        title="Modifica documento"
         width={520}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -346,8 +321,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
               background: 'var(--bg-tertiary)', borderRadius: 6,
               fontSize: 12, color: 'var(--text-muted)',
             }}>
-              <span>{editDoc.mimeType?.includes('pdf') ? '📕' : editDoc.mimeType?.includes('image') ? '🖼️' : '📄'}</span>
-              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{editDoc.mimeType}</span>
+                            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{editDoc.mimeType}</span>
               <span>·</span>
               <span>{fmtSize(editDoc.dimensione)}</span>
               <span style={{ marginLeft: 'auto', fontStyle: 'italic' }}>Il file non viene sostituito</span>
@@ -368,11 +342,11 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
               disabled={!editNome.trim() || saving}
               onClick={handleUpdate}
             >
-              {saving ? '⏳ Salvataggio...' : '💾 Salva modifiche'}
+              {saving ? 'Salvataggio…' : 'Salva modifiche'}
             </button>
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }
