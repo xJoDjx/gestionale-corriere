@@ -1,0 +1,9 @@
+/* Conteggi del mese: dettagli del nuovo design */
+.cp2-contents { display: contents; }
+.cp2-editable { cursor: pointer; }
+.cp2-editable:hover { border-color: var(--border-hover); }
+.cp2-month { border: 0; background: transparent; font: inherit; font-weight: 600; color: var(--ink); outline: 0; }
+.cp2-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 10px; }
+.cp2-name { display: flex; align-items: center; gap: 10px; }
+.cp2-avatar { flex: 0 0 26px; height: 26px; border-radius: 7px; background: #F1F1F3; color: var(--text-secondary); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.cp2-link { border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; padding: 0; }
