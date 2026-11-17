@@ -112,6 +112,7 @@ export interface KpiItem {
   label: string; value: ReactNode; sub?: ReactNode; color: string; icon: IconName;
   delta?: { text: string; good?: boolean }; subColor?: string;
   seg?: { w: number; color: string }[];
+  spark?: number[];
 }
 export function Kpis({ items, className = 'ds-g4' }: { items: KpiItem[]; className?: string }) {
   return (
@@ -123,13 +124,21 @@ export function Kpis({ items, className = 'ds-g4' }: { items: KpiItem[]; classNa
             <span className="ds-kpi-label">{k.label}</span>
             {k.delta && <span className="ds-kpi-delta" style={{ color: k.delta.good === false ? '#B91C1C' : '#15803D' }}>{k.delta.text}</span>}
           </div>
-          <span className="ds-kpi-value">{k.value}</span>
+          {k.spark ? (
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                <span className="ds-kpi-value">{k.value}</span>
+                {k.sub && <span className="ds-kpi-sub" style={k.subColor ? { color: k.subColor } : undefined}>{k.sub}</span>}
+              </div>
+              <Spark values={k.spark} color={k.color} />
+            </div>
+          ) : <span className="ds-kpi-value">{k.value}</span>}
           {k.seg && (
             <div className="ds-seg" aria-hidden="true">
               {k.seg.map((s, i) => <span key={i} style={{ width: `${s.w}%`, background: s.color }} />)}
             </div>
           )}
-          {k.sub && <span className="ds-kpi-sub" style={k.subColor ? { color: k.subColor } : undefined}>{k.sub}</span>}
+          {k.sub && !k.spark && <span className="ds-kpi-sub" style={k.subColor ? { color: k.subColor } : undefined}>{k.sub}</span>}
         </div>
       ))}
     </section>
@@ -290,6 +299,26 @@ export function SegBar({ parts, height = 8 }: { parts: { value: number; color: s
       {parts.filter(p => p.value > 0).map((p, i) => (
         <span key={i} style={{ display: 'block', height: '100%', borderRadius: 3, width: `${(p.value / tot) * 100}%`, background: p.color }} />
       ))}
+    </div>
+  );
+}
+
+/** Mini grafico a puntini (una colonna per mese, l'ultima piena). */
+export function Spark({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(1, ...values);
+  return (
+    <div aria-hidden="true" style={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
+      {values.map((v, i) => {
+        const n = Math.max(1, Math.round((v / max) * 7));
+        const last = i === values.length - 1;
+        return [0, 1].map(r => (
+          <div key={`${i}-${r}`} style={{ display: 'flex', flexDirection: 'column-reverse', gap: 2 }}>
+            {Array.from({ length: 7 }).map((_, j) => (
+              <span key={j} style={{ display: 'block', width: 3, height: 3, borderRadius: 1, background: j < n ? (last ? color : color + '80') : '#EEEEF0' }} />
+            ))}
+          </div>
+        ));
+      })}
     </div>
   );
 }
