@@ -161,3 +161,24 @@ th[aria-sort="ascending"] .ds-sortbtn, th[aria-sort="descending"] .ds-sortbtn { 
 .ds-listrow { display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-top: 1px solid var(--line-soft); }
 .ds-listrow:hover { background: #FAFAFB; }
 .ds-empty { padding: 28px 18px; text-align: center; color: var(--text-muted); }
+
+/* ─── Cose da fare ─────────────────────────── */
+.ds-task { align-items: flex-start; cursor: pointer; }
+.ds-task input[type="checkbox"] { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--c-green); flex: 0 0 auto; cursor: pointer; }
+.ds-task-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ds-task-done { color: var(--text-muted); text-decoration: line-through; }
+.ds-task-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); }
+
+/* ─── Barra azioni su selezione ────────────── */
+.ds-bulkbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; background: var(--ink); color: #FFFFFF; }
+.ds-bulkbar strong { margin-right: 8px; }
+.ds-bulkbar .ds-btn { border-color: #3F3F46; background: #1C1C20; color: #FFFFFF; }
+.ds-bulkbar .ds-btn:hover { background: #2A2A30; }
+
+/* ─── Menu a tendina (es. scelta colonne) ──── */
+.ds-pop { position: relative; }
+.ds-popmenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 220px; padding: 6px; border-radius: 10px; border: 1px solid var(--border); background: #FFFFFF; box-shadow: 0 10px 30px rgba(11, 11, 12, 0.12); display: flex; flex-direction: column; }
+.ds-popmenu label, .ds-popmenu button { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border-radius: 6px; border: 0; background: transparent; font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.ds-popmenu label:hover, .ds-popmenu button:hover { background: #F4F4F5; }
+.ds-popmenu input[type="checkbox"] { accent-color: var(--primary); }
+.ds-check { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }

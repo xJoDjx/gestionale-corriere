@@ -1,0 +1,21 @@
+/* Flotta mezzi: dettagli che non stanno nel design system */
+.fl-scroll { max-height: 318px; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line-soft); }
+.fl-scroll .ds-listrow:first-child { border-top: 0; }
+.fl-rowbtn { width: 100%; border: 0; border-top: 1px solid var(--line-soft); background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.fl-stack { flex-direction: column; align-items: stretch; gap: 2px; }
+.fl-line { display: flex; justify-content: space-between; gap: 8px; }
+.fl-targa { font-size: 12px; font-weight: 600; }
+.fl-meta { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.fl-text { font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-form { margin: 0 14px 12px; padding: 12px; border-radius: 10px; border: 1px solid #DCE4FD; background: #F5F7FF; display: flex; flex-direction: column; gap: 8px; }
+.fl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 18px 10px; }
+.fl-table td { white-space: nowrap; }
+.fl-cellstack { display: flex; flex-direction: column; gap: 1px; }
+.fl-poss { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+.fl-poss i { width: 6px; height: 6px; border-radius: 2px; display: inline-block; }
+.fl-ellipsis { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.fl-empty { color: #A1A1AA; }
+.fl-km { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+.fl-km-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.fl-km-bar { display: block; height: 4px; border-radius: 2px; background: #F1F1F3; overflow: hidden; }
+.fl-km-bar i { display: block; height: 100%; border-radius: 2px; }
