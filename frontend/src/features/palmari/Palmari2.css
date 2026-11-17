@@ -1,0 +1,23 @@
+/* Palmari — ricalcata sul mockup */
+.pm2-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 10px; border: 1px solid #FBDDC4; background: #FFF7ED; }
+.pm2-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 999px; background: #EA6A2A; }
+.pm2-table td { vertical-align: middle; }
+.pm2-table tr.is-open td { background: #F3F6FF; }
+.pm2-cod { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pm2-cod-t { display: flex; flex-direction: column; min-width: 0; }
+.pm2-tile { flex: 0 0 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #FFFFFF; }
+.pm2-tile-lg { flex-basis: 36px; height: 36px; border-radius: 9px; }
+.pm2-sub { font-size: 12px; color: #6B6B73; }
+.pm2-ell { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm2-side { display: flex; flex-direction: column; min-width: 0; align-self: start; position: sticky; top: 72px; }
+.pm2-side-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 12px; }
+.pm2-dl { margin: 0; padding: 0 18px 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.pm2-dl dt { font-size: 12px; color: #6B6B73; }
+.pm2-dl dd { margin: 1px 0 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.pm2-side-sec { padding: 12px 18px 6px; border-top: 1px solid #F0F0F2; font-size: 12px; font-weight: 600; color: #3F3F46; }
+.pm2-hist { display: flex; gap: 10px; padding: 8px 18px; }
+.pm2-hist > span { flex: 0 0 8px; height: 8px; margin-top: 5px; border-radius: 999px; }
+.pm2-hist > div { display: flex; flex-direction: column; min-width: 0; word-break: break-word; }
+.pm2-side-foot { margin-top: auto; padding: 12px 18px; border-top: 1px solid #F0F0F2; display: flex; flex-direction: column; gap: 8px; }
+.pm2-link { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: #3D63F0; cursor: pointer; text-align: left; }
+.pm2-link:hover { text-decoration: underline; }
