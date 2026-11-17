@@ -1,12 +1,24 @@
-.app-layout {
-  display: flex;
-  min-height: 100vh;
-  background: var(--bg-primary);
-}
+.app-layout { display: flex; min-height: 100vh; background: var(--bg-primary); }
+.app-main { flex: 1; min-width: 0; margin-left: var(--sidebar-width, 248px); min-height: 100vh; display: flex; flex-direction: column; transition: margin-left 0.15s ease; }
+.app-content { flex: 1 1 auto; min-width: 0; overflow-x: hidden; }
 
-.app-main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  min-height: 100vh;
-  overflow-x: hidden;
+/* Barra in alto, fissa durante lo scorrimento */
+.topbar { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; box-sizing: border-box; padding: 8px 28px; background: #FFFFFF; border-bottom: 1px solid var(--border); }
+.topbar-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text-muted); }
+.topbar-crumbs a { color: var(--text-muted); }
+.topbar-crumbs a:hover { color: var(--primary); }
+.topbar-crumb { display: inline-flex; align-items: center; gap: 6px; }
+.topbar-crumb [aria-current] { color: var(--ink); font-weight: 500; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-search { display: flex; align-items: center; gap: 8px; min-height: 36px; min-width: 240px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; background: #F6F6F7; color: var(--text-muted); }
+.topbar-search span { flex-grow: 1; }
+.topbar-search kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border-strong); background: #FFFFFF; color: var(--text-muted); }
+.topbar-search:hover { background: #F1F1F3; }
+.topbar-avatar { width: 30px; height: 30px; border-radius: 999px; background: #E8EDFE; color: var(--primary); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+@media (max-width: 760px) {
+  .app-main { margin-left: 64px; }
+  .topbar { padding: 8px 16px; }
+  .topbar-search { min-width: 0; }
+  .topbar-search span, .topbar-search kbd { display: none; }
 }

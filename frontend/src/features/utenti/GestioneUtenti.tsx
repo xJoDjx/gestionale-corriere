@@ -2,12 +2,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import { navItems } from '../../components/layout/Sidebar';
+import { Icon } from '../../components/ds';
 import { useAuthStore } from '../../stores/auth.store';
 
 // Sezioni disponibili (derivate dalla sidebar, escludendo i divider)
-const SEZIONI = navItems
-  .filter((item): item is { path: string; label: string; icon: string; key: string } => !('divider' in item))
-  .map(({ key, label, icon }) => ({ key, label, icon }));
+const SEZIONI = navItems.map(({ key, label, icon }) => ({ key, label, icon }));
 
 interface User {
   id: string;
@@ -94,7 +93,7 @@ function SezioniChecklist({
               disabled={disabled}
               style={{ accentColor: 'var(--primary)', cursor: disabled ? 'default' : 'pointer' }}
             />
-            <span>{icon} {label}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name={icon} size={14} /> {label}</span>
           </label>
         ))}
       </div>
