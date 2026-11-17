@@ -7,6 +7,8 @@
 // Margini.tsx e RicaricheElettriche.tsx (card KPI, header, palette).
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './AnalisiSpedizioni.css';
+import './Analisi2.css';
+import { Page, PageHeader, Card, CardHead, Kpis, Button, IconButton, Tabs, Select, Empty, Alert, Icon, C, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -125,10 +127,10 @@ function normalizzaRisultato(r: any): AnalisiResult {
 }
 
 const AZIONE_LABEL: Record<AzioneApplica, string> = {
-  creato: '✅ Creato', aggiornato: '🔄 Aggiornato',
-  saltato_confermato: '🔒 Confermato',
-  conteggio_non_trovato: '⚠️ Conteggio assente',
-  padroncino_non_trovato: '❌ Padroncino non trovato',
+  creato: 'Creato', aggiornato: 'Aggiornato',
+  saltato_confermato: 'Confermato',
+  conteggio_non_trovato: 'Conteggio assente',
+  padroncino_non_trovato: 'Padroncino non trovato',
 };
 const AZIONE_CLASS: Record<AzioneApplica, string> = {
   creato: 'as-az--ok', aggiornato: 'as-az--update',
@@ -176,7 +178,6 @@ function ApplicaPanel({ mese, voci, descrizione, endpoint, buildPayload, onDone,
   if (result) return (
     <div className={`as-applica-result ${result.saltati === 0 ? 'as-applica-result--ok' : 'as-applica-result--partial'}`}>
       <div className="as-applica-result-header">
-        <span>{result.saltati === 0 ? '✅' : '⚠️'}</span>
         <div>
           <strong>{result.applicati} conteggi aggiornati{result.saltati > 0 && `, ${result.saltati} saltati`}</strong>
           <span className="as-applica-result-sub"> — {meseLabelItaliano(mese)}</span>
@@ -200,21 +201,21 @@ function ApplicaPanel({ mese, voci, descrizione, endpoint, buildPayload, onDone,
       {!show && (
         <div className="as-action-bar">
           <div className="as-action-info">
-            <span className="as-action-icon">📋</span>
+            
             <div>
               <strong>Applica ai conteggi di {meseLabelItaliano(mese)}</strong>
               <span className="as-action-sub">{descrizione}</span>
             </div>
           </div>
           <button className="as-btn-applica" onClick={() => setShow(true)}>
-            Applica ai conteggi →
+            Applica ai conteggi
           </button>
         </div>
       )}
 
       {show && (
         <div className="as-confirm-panel">
-          <div className="as-confirm-header"><span>⚠️</span><strong>Conferma applicazione</strong></div>
+          <div className="as-confirm-header"><strong>Conferma applicazione</strong></div>
           <p className="as-confirm-text">
             Aggiungi/aggiorna la voce <strong>"{descrizione}"</strong> nei conteggi di{' '}
             <strong>{meseLabelItaliano(mese)}</strong> per <strong>{voci.length} padroncini</strong>.
@@ -231,7 +232,7 @@ function ApplicaPanel({ mese, voci, descrizione, endpoint, buildPayload, onDone,
           <div className="as-confirm-actions">
             <button className="as-btn-cancel" onClick={() => setShow(false)} disabled={loading}>Annulla</button>
             <button className="as-btn-confirm" onClick={applica} disabled={loading}>
-              {loading ? <><span className="as-spinner-sm" /> Applicazione…</> : '✅ Conferma e applica'}
+              {loading ? <><span className="as-spinner-sm" /> Applicazione…</> : 'Conferma e applica'}
             </button>
           </div>
         </div>
@@ -251,13 +252,13 @@ function TabDoppie({ doppie, mese }: { doppie: ContaDoppiResult; mese: string })
     <div>
       {doppie.codiciNonAssociati.length > 0 && (
         <div className="as-warn-box">
-          <strong>⚠️ {doppie.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
+          <strong>{doppie.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
           <span className="as-warn-codes">{doppie.codiciNonAssociati.join(', ')}</span>
         </div>
       )}
 
       {errore && (
-        <div className="as-error"><span>⚠️</span><span>{errore}</span>
+        <div className="as-error"><span>{errore}</span>
           <button className="as-error-close" onClick={() => setErrore(null)}>✕</button>
         </div>
       )}
@@ -345,13 +346,13 @@ function TabIngiustificati({ ing, mese }: { ing: IngiustificatiResult; mese: str
     <div>
       {ing.codiciNonAssociati.length > 0 && (
         <div className="as-warn-box">
-          <strong>⚠️ {ing.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
+          <strong>{ing.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
           <span className="as-warn-codes">{ing.codiciNonAssociati.join(', ')}</span>
         </div>
       )}
 
       {errore && (
-        <div className="as-error"><span>⚠️</span><span>{errore}</span>
+        <div className="as-error"><span>{errore}</span>
           <button className="as-error-close" onClick={() => setErrore(null)}>✕</button>
         </div>
       )}
@@ -459,20 +460,20 @@ function TabForzaMaggiore({ fm, mese }: { fm: ForzaMaggioreResult; mese: string 
     <div>
       {fm.codiciNonAssociati.length > 0 && (
         <div className="as-warn-box">
-          <strong>⚠️ {fm.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
+          <strong>{fm.codiciNonAssociati.length} codici senza padroncino</strong> — esclusi:
           <span className="as-warn-codes">{fm.codiciNonAssociati.join(', ')}</span>
         </div>
       )}
 
       {fm.codiciEsclusi.length > 0 && (
         <div className="as-warn-box as-warn-box--info">
-          <strong>ℹ️ {fm.codiciEsclusi.length} codici esclusi per tariffa &gt; 5 €:</strong>
+          <strong>{fm.codiciEsclusi.length} codici esclusi per tariffa &gt; 5 €:</strong>
           <span className="as-warn-codes">{fm.codiciEsclusi.join(', ')}</span>
         </div>
       )}
 
       {errore && (
-        <div className="as-error"><span>⚠️</span><span>{errore}</span>
+        <div className="as-error"><span>{errore}</span>
           <button className="as-error-close" onClick={() => setErrore(null)}>✕</button>
         </div>
       )}
@@ -625,13 +626,13 @@ function TabControlloZone({
     <div>
       {ctrl.codiciNonAssociati.length > 0 && (
         <div className="as-warn-box">
-          <strong>⚠️ {ctrl.codiciNonAssociati.length} codici senza tariffa</strong> — esclusi:
+          <strong>{ctrl.codiciNonAssociati.length} codici senza tariffa</strong> — esclusi:
           <span className="as-warn-codes">{ctrl.codiciNonAssociati.join(', ')}</span>
         </div>
       )}
 
       {errore && (
-        <div className="as-error"><span>⚠️</span><span>{errore}</span>
+        <div className="as-error"><span>{errore}</span>
           <button className="as-error-close" onClick={() => setErrore(null)}>✕</button>
         </div>
       )}
@@ -643,7 +644,7 @@ function TabControlloZone({
             className={`as-tab ${zonaAttiva === z.zonaControllo ? 'as-tab--active' : ''}`}
             onClick={() => { setZonaAttiva(z.zonaControllo); setSubtab('totali'); }}
           >
-            📍 {z.zonaControllo}
+            {z.zonaControllo}
             <span className="as-tab-badge">{z.totaleSpedizioni} sped.</span>
           </button>
         ))}
@@ -674,7 +675,7 @@ function TabControlloZone({
             </span>
           ) : (
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              ℹ️ Inserisci la tariffa concordata per la zona per calcolare la differenza
+              Inserisci la tariffa concordata per la zona per calcolare la differenza
             </span>
           )}
         </div>
@@ -812,8 +813,7 @@ function calcolaZonePayload(ctrl: ControlloZoneResult, tariffe: Record<string, s
   return out;
 }
 
-function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps) {
-  const [show, setShow]       = useState(false);
+function ApplicaTuttoPanel({ risultato, mese, tariffe, show, setShow }: ApplicaTuttoPanelProps & { show: boolean; setShow: (v: boolean) => void }) {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, ApplicaResult | null> | null>(null);
   const [errore, setErrore]   = useState<string | null>(null);
@@ -856,10 +856,10 @@ function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps)
 
   if (results) {
     const sez = [
-      { key: 'doppie',         label: '🔁 Consegne Doppie',          r: results.doppie },
-      { key: 'ingiustificati', label: '⛔ Ingiustificate',            r: results.ingiustificati },
-      { key: 'forzaMaggiore',  label: '🌩️ Forza Maggiore / 48-72h',  r: results.forzaMaggiore },
-      { key: 'zone',           label: '📍 Controllo Zone',            r: results.zone },
+      { key: 'doppie',         label: 'Consegne doppie',          r: results.doppie },
+      { key: 'ingiustificati', label: 'Ingiustificate',            r: results.ingiustificati },
+      { key: 'forzaMaggiore',  label: 'Forza maggiore / 48-72h',  r: results.forzaMaggiore },
+      { key: 'zone',           label: 'Controllo zone',            r: results.zone },
     ] as const;
     const totApplicati = sez.reduce((s, x) => s + (x.r?.applicati ?? 0), 0);
     const totSaltati   = sez.reduce((s, x) => s + (x.r?.saltati   ?? 0), 0);
@@ -868,9 +868,9 @@ function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps)
       <div className={`as-applica-result ${totSaltati === 0 ? 'as-applica-result--ok' : 'as-applica-result--partial'}`}
            style={{ marginBottom: 16 }}>
         <div className="as-applica-result-header">
-          <span>{totSaltati === 0 ? '✅' : '⚠️'}</span>
+          
           <div>
-            <strong>Applica Tutto — {totApplicati} righe aggiornate{totSaltati > 0 && `, ${totSaltati} saltate`}</strong>
+            <strong>Applica tutto: {totApplicati} righe aggiornate{totSaltati > 0 && `, ${totSaltati} saltate`}</strong>
             <span className="as-applica-result-sub"> — {meseLabelItaliano(mese)}</span>
           </div>
           <button className="as-error-close" onClick={() => setResults(null)}>✕</button>
@@ -897,50 +897,30 @@ function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps)
     <>
       {errore && (
         <div className="as-error" style={{ marginBottom: 12 }}>
-          <span>⚠️</span><span>{errore}</span>
+          <span>{errore}</span>
           <button className="as-error-close" onClick={() => setErrore(null)}>✕</button>
-        </div>
-      )}
-
-      {!show && (
-        <div className="as-action-bar as-action-bar--tutto" style={{ marginBottom: 16 }}>
-          <div className="as-action-info">
-            <span className="as-action-icon">⚡</span>
-            <div>
-              <strong>Applica Tutto — {meseLabelItaliano(mese)}</strong>
-              <span className="as-action-sub">
-                Inserisce tutte e 4 le trattenute in un colpo solo:
-                Doppie ({doppie.length}), Ingiustificate ({ingiustificati.length}),
-                Forza Maggiore ({forzaMaggiore.length}), Zone ({zone.length})
-                — {totPadroncini} padroncini coinvolti
-              </span>
-            </div>
-          </div>
-          <button className="as-btn-applica as-btn-applica--tutto" onClick={() => setShow(true)}>
-            ⚡ Applica Tutto →
-          </button>
         </div>
       )}
 
       {show && (
         <div className="as-confirm-panel" style={{ marginBottom: 16 }}>
-          <div className="as-confirm-header"><span>⚠️</span><strong>Conferma — Applica Tutto</strong></div>
+          <div className="as-confirm-header"><strong>Applica ai conteggi di {meseLabelItaliano(mese)}</strong></div>
           <p className="as-confirm-text">
             Verranno aggiunte/aggiornate <strong>4 voci di trattenuta</strong> nei conteggi di{' '}
             <strong>{meseLabelItaliano(mese)}</strong> per <strong>{totPadroncini} padroncini</strong>.
             I conteggi già CONFERMATI verranno saltati automaticamente.
             {zone.length === 0 && tariffe && Object.keys(tariffe).length > 0 && (
               <span style={{ display: 'block', marginTop: 6, color: 'var(--text-secondary)', fontSize: 12 }}>
-                ℹ️ Nessuna zona calcolabile — inserisci le tariffe zona nel tab Controllo Zone.
+                Nessuna zona calcolabile — inserisci le tariffe zona nel tab Controllo Zone.
               </span>
             )}
           </p>
           <div className="as-confirm-preview">
             {[
-              { label: '🔁 Consegne Doppie', items: doppie.map((r) => ({ nome: r.nome, importo: r['spedDoppieMetà'] })) },
-              { label: '⛔ Ingiustificate',   items: ingiustificati.map((r) => ({ nome: r.nome, importo: r.importo })) },
-              { label: '🌩️ Forza Maggiore',  items: forzaMaggiore.map((r) => ({ nome: r.nome, importo: r.importo })) },
-              { label: '📍 Controllo Zone',   items: zone.map((r) => ({ nome: `${r.nome} (${r.zonaControllo})`, importo: r.importo })) },
+              { label: 'Consegne doppie', items: doppie.map((r) => ({ nome: r.nome, importo: r['spedDoppieMetà'] })) },
+              { label: 'Ingiustificate',   items: ingiustificati.map((r) => ({ nome: r.nome, importo: r.importo })) },
+              { label: 'Forza maggiore',  items: forzaMaggiore.map((r) => ({ nome: r.nome, importo: r.importo })) },
+              { label: 'Controllo zone',   items: zone.map((r) => ({ nome: `${r.nome} (${r.zonaControllo})`, importo: r.importo })) },
             ].map(({ label, items }) => items.length > 0 && (
               <div key={label} style={{ marginBottom: 8 }}>
                 <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 3 }}>{label}</div>
@@ -956,7 +936,7 @@ function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps)
           <div className="as-confirm-actions">
             <button className="as-btn-cancel" onClick={() => setShow(false)} disabled={loading}>Annulla</button>
             <button className="as-btn-confirm" onClick={applica} disabled={loading}>
-              {loading ? <><span className="as-spinner-sm" /> Applicazione…</> : '⚡ Conferma e applica tutto'}
+              {loading ? <><span className="as-spinner-sm" /> Applicazione…</> : 'Conferma e applica'}
             </button>
           </div>
         </div>
@@ -967,8 +947,8 @@ function ApplicaTuttoPanel({ risultato, mese, tariffe }: ApplicaTuttoPanelProps)
 
 // ── Pagina principale (Dashboard) ──────────────────────────────────────────────
 export default function AnalisiSpedizioni() {
-  const [view, setView] = useState<'dashboard' | 'detail'>('dashboard');
   const [mese, setMese] = useState(meseCorrente());
+  const [autoMese, setAutoMese] = useState(false);
 
   const [mesiStats, setMesiStats] = useState<Record<string, AnalisiMeseRecord>>({});
   const [loadingStats, setLoadingStats] = useState(true);
@@ -986,9 +966,13 @@ export default function AnalisiSpedizioni() {
   useEffect(() => { caricaSommari(); }, [caricaSommari]);
 
   const mesiConDati = mesiWindow.filter((m) => mesiStats[m]);
+  // All'apertura mostra l'ultimo mese analizzato se il mese corrente non ha dati
+  useEffect(() => {
+    if (autoMese || loadingStats) return;
+    setAutoMese(true);
+    if (!mesiStats[mese] && mesiConDati.length) setMese(mesiConDati[0]);
+  }, [autoMese, loadingStats, mesiStats, mese, mesiConDati]);
 
-  const apriMese = (m: string) => { setMese(m); setView('detail'); };
-  const onNuovaAnalisi = () => { setMese(meseCorrente()); setView('detail'); };
 
   // ── Aggregati dashboard ──
   const aggMese = (r: AnalisiMeseRecord) => {
@@ -1009,137 +993,25 @@ export default function AnalisiSpedizioni() {
   const totForza      = mesiConDati.reduce((a, m) => a + aggMese(mesiStats[m]).forzaSped, 0);
   const totTrattenute = mesiConDati.reduce((a, m) => a + aggMese(mesiStats[m]).trattenute, 0);
 
-  const ultimoMese = mesiConDati[0];
-  const ultimoAgg  = ultimoMese ? aggMese(mesiStats[ultimoMese]) : null;
+  const storico = mesiConDati.map((m) => ({ mese: m, updatedAt: mesiStats[m].updatedAt, ...aggMese(mesiStats[m]) }));
 
   return (
-    <div className="as-page">
-      {view === 'dashboard' && (
-        <>
-          <div className="as-header">
-            <div>
-              <h1>📦 Analisi Spedizioni</h1>
-              <span className="as-sub">Consegne Doppie, Ingiustificate, Forza Maggiore e Controllo Zone — storico mensile</span>
-            </div>
-            <div className="as-header-actions">
-              <button className="as-btn-applica" onClick={onNuovaAnalisi}>📂 Nuova Analisi</button>
-            </div>
-          </div>
-
-          <div className="as-kpi-row">
-            <div className="as-kpi as-kpi-gray"><span className="as-kpi-label">Mesi Analizzati</span><span className="as-kpi-val">{mesiConDati.length}</span><span className="as-kpi-sub">dati caricati</span></div>
-            <div className="as-kpi as-kpi-blue"><span className="as-kpi-label">Sped. Analizzate</span><span className="as-kpi-val">{totSpedizioni.toLocaleString('it-IT')}</span><span className="as-kpi-sub">tutti i mesi</span></div>
-            <div className="as-kpi as-kpi-amber"><span className="as-kpi-label">Consegne Doppie</span><span className="as-kpi-val">{totDoppie.toLocaleString('it-IT')}</span><span className="as-kpi-sub">da trattenere</span></div>
-            <div className="as-kpi as-kpi-red"><span className="as-kpi-label">Anomalie Totali</span><span className="as-kpi-val">{(totIngiust + totForza).toLocaleString('it-IT')}</span><span className="as-kpi-sub">ingiust. + forza magg.</span></div>
-            <div className="as-kpi as-kpi-purple"><span className="as-kpi-label">Trattenute Totali</span><span className="as-kpi-val as-kpi-val-md">{eur(totTrattenute)}</span><span className="as-kpi-sub">tutti i mesi</span></div>
-          </div>
-
-          {loadingStats && <div className="as-loading"><div className="as-spinner" /><span>Caricamento storico…</span></div>}
-
-          {!loadingStats && mesiConDati.length === 0 && (
-            <div className="as-empty-state">
-              <span className="as-empty-icon">📦</span>
-              <div className="as-empty-title">Nessun dato ancora</div>
-              <button className="as-btn-applica" onClick={onNuovaAnalisi}>📂 Carica la prima analisi</button>
-            </div>
-          )}
-
-          {!loadingStats && mesiConDati.length > 0 && (
-            <div className="as-dash-grid">
-              <div className="as-panel">
-                <div className="as-panel-hd"><span>📅 Storico Mensile</span><span className="as-panel-sub">{mesiConDati.length} mesi · clicca per aprire</span></div>
-                <div className="as-month-col-hd">
-                  <span>MESE</span><span>RIPARTIZIONE ANOMALIE</span>
-                  <span style={{ textAlign: 'center' }}>TOTALE</span>
-                  <span style={{ textAlign: 'right' }}>TRATTENUTE</span><span />
-                </div>
-                {mesiConDati.map((m) => {
-                  const r = mesiStats[m];
-                  const agg = aggMese(r);
-                  const anomalieTot = agg.doppieMeta + agg.ingiustSped + agg.forzaSped;
-                  const dp = Math.round((agg.doppieMeta / (agg.trattenute || 1)) * 100);
-                  const ip = Math.round((agg.ingiustImp / (agg.trattenute || 1)) * 100);
-                  const fp = Math.max(0, 100 - dp - ip);
-                  return (
-                    <div key={m} className="as-month-row" onClick={() => apriMese(m)}>
-                      <div>
-                        <div className="as-month-name">{meseLabelItaliano(m)}</div>
-                        <div className="as-month-sub">{agg.spedAnalizzate.toLocaleString('it-IT')} sped. analizzate</div>
-                      </div>
-                      <div>
-                        <div className="as-bar-wrap">
-                          <div className="as-bar-doppie" style={{ flex: dp || 0.01 }} />
-                          <div className="as-bar-ingiust" style={{ flex: ip || 0.01 }} />
-                          <div className="as-bar-forza" style={{ flex: fp || 0.01 }} />
-                        </div>
-                        <div className="as-bar-labels">
-                          <span className="as-doppie-label">🔁 {agg.doppieMeta}</span>
-                          <span className="as-ingiust-label">⛔ {agg.ingiustSped}</span>
-                          <span className="as-forza-label">🌩️ {agg.forzaSped}</span>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <span className={`as-anomalie-badge ${anomalieTot > 20 ? 'as-anomalie-danger' : 'as-anomalie-ok'}`}>{anomalieTot}</span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="as-trattenute-val">{eur(agg.trattenute)}</span>
-                        <span className="as-trattenute-sub">totale</span>
-                      </div>
-                      <div style={{ textAlign: 'right' }}><span className="as-apri-btn">Apri →</span></div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="as-sidebar">
-                <div className="as-panel">
-                  <div className="as-panel-hd"><span>📊 Ripartizione Anomalie</span><span className="as-panel-sub">{ultimoMese ? meseLabelItaliano(ultimoMese) : ''}</span></div>
-                  {ultimoAgg && (
-                    <div className="as-split-body">
-                      <div className="as-split-bar-wrap">
-                        <div className="as-split-bar-doppie" style={{ flex: ultimoAgg.doppieMeta || 0.01 }} />
-                        <div className="as-split-bar-ingiust" style={{ flex: ultimoAgg.ingiustSped || 0.01 }} />
-                        <div className="as-split-bar-forza" style={{ flex: ultimoAgg.forzaSped || 0.01 }} />
-                      </div>
-                      <div className="as-split-row"><span className="as-split-legend"><span className="as-split-dot" style={{ background: '#d97706' }} />🔁 Consegne Doppie</span><span className="as-split-pct-doppie">{ultimoAgg.doppieMeta}</span></div>
-                      <div className="as-split-row"><span className="as-split-legend"><span className="as-split-dot" style={{ background: '#dc2626' }} />⛔ Ingiustificate</span><span className="as-split-pct-ingiust">{ultimoAgg.ingiustSped}</span></div>
-                      <div className="as-split-row"><span className="as-split-legend"><span className="as-split-dot" style={{ background: '#7c3aed' }} />🌩️ Forza Maggiore</span><span className="as-split-pct-forza">{ultimoAgg.forzaSped}</span></div>
-                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Totale trattenute</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{eur(ultimoAgg.trattenute)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="as-panel">
-                  <div className="as-panel-hd"><span>📍 Zone Controllate</span><span className="as-panel-sub">{ultimoMese ? meseLabelItaliano(ultimoMese) : ''}</span></div>
-                  {ultimoMese && normalizzaRisultato(mesiStats[ultimoMese].risultato).controlloZone.zone.map((z) => (
-                    <div key={z.zonaControllo} className="as-zona-row">
-                      <span className="as-zona-nome">📍 {z.zonaControllo}</span>
-                      <span className="as-zona-sped">{z.totaleSpedizioni} sped.</span>
-                    </div>
-                  ))}
-                  {ultimoMese && normalizzaRisultato(mesiStats[ultimoMese].risultato).controlloZone.zone.length === 0 && (
-                    <div className="as-empty-hint">Nessuna zona configurata</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {view === 'detail' && (
-        <AnalisiSpedizioniDetail mese={mese} onBack={() => { setView('dashboard'); caricaSommari(); }} onMeseChange={setMese} />
-      )}
-    </div>
+    <AnalisiSpedizioniDetail
+      mese={mese}
+      onMeseChange={setMese}
+      storico={storico}
+      loadingStorico={loadingStats}
+      onChanged={caricaSommari}
+    />
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // Vista di dettaglio — logica identica alla vecchia ContaDoppi, restyled.
-function AnalisiSpedizioniDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: () => void; onMeseChange: (m: string) => void }) {
+interface VoceStorico { mese: string; updatedAt: string; doppieMeta: number; ingiustSped: number; ingiustImp: number; forzaSped: number; forzaImp: number; zoneCount: number; trattenute: number; spedAnalizzate: number }
+function AnalisiSpedizioniDetail({ mese, onMeseChange, storico, loadingStorico, onChanged }: { mese: string; onMeseChange: (m: string) => void; storico: VoceStorico[]; loadingStorico: boolean; onChanged: () => void }) {
+  const onBack = onChanged;
+  const [showApplica, setShowApplica] = useState(false);
   const [loading, setLoading]     = useState(false);
   const [loadingDB, setLoadingDB] = useState(true);
   const [errore, setErrore]       = useState<string | null>(null);
@@ -1253,188 +1125,177 @@ function AnalisiSpedizioniDetail({ mese, onBack, onMeseChange }: { mese: string;
     }
   }, [mese, onBack]);
 
-  if (loadingDB) return (
-    <div className="as-loading" style={{ paddingTop: 80 }}>
-      <div className="as-spinner" />
-      <p>Caricamento {meseLabelItaliano(mese)}…</p>
-    </div>
-  );
-
+  const totDoppie      = risultato?.doppie.totali.reduce((s, r) => s + r.spedDoppie, 0) ?? 0;
   const totDoppieMetà = risultato?.doppie.totali.reduce((s, r) => s + r.spedDoppieMetà, 0) ?? 0;
   const totIngiustSped = risultato?.ingiustificati.totaleIngiustificati ?? 0;
   const totForzaSped   = risultato?.forzaMaggiore.totaleSpedizioni ?? 0;
   const totZone        = risultato?.controlloZone?.zone?.length ?? 0;
+  // Solo visualizzazione: trattenute per padroncino come verranno applicate (doppie = metà, 1 € l'una)
+  const zonePay = risultato ? calcolaZonePayload(risultato.controlloZone, tariffe) : [];
+  const zoneImp = zonePay.reduce((s, r) => s + r.importo, 0);
+  const perPad = (() => {
+    if (!risultato) return [];
+    const m = new Map<string, [number, number, number, number]>();
+    const add = (n: string, i: number, v: number) => { const e = m.get(n) ?? [0, 0, 0, 0]; e[i] += v; m.set(n, e); };
+    risultato.doppie.totali.forEach((r) => add(r.nome, 0, r.spedDoppieMetà));
+    risultato.ingiustificati.totali.forEach((r) => add(r.nome, 1, r.importo));
+    risultato.forzaMaggiore.totali.forEach((r) => add(r.nome, 2, r.importo));
+    zonePay.forEach((r) => add(r.nome, 3, r.importo));
+    return [...m.entries()].map(([n, v]) => ({ n, v, tot: v[0] + v[1] + v[2] + v[3] })).sort((x, y) => y.tot - x.tot);
+  })();
+  const maxPad = Math.max(1, ...perPad.map((p) => p.tot));
+  const logScale = maxPad > 5000;
+  const scala = (x: number) => (logScale ? Math.log10(x + 1) / Math.log10(maxPad + 1) : x / maxPad) * 100;
+  const SERIE = [['Doppie', C.blue], ['Ingiustificate', C.red], ['Forza maggiore', C.purple], ['Zone', C.orange]] as const;
+  const mesiOpts = Array.from(new Set([...ultimiMesi(12), ...storico.map((x) => x.mese), mese])).sort().reverse();
+  const meseNome = meseLabelItaliano(mese);
+  const TAB_ITEMS = risultato ? [
+    { value: 'doppie' as const, label: 'Consegne doppie', count: totDoppieMetà },
+    { value: 'ingiustificati' as const, label: 'Ingiustificate', count: totIngiustSped },
+    { value: 'forzaMaggiore' as const, label: 'Forza maggiore / 48-72h', count: totForzaSped },
+    { value: 'controlloZone' as const, label: 'Controllo zone', count: `${totZone} zone` },
+  ] : [];
 
   return (
-    <div>
-      <div className="as-header">
-        <div className="as-header-left">
-          <button className="as-btn-outline as-btn-sm" onClick={onBack}>← Storico</button>
-          <div>
-            <h1>📦 {meseLabelItaliano(mese)}</h1>
-            <span className="as-sub">
-              {risultato ? `${risultato.doppie.totaleSpedizioniAnalizzate.toLocaleString('it-IT')} spedizioni analizzate` : 'Nessuna analisi per questo mese'}
-              {analisiInfo && (
-                <> · ultima analisi: {new Date(analisiInfo.updatedAt).toLocaleString('it-IT', {
-                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                })}</>
-              )}
-            </span>
-          </div>
-        </div>
-        <div className="as-header-actions">
-          <div className="as-mese-wrap">
-            <label>Mese</label>
-            <input type="month" className="as-mese-input" value={mese} onChange={(e) => onMeseChange(e.target.value)} />
-          </div>
-          <button className="as-btn-outline" onClick={() => setShowImport((v) => !v)}>{showImport ? '✕ Chiudi' : '📂 Nuova analisi'}</button>
-          {risultato && (
-            <button
-              className="as-btn-outline as-btn-danger"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={deleting}
-            >
-              🗑️ Elimina analisi
-            </button>
-          )}
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Analisi"
+        title="Analisi spedizioni"
+        sub="Anomalie di consegna del mese da trattenere nei conteggi dei padroncini"
+        actions={<>
+          <Select label="Analisi" value={mese} onChange={onMeseChange}
+            options={mesiOpts.map((m) => ({ value: m, label: `${meseLabelItaliano(m)}${storico.some((x) => x.mese === m) ? '' : ' · vuoto'}` }))} />
+          <Button icon="upload" onClick={() => setShowImport((v) => !v)}>{showImport ? 'Chiudi' : 'Nuova analisi'}</Button>
+          {risultato && <Button icon="check" variant="primary" onClick={() => setShowApplica(true)}>Applica ai conteggi di {meseNome.split(' ')[0].toLowerCase()}</Button>}
+          {risultato && <Button icon="trash" variant="danger" onClick={() => setShowDeleteConfirm(true)} disabled={deleting}>Elimina analisi</Button>}
+        </>}
+      />
 
       {showDeleteConfirm && (
-        <div className="as-confirm-panel" style={{ marginBottom: 16 }}>
-          <div className="as-confirm-header"><span>⚠️</span><strong>Elimina analisi di {meseLabelItaliano(mese)}</strong></div>
-          <p className="as-confirm-text">
-            L'analisi caricata per <strong>{meseLabelItaliano(mese)}</strong> verrà eliminata definitivamente.
-            Le trattenute già applicate ai conteggi mensili <strong>non</strong> verranno rimosse automaticamente.
-          </p>
-          <div className="as-confirm-actions">
-            <button className="as-btn-cancel" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Annulla</button>
-            <button className="as-btn-confirm as-btn-confirm--danger" onClick={eliminaAnalisi} disabled={deleting}>
-              {deleting ? <><span className="as-spinner-sm" /> Eliminazione…</> : '🗑️ Conferma eliminazione'}
-            </button>
+        <Alert tone="ko" title={`Eliminare l'analisi di ${meseNome}?`}
+          actions={<>
+            <Button size="sm" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>Annulla</Button>
+            <Button size="sm" variant="danger" onClick={eliminaAnalisi} disabled={deleting}>{deleting ? 'Eliminazione…' : 'Conferma eliminazione'}</Button>
+          </>}>
+          L'analisi verrà eliminata definitivamente. Le trattenute già applicate ai conteggi non verranno rimosse automaticamente.
+        </Alert>
+      )}
+
+      {loadingDB ? <Card pad><Empty>Caricamento {meseNome.toLowerCase()}…</Empty></Card> : (<>
+        {risultato && (
+          <Kpis items={[
+            { label: 'Consegne doppie', value: fmtNum2(totDoppie), color: C.blue, icon: 'swap',
+              sub: `Trattenuta metà: ${fmtEur2(totDoppieMetà)} · ${fmtNum2(risultato.doppie.totaleSpedizioniAnalizzate)} spedizioni lette` },
+            { label: 'Ingiustificate', value: fmtEur2(risultato.ingiustificati.totaleImporto), color: C.red, icon: 'close',
+              sub: `${fmtNum2(totIngiustSped)} spedizioni` },
+            { label: 'Forza maggiore 48-72h', value: fmtEur2(risultato.forzaMaggiore.totaleImporto), color: C.purple, icon: 'warn',
+              sub: `${fmtNum2(totForzaSped)} spedizioni${risultato.forzaMaggiore.codiciEsclusi?.length ? ` · ${risultato.forzaMaggiore.codiciEsclusi.length} codici a tariffa giornaliera esclusi` : ''}` },
+            { label: 'Controllo zone', value: fmtEur2(zoneImp), color: C.orange, icon: 'pin',
+              sub: `${fmtNum2(risultato.controlloZone?.totaleSpedizioniGlobale ?? 0)} spedizioni · ${totZone} zone` },
+          ]} />
+        )}
+
+        {showImport && (
+          <Card pad>
+            <div className={`an2-drop${dragging ? ' is-over' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
+              role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') inputRef.current?.click(); }}>
+              <input ref={inputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files?.[0])} />
+              <Icon name="upload" size={20} />
+              <span style={{ fontWeight: 600 }}>{risultato ? `Sostituisci i dati di ${meseNome.toLowerCase()}` : 'Trascina il file delle spedizioni'} oppure clicca per sceglierlo</span>
+              <span className="ds-cardsub">File Excel (.xlsx / .xls) con le colonne Spedizione, Esito e Codice Autista. Un solo file genera le quattro analisi.</span>
+            </div>
+          </Card>
+        )}
+
+        {loading && <Card pad><Empty>Analisi in corso…</Empty></Card>}
+        {errore && <Alert tone="ko" title="Errore" actions={<IconButton icon="close" label="Chiudi" onClick={() => setErrore(null)} />}>{errore}</Alert>}
+
+        <div className="ds-g4">
+          <Card pad className="ds-s2">
+            <CardHead title="Trattenute per padroncino" sub="Somma delle quattro analisi che verranno inserite come addebito" />
+            {perPad.length === 0 ? <Empty>{risultato ? 'Nessuna trattenuta' : 'Nessuna analisi per questo mese'}</Empty> : (<>
+              <div className="an2-legend">{SERIE.map(([t, c]) => <span key={t}><i style={{ background: c }} />{t}</span>)}{logScale && <span className="ds-cardsub">scala logaritmica</span>}</div>
+              <div className="an2-rip">
+                {perPad.map((p) => (
+                  <div key={p.n} className="an2-riprow" title={`Doppie ${fmtEur2(p.v[0])} · ingiustificate ${fmtEur2(p.v[1])} · forza maggiore ${fmtEur2(p.v[2])} · zone ${fmtEur2(p.v[3])}`}>
+                    <span className="an2-ripn">{p.n}</span>
+                    <span className="an2-ripbar" style={{ width: `${Math.max(2, scala(p.tot))}%` }}>
+                      {p.v.map((x, i) => x > 0 ? <i key={i} style={{ flexGrow: x, background: SERIE[i][1] }} /> : null)}
+                    </span>
+                    <span className="an2-ripv">{fmtEur2(p.tot)}</span>
+                  </div>
+                ))}
+              </div>
+            </>)}
+          </Card>
+          <Card pad>
+            <CardHead title="Tariffe per zona" sub="Usate dal controllo zone" />
+            {!risultato || totZone === 0 ? <Empty>Nessuna zona di controllo</Empty> : (
+              <div className="an2-tariffe">
+                {risultato.controlloZone.zone.map((z) => {
+                  const v = tariffe[z.zonaControllo] ?? '';
+                  const n = parseFloat(v.replace(',', '.'));
+                  return (
+                    <div key={z.zonaControllo}>
+                      <label className="an2-tz">
+                        <span>{z.zonaControllo}<em>{fmtNum2(z.totaleSpedizioni)} sped.</em></span>
+                        <span className={`an2-tzin${n > 5 ? ' is-warn' : ''}`}>€<input inputMode="decimal" value={v} onChange={(e) => handleTariffeChange(z.zonaControllo, e.target.value)} /></span>
+                      </label>
+                      {n > 5 && <span className="an2-warn">{z.zonaControllo} a {fmtEur2(n)} sembra una tariffa giornaliera</span>}
+                    </div>
+                  );
+                })}
+                <span className="ds-cardsub">Le tariffe si salvano da sole mentre scrivi.</span>
+              </div>
+            )}
+          </Card>
+          <Card pad>
+            <CardHead title="Storico analisi" sub="Una per mese, si può riaprire o eliminare" />
+            {loadingStorico ? <Empty>Caricamento…</Empty> : storico.length === 0 ? <Empty>Nessuna analisi salvata</Empty> : (
+              <div className="an2-storico">
+                {storico.map((x) => (
+                  <div key={x.mese} className={`an2-st${x.mese === mese ? ' is-on' : ''}`}>
+                    <i style={{ background: x.mese === mese ? C.blue : '#D4D4D8' }} />
+                    <button type="button" onClick={() => onMeseChange(x.mese)}>{meseLabelItaliano(x.mese)}</button>
+                    <span className="ds-cardsub">{fmtNum2(x.doppieMeta)} doppie · {fmtEur2(x.trattenute)}</span>
+                    <IconButton icon="trash" label={`Elimina analisi di ${meseLabelItaliano(x.mese)}`} danger onClick={() => { onMeseChange(x.mese); setShowDeleteConfirm(true); }} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {risultato && !loading && (
+          <div className="an2">
+            <ApplicaTuttoPanel risultato={risultato} mese={mese} tariffe={tariffe} show={showApplica} setShow={setShowApplica} />
+            <Card>
+              <div style={{ padding: '6px 18px 0' }}>
+                <Tabs items={TAB_ITEMS} value={analisiTab} onChange={setAnalisiTab} label="Analisi" />
+              </div>
+              <div className="an2-body">
+                {analisiTab === 'doppie' && <TabDoppie doppie={risultato.doppie} mese={mese} />}
+                {analisiTab === 'ingiustificati' && <TabIngiustificati ing={risultato.ingiustificati} mese={mese} />}
+                {analisiTab === 'forzaMaggiore' && risultato.forzaMaggiore && <TabForzaMaggiore fm={risultato.forzaMaggiore} mese={mese} />}
+                {analisiTab === 'controlloZone' && risultato.controlloZone && (
+                  <TabControlloZone ctrl={risultato.controlloZone} mese={mese} tariffe={tariffe} onTariffeChange={handleTariffeChange} />
+                )}
+              </div>
+            </Card>
           </div>
-        </div>
-      )}
+        )}
 
-      {risultato && (
-        <div className="as-kpi-row">
-          <div className="as-kpi as-kpi-gray"><span className="as-kpi-label">Sped. Analizzate</span><span className="as-kpi-val">{risultato.doppie.totaleSpedizioniAnalizzate.toLocaleString('it-IT')}</span><span className="as-kpi-sub">righe file</span></div>
-          <div className="as-kpi as-kpi-amber"><span className="as-kpi-label">Consegne Doppie</span><span className="as-kpi-val">{totDoppieMetà.toLocaleString('it-IT')}</span><span className="as-kpi-sub">da trattenere</span></div>
-          <div className="as-kpi as-kpi-red"><span className="as-kpi-label">Ingiustificate</span><span className="as-kpi-val">{totIngiustSped.toLocaleString('it-IT')}</span><span className="as-kpi-sub">{eur(risultato.ingiustificati.totaleImporto)}</span></div>
-          <div className="as-kpi as-kpi-purple"><span className="as-kpi-label">Forza Maggiore</span><span className="as-kpi-val">{totForzaSped.toLocaleString('it-IT')}</span><span className="as-kpi-sub">{eur(risultato.forzaMaggiore.totaleImporto)}</span></div>
-          <div className="as-kpi as-kpi-blue"><span className="as-kpi-label">Zone Controllate</span><span className="as-kpi-val">{totZone}</span><span className="as-kpi-sub">{(risultato.controlloZone?.totaleSpedizioniGlobale ?? 0).toLocaleString('it-IT')} sped.</span></div>
-        </div>
-      )}
-
-      {showImport && (
-        <div
-          className={`as-drop-zone ${dragging ? 'as-drop-zone--over' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-        >
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
-            onChange={(e) => handleFile(e.target.files?.[0])} />
-          <div className="as-drop-icon">📂</div>
-          <p className="as-drop-main">
-            {risultato ? `Sostituisci i dati di ${meseLabelItaliano(mese)}` : 'Trascina il file delle spedizioni'} oppure <span className="as-drop-link">clicca per selezionarlo</span>
-          </p>
-          <p className="as-drop-hint">
-            File Excel (.xlsx / .xls) — colonne richieste: <strong>Spedizione</strong>, <strong>Esito</strong>, <strong>Codice Autista</strong>
-          </p>
-          <p className="as-drop-hint as-drop-hint--info">
-            Un solo upload genera tutte e quattro le analisi: <strong>Consegne Doppie</strong>, <strong>Ingiustificate</strong>,
-            <strong> Forza Maggiore</strong> e <strong>Controllo Zone</strong>.
-          </p>
-        </div>
-      )}
-
-      {loading && (
-        <div className="as-loading"><div className="as-spinner" /><p>Analisi in corso…</p></div>
-      )}
-
-      {errore && (
-        <div className="as-error">
-          <span>⚠️</span><span>{errore}</span>
-          <button onClick={() => setErrore(null)} className="as-error-close">✕</button>
-        </div>
-      )}
-
-      {risultato && !loading && (
-        <>
-          <ApplicaTuttoPanel risultato={risultato} mese={mese} tariffe={tariffe} />
-
-          <div className="as-analisi-tabs">
-            <button
-              className={`as-analisi-tab ${analisiTab === 'doppie' ? 'as-analisi-tab--active' : ''}`}
-              onClick={() => setAnalisiTab('doppie')}
-            >
-              <span>🔁</span>
-              <span>Consegne Doppie</span>
-              <span className="as-analisi-badge as-analisi-badge--warn">
-                {risultato.doppie.totali.reduce((s, r) => s + r.spedDoppieMetà, 0)}
-              </span>
-            </button>
-            <button
-              className={`as-analisi-tab ${analisiTab === 'ingiustificati' ? 'as-analisi-tab--active' : ''}`}
-              onClick={() => setAnalisiTab('ingiustificati')}
-            >
-              <span>⛔</span>
-              <span>Ingiustificate</span>
-              <span className="as-analisi-badge as-analisi-badge--danger">
-                {risultato.ingiustificati.totaleIngiustificati}
-              </span>
-            </button>
-            <button
-              className={`as-analisi-tab ${analisiTab === 'forzaMaggiore' ? 'as-analisi-tab--active' : ''}`}
-              onClick={() => setAnalisiTab('forzaMaggiore')}
-            >
-              <span>🌩️</span>
-              <span>Forza Maggiore / 48-72h</span>
-              <span className="as-analisi-badge as-analisi-badge--danger">
-                {risultato.forzaMaggiore.totaleSpedizioni}
-              </span>
-            </button>
-            <button
-              className={`as-analisi-tab ${analisiTab === 'controlloZone' ? 'as-analisi-tab--active' : ''}`}
-              onClick={() => setAnalisiTab('controlloZone')}
-            >
-              <span>📍</span>
-              <span>Controllo Zone</span>
-              <span className="as-analisi-badge as-analisi-badge--warn">
-                {risultato.controlloZone?.zone?.length ?? 0} zone
-              </span>
-            </button>
-          </div>
-
-          {analisiTab === 'doppie' && (
-            <TabDoppie doppie={risultato.doppie} mese={mese} />
-          )}
-          {analisiTab === 'ingiustificati' && (
-            <TabIngiustificati ing={risultato.ingiustificati} mese={mese} />
-          )}
-          {analisiTab === 'forzaMaggiore' && risultato.forzaMaggiore && (
-            <TabForzaMaggiore fm={risultato.forzaMaggiore} mese={mese} />
-          )}
-          {analisiTab === 'controlloZone' && risultato.controlloZone && (
-            <TabControlloZone
-              ctrl={risultato.controlloZone}
-              mese={mese}
-              tariffe={tariffe}
-              onTariffeChange={handleTariffeChange}
-            />
-          )}
-        </>
-      )}
-
-      {!risultato && !loading && !showImport && (
-        <div className="as-empty-state">
-          <span className="as-empty-icon">📦</span>
-          <div className="as-empty-title">Nessuna analisi per {meseLabelItaliano(mese)}</div>
-          <div className="as-empty-hint">Clicca "Nuova analisi" per caricare il file delle spedizioni</div>
-        </div>
-      )}
-    </div>
+        {!risultato && !loading && !showImport && (
+          <Card pad><Empty>Nessuna analisi per {meseNome.toLowerCase()}. Usa "Nuova analisi" per caricare il file delle spedizioni.</Empty></Card>
+        )}
+        {analisiInfo && risultato && (
+          <span className="ds-cardsub">Ultima analisi di {meseNome.toLowerCase()}: {new Date(analisiInfo.updatedAt).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+        )}
+      </>)}
+    </Page>
   );
 }
