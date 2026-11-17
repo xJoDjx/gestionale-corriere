@@ -110,7 +110,7 @@ function ThSort({ label, col, sortKey, sortDir, onSort, style, title }: {
 /** Calcola fatturato lordo c/IVA, addebiti (PALMARE×1.22 + NOLEGGIO/RICARICA/ADDEBITO già ivati + bollo)
  *  e compensazioni (FINE_MESE + ACCONTO + ACCREDITO + BONUS) dalle righe del conteggio.
  *  Allineato con calcolaTotali nel backend: FINE_MESE è nelle compensazioni, non negli addebiti. */
-function calcolaRighe(righe: import('../../lib/conteggi.api').ConteggiRiga[]) {
+export function calcolaRighe(righe: import('../../lib/conteggi.api').ConteggiRiga[]) {
   const SOGLIA_BOLLO = 77.47;
   const COSTO_BOLLO = 2.00;
 

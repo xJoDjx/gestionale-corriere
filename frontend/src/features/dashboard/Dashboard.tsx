@@ -1,650 +1,508 @@
-// src/features/dashboard/Dashboard.tsx
+// src/features/dashboard/Dashboard.tsx — Panoramica (layout del mockup approvato)
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  mezziApi,
-  padronciniApi,
-  palmariApi,
-  conteggiApi,
-  auditApi,
-  ricaricheApi,
-  accontiApi,
-  type MezziStats,
-  type PadronciniStats,
-  type PalmariStats,
-  type ConteggiStats,
-  type AndamentoMese,
-  type TopDaBonificare,
-  type AuditLogEntry,
-  type Mezzo,
+  api, mezziApi, padronciniApi, palmariApi, codiciAutistaApi, conteggiApi as conteggiStatsApi, carteEniApi, taskApi,
+  type MezziStats, type PalmariStats, type CodiciAutistaStats, type AndamentoMese, type Mezzo, type Padroncino, type TaskItem,
 } from '../../lib/api';
-import { MEZZO_FIELD_PRIORITY } from '../../lib/auditFormat';
+import { conteggiApi, type ConteggioMensile } from '../../lib/conteggi.api';
+import { addebitivSospesoApi, type AddebitoSospeso } from '../../lib/addebiti-sospesi.api';
+import { useAuthStore } from '../../stores/auth.store';
+import { calcolaRighe } from '../conteggi/ConteggiPage';
+import TaskModal from '../../components/ui/TaskModal';
+import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import {
-  Page, PageHeader, Card, CardHead, Kpis, Button, SegTabs, Dot, Empty, BarStrip, SegBar,
-  Th, useSort, Icon, C, fmtEur, type KpiItem, type Tone, type IconName,
+  Page, Icon, Spark, BarStrip, Th, useSort, Empty, C, fmtEur, fmtNum, type IconName,
 } from '../../components/ds';
 import './Dashboard.css';
 
-// ─── Helpers ──────────────────────────────────────────
-const eur = (n: number) =>
-  n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// ─── Helpers di visualizzazione ───────────────────────
+const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const meseShift = (m: string, k: number) => { const [y, mo] = m.split('-').map(Number); return ym(new Date(y, mo - 1 + k, 1)); };
+const nomeMese = (m: string) => MESI[Number(m.split('-')[1]) - 1];
+const nomeMeseCap = (m: string) => nomeMese(m).charAt(0).toUpperCase() + nomeMese(m).slice(1);
+const meseLungo = (m: string) => `${nomeMeseCap(m)} ${m.split('-')[0]}`;
+const giorniDa = (iso: string | null | undefined) => (iso ? Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000) : null);
+const dataIt = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const k = (n: number) => `€ ${fmtNum(Math.round(n))}`;
+const iniziali = (s: string) => s.replace(/[^A-Za-z0-9 ]/g, ' ').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const breve = (s: string) => s.replace(/ (S\.?R\.?L\.?S?\.?|SAS|SRL|SRLS)$/i, '');
+const AVATAR = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
+const pctDelta = (a?: number | null, b?: number | null) => (a != null && b ? ((a - b) / b) * 100 : null);
+const fmtPct = (d: number) => `${d >= 0 ? '+' : '−'}${Math.abs(d).toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`;
 
-const meseCorrente = (): string => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
+const TONI = { rosso: ['#B91C1C', '#E5484D'], ambra: ['#C2410C', '#EA6A2A'], grigio: ['#52525B', '#A1A1AA'], blu: ['#1D4ED8', '#3D63F0'], verde: ['#15803D', '#15A06A'] } as const;
+type Tono = keyof typeof TONI;
 
-const mesePrecedente = (): string => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const formatMeseShort = (mese: string) => {
-  const [y, m] = mese.split('-').map(Number);
-  const d = new Date(y, m - 1, 1);
-  return d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
-};
-
-const giorniDaOra = (iso: string): number => {
-  const d = new Date(iso);
-  const now = new Date();
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-};
-
-const formatRelativeTime = (iso: string): string => {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'ora';
-  if (min < 60) return `${min}m`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h`;
-  const days = Math.floor(h / 24);
-  if (days === 1) return 'Ieri';
-  if (days < 7) return `${days}gg`;
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
-};
-
-const formatMese = (mese: string | undefined): string => {
-  if (!mese || typeof mese !== 'string' || !/^\d{4}-\d{2}$/.test(mese)) return '';
-  const [y, m] = mese.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
-};
-
-const eurFmt = (v: number) =>
-  v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const auditLabel = (log: AuditLogEntry): { azione: string; dettaglio: string; tipo: string } => {
-  const t = log.entityType;
-  const a = log.azione;
-  const dopo: any = log.dataDopo || {};
-  const prima: any = log.dataPrima || {};
-
-  const tipoMap: Record<string, string> = {
-    mezzo: 'Mezzo',
-    padroncino: 'Padroncino',
-    palmare: 'Palmare',
-    conteggio_mensile: 'Conteggio',
-    conteggio_riga: 'Riga conteggio',
-    acconto: 'Acconto',
-    ricarica_elettrica: 'Ricarica',
-    codice_autista: 'Codice autista',
-    assegnazione_mezzo: 'Assegnazione mezzo',
-    assegnazione_palmare: 'Assegnazione palmare',
-    utente: 'Utente',
-    documento: 'Documento',
-  };
-  const tipoLabel = tipoMap[t] ?? t.replace(/_/g, ' ');
-
-  if (t === 'conteggio_mensile') {
-    const meseDopo = formatMese(dopo.mese || dopo.meseDestinazione);
-    const padr = dopo.padroncino || prima.padroncino;
-    const ctx = [padr, meseDopo].filter(Boolean).join(' · ');
-
-    if (a === 'CREATE') {
-      return { tipo: 'Conteggio', azione: 'Creato conteggio', dettaglio: ctx || log.entityId.slice(0, 8) };
-    }
-    if (a === 'DELETE') {
-      return { tipo: 'Conteggio', azione: 'Eliminato conteggio', dettaglio: ctx || log.entityId.slice(0, 8) };
-    }
-    if (dopo.azione === 'duplica_da_mese') {
-      const src = formatMese(dopo.meseSorgente);
-      const dst = formatMese(dopo.meseDestinazione);
-      return {
-        tipo: 'Conteggio',
-        azione: 'Duplicato conteggio',
-        dettaglio: `${dopo.padroncino ?? ''} · ${src} → ${dst} (${dopo.righeCopiate ?? 0} righe)`.replace(/^ · /, ''),
-      };
-    }
-    if (dopo.azione === 'rigenerazione_righe_automatiche') {
-      return { tipo: 'Conteggio', azione: 'Rigenerate righe automatiche', dettaglio: ctx };
-    }
-    if (dopo.azione === 'cambio_stato' || dopo.stato) {
-      const stato = dopo.stato;
-      const verbo = stato === 'CONFERMATO' ? 'Confermato' : stato === 'CHIUSO' ? 'Chiuso' : 'Riportato in bozza';
-      return { tipo: 'Conteggio', azione: `${verbo} conteggio`, dettaglio: ctx };
-    }
-    if (dopo.azione === 'salva_netto') {
-      const n = Number(dopo.nettoSalvato ?? 0);
-      return { tipo: 'Conteggio', azione: 'Salvato netto', dettaglio: `${ctx} · ${eurFmt(n)} €` };
-    }
-    return { tipo: 'Conteggio', azione: 'Aggiornato conteggio', dettaglio: ctx || log.entityId.slice(0, 8) };
-  }
-
-  if (t === 'conteggio_riga') {
-    const r = a === 'DELETE' ? prima : dopo;
-    const ctx = [r.padroncino, formatMese(r.mese)].filter(Boolean).join(' · ');
-    const importo = r.importo != null ? `${eurFmt(Number(r.importo))} €` : '';
-    const desc = r.descrizione || r.tipo || '';
-    const verbo = a === 'CREATE' ? 'Aggiunta' : a === 'DELETE' ? 'Eliminata' : 'Modificata';
-    const det = [ctx, [desc, importo].filter(Boolean).join(' — ')].filter(Boolean).join(' · ');
-    return { tipo: 'Riga', azione: `${verbo} riga conteggio`, dettaglio: det };
-  }
-
-  if (t === 'mezzo') {
-    const targa = dopo.targa || prima.targa;
-    const verbo = a === 'CREATE' ? 'Creato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    const targaLabel = targa ? `Targa ${targa}` : log.entityId.slice(0, 8);
-    if (a === 'UPDATE') {
-      for (const [field, label] of MEZZO_FIELD_PRIORITY) {
-        if (prima[field] !== undefined && dopo[field] !== undefined &&
-            JSON.stringify(prima[field]) !== JSON.stringify(dopo[field])) {
-          const fmtVal = (v: any) => {
-            if (field === 'rataNoleggio') return `${eurFmt(Number(v))} €`;
-            if (field === 'kmAttuali') return v == null ? '—' : `${Number(v).toLocaleString('it-IT')} km`;
-            if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return new Date(v).toLocaleDateString('it-IT');
-            return String(v ?? '—');
-          };
-          return {
-            tipo: 'Mezzo',
-            azione: `${label[0].toUpperCase()}${label.slice(1)} aggiornati`,
-            dettaglio: `${targaLabel} · da ${fmtVal(prima[field])} a ${fmtVal(dopo[field])}`,
-          };
-        }
-      }
-    }
-    return { tipo: 'Mezzo', azione: `${verbo} mezzo`, dettaglio: targaLabel };
-  }
-
-  if (t === 'assegnazione_mezzo') {
-    const targa = dopo.targa || prima.targa;
-    const padr = dopo.ragioneSociale || prima.ragioneSociale;
-    if (a === 'ASSEGNA') {
-      return { tipo: 'Assegnazione', azione: 'Assegnato mezzo', dettaglio: `${targa ?? ''} → ${padr ?? ''}`.trim() };
-    }
-    if (a === 'CHIUDI' || a === 'CHIUDI_ASSEGNAZIONE' || a === 'DELETE') {
-      return { tipo: 'Assegnazione', azione: 'Chiusa assegnazione mezzo', dettaglio: `${targa ?? ''} ${padr ? `→ ${padr}` : ''}`.trim() };
-    }
-  }
-
-  if (t === 'assegnazione_palmare') {
-    const codice = dopo.codice || prima.codice;
-    const padr = dopo.ragioneSociale || prima.ragioneSociale;
-    if (a === 'ASSEGNA') {
-      return { tipo: 'Assegnazione', azione: 'Assegnato palmare', dettaglio: `${codice ?? ''} → ${padr ?? ''}`.trim() };
-    }
-    return { tipo: 'Assegnazione', azione: 'Aggiornata assegnazione palmare', dettaglio: codice ?? '' };
-  }
-
-  if (t === 'padroncino') {
-    const rs = dopo.ragioneSociale || prima.ragioneSociale;
-    if (a === 'ASSEGNA') {
-      const tipo = dopo.tipo;
-      const ref = dopo.targa || dopo.codice || '';
-      return {
-        tipo: 'Padroncino',
-        azione: `Assegnato ${tipo ?? ''}`,
-        dettaglio: [ref, rs].filter(Boolean).join(' → '),
-      };
-    }
-    const verbo = a === 'CREATE' ? 'Creato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    return { tipo: 'Padroncino', azione: `${verbo} padroncino`, dettaglio: rs ?? log.entityId.slice(0, 8) };
-  }
-
-  if (t === 'palmare') {
-    const codice = dopo.codice || prima.codice;
-    const verbo = a === 'CREATE' ? 'Creato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    return { tipo: 'Palmare', azione: `${verbo} palmare`, dettaglio: codice ?? log.entityId.slice(0, 8) };
-  }
-
-  if (t === 'acconto') {
-    const r = a === 'DELETE' ? prima : dopo;
-    const importo = r.importo != null ? `${eurFmt(Number(r.importo))} €` : '';
-    const mese = formatMese(r.mese);
-    const cod = r.codiceAutista || r.codice || '';
-    const verbo = a === 'CREATE' ? 'Inserito' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    return { tipo: 'Acconto', azione: `${verbo} acconto`, dettaglio: [cod, mese, importo].filter(Boolean).join(' · ') };
-  }
-
-  if (t === 'ricarica_elettrica') {
-    const r = a === 'DELETE' ? prima : dopo;
-    const importo = r.importo != null ? `${eurFmt(Number(r.importo))} €` : '';
-    const mese = formatMese(r.mese);
-    const verbo = a === 'CREATE' ? 'Inserita' : a === 'DELETE' ? 'Eliminata' : 'Aggiornata';
-    return { tipo: 'Ricarica', azione: `${verbo} ricarica`, dettaglio: [mese, importo].filter(Boolean).join(' · ') };
-  }
-
-  if (t === 'documento') {
-    const r = a === 'DELETE' ? prima : dopo;
-    const tipo = (r.tipo || prima.tipo || '').toUpperCase();
-    const nome = r.nome || prima.nome || '';
-    const rs   = r.ragioneSociale || prima.ragioneSociale || '';
-    const verbo = a === 'CREATE' ? 'Caricato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    const label = [tipo, nome].filter(Boolean).join(' — ');
-    const dettaglio = [rs, label].filter(Boolean).join(' · ');
-    return { tipo: 'Documento', azione: `${verbo} documento`, dettaglio: dettaglio || log.entityId.slice(0, 8) };
-  }
-
-  if (t === 'utente') {
-    const nome = [dopo.nome, dopo.cognome].filter(Boolean).join(' ') || dopo.email || prima.email || '';
-    if (a === 'LOGIN') {
-      return { tipo: 'Utente', azione: 'Accesso effettuato', dettaglio: nome ? `${nome} ha effettuato l'accesso` : '' };
-    }
-    const verbo = a === 'CREATE' ? 'Creato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    return { tipo: 'Utente', azione: `${verbo} utente`, dettaglio: nome || log.entityId.slice(0, 8) };
-  }
-
-  if (t === 'codice_autista') {
-    const c = dopo.codice || prima.codice;
-    const rs = dopo.ragioneSociale || prima.ragioneSociale || '';
-    const verbo = a === 'CREATE' ? 'Creato' : a === 'DELETE' ? 'Eliminato' : 'Aggiornato';
-    const dettaglio = [rs, c].filter(Boolean).join(' · ');
-    return { tipo: 'Codice', azione: `${verbo} codice autista`, dettaglio: dettaglio || log.entityId.slice(0, 8) };
-  }
-
-  const verboMap: Record<string, string> = {
-    CREATE: 'Creato',
-    UPDATE: 'Aggiornato',
-    DELETE: 'Eliminato',
-    ASSEGNA: 'Assegnato',
-    CHIUDI: 'Chiuso',
-  };
-  return {
-    tipo: tipoLabel,
-    azione: `${verboMap[a] ?? a} ${tipoLabel.toLowerCase()}`,
-    dettaglio:
-      dopo.targa || dopo.ragioneSociale || dopo.codice || dopo.descrizione ||
-      prima.targa || prima.ragioneSociale || prima.codice ||
-      log.entityId.slice(0, 8),
-  };
-};
-
-const getEntityUrl = (log: AuditLogEntry): string | null => {
-  const t = log.entityType;
-  const dopo: any = log.dataDopo || {};
-  const prima: any = log.dataPrima || {};
-
-  if (t === 'mezzo') return `/flotta/${log.entityId}`;
-  if (t === 'padroncino') {
-    const id = dopo.padroncinoId || prima.padroncinoId || log.entityId;
-    return `/padroncini/${id}`;
-  }
-  if (t === 'palmare') return `/palmari/${log.entityId}`;
-  if (t === 'codice_autista') return `/codici-autista/${log.entityId}`;
-  if (t === 'conteggio_mensile') {
-    if (log.azione === 'DELETE') return null;
-    return `/conteggi/${log.entityId}`;
-  }
-  if (t === 'assegnazione_mezzo') {
-    const mezzoId = dopo.mezzoId || prima.mezzoId;
-    return mezzoId ? `/flotta/${mezzoId}` : null;
-  }
-  if (t === 'assegnazione_palmare') {
-    const palmareId = dopo.palmareId || prima.palmareId;
-    return palmareId ? `/palmari/${palmareId}` : null;
-  }
-  if (t === 'acconto') return '/acconti';
-  if (t === 'ricarica_elettrica') return '/ricariche';
-  return null;
-};
-
-interface ScadenzaRow {
-  mezzoId: string;
-  targa: string;
-  tipo: string;
-  data: string;
-  giorni: number;
-  gravita: 'danger' | 'warning' | 'info';
-}
-
-const SCAD_TABS = ['Noleggio', 'Revisione', 'Assicurazione'] as const;
-
-const formatMeseLungo = (mese: string) => {
-  const [y, m] = mese.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-};
-
-const STATO_TONE: Record<string, Tone> = { BOZZA: 'na', CONFERMATO: 'ok', CHIUSO: 'info' };
-const STATO_LABEL: Record<string, string> = { BOZZA: 'Bozza', CONFERMATO: 'Confermato', CHIUSO: 'Chiuso' };
-
-/** Ultimi 12 mesi fino al mese attuale, per il selettore. */
-const ultimiMesi = (n = 12): string[] => {
-  const out: string[] = [];
-  const d = new Date();
-  for (let i = 0; i < n; i++) {
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    d.setMonth(d.getMonth() - 1);
-  }
-  return out;
-};
+interface DaGestire { k: 'Mezzi' | 'Documenti' | 'Sospesi'; tile: string; icon: IconName; tag: string; tono: Tono; title: string; detail: string; to: string; ordine: number }
 
 // ─── Component ────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [meseKpi, setMeseKpi] = useState<string>(mesePrecedente);
-  const [scadTab, setScadTab] = useState<typeof SCAD_TABS[number]>('Noleggio');
+  const { user } = useAuthStore();
+  const meseCorrente = ym(new Date());
+  const [mese, setMese] = useState<string>(meseShift(meseCorrente, -1));
+  const [periodo, setPeriodo] = useState<3 | 8 | 12>(8);
+  const [filtro, setFiltro] = useState<'Tutto' | 'Mezzi' | 'Documenti' | 'Sospesi'>('Tutto');
+  const [cerca, setCerca] = useState('');
 
-  const [mezziStats, setMezziStats] = useState<MezziStats | null>(null);
-  const [padronciniStats, setPadronciniStats] = useState<PadronciniStats | null>(null);
-  const [palmariStats, setPalmariStats] = useState<PalmariStats | null>(null);
-  const [conteggiStats, setConteggiStats] = useState<ConteggiStats | null>(null);
   const [andamento, setAndamento] = useState<AndamentoMese[]>([]);
-  const [topBonifici, setTopBonifici] = useState<TopDaBonificare[]>([]);
-  const [scadenzeMezzi, setScadenzeMezzi] = useState<Mezzo[]>([]);
-  const [activity, setActivity] = useState<AuditLogEntry[]>([]);
-  const [ricaricheTot, setRicaricheTot] = useState(0);
-  const [accontiTot, setAccontiTot] = useState(0);
-  const [competenzeAttive, setCompetenzeAttive] = useState<number | null>(null);
+  const [conteggi, setConteggi] = useState<ConteggioMensile[]>([]);
+  const [padroncini, setPadroncini] = useState<Padroncino[]>([]);
+  const [mezzi, setMezzi] = useState<Mezzo[]>([]);
+  const [mezziStats, setMezziStats] = useState<MezziStats | null>(null);
+  const [palmariStats, setPalmariStats] = useState<PalmariStats | null>(null);
+  const [codiciStats, setCodiciStats] = useState<CodiciAutistaStats | null>(null);
+  const [eniMesi, setEniMesi] = useState<{ mese: string; totale: number }[]>([]);
+  const [ricariche, setRicariche] = useState<{ mese: string; totale: number }[]>([]);
+  const [sospesi, setSospesi] = useState<AddebitoSospeso[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [aggiornato, setAggiornato] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMese, setLoadingMese] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadStatic = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [mz, pd, pl, an, sc, au] = await Promise.all([
-        mezziApi.stats(),
-        padronciniApi.stats(),
-        palmariApi.stats(),
-        conteggiApi.andamento(12),
-        mezziApi.scadenze(60),
-        auditApi.list({ limit: 12 }),
-      ]);
-      setMezziStats(mz);
-      setPadronciniStats(pd);
-      setPalmariStats(pl);
-      setAndamento(an);
-      setScadenzeMezzi(sc);
-      setActivity(au.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Errore caricamento dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Dati che non dipendono dal mese
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const [an, pd, mz, ms, ps, cs, eni, sos, tk] = await Promise.all([
+          conteggiStatsApi.andamento(12),
+          padronciniApi.list({ limit: '200' }),
+          mezziApi.list({ limit: '200' }),
+          mezziApi.stats(),
+          palmariApi.stats(),
+          codiciAutistaApi.stats().catch(() => null),
+          carteEniApi.listMesi().catch(() => []),
+          addebitivSospesoApi.list({ stato: 'PENDENTE' }).catch(() => []),
+          taskApi.list('conteggi', 'conteggi').catch(() => []),
+        ]);
+        setAndamento(an); setPadroncini(pd.data); setMezzi(mz.data); setMezziStats(ms); setPalmariStats(ps); setCodiciStats(cs);
+        setEniMesi(eni.map(e => ({ mese: e.mese, totale: Number(e.totale) })));
+        setSospesi(sos); setTasks(tk);
+        setAggiornato(new Date());
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Errore caricamento panoramica');
+      } finally { setLoading(false); }
+    })();
+  }, []);
 
-  const loadMese = async (m: string) => {
-    setLoadingMese(true);
-    try {
-      const [cs, tb, ric, acc, comp] = await Promise.all([
-        conteggiApi.stats(m),
-        conteggiApi.topDaBonificare(m, 5),
-        ricaricheApi.riepilogo(m).catch(() => []),
-        accontiApi.list(m).catch(() => []),
-        conteggiApi.getCompetenzeAttive(m).catch(() => ({ mese: m, valore: null })),
-      ]);
-      setConteggiStats(cs);
-      setTopBonifici(tb);
-      setRicaricheTot(ric.reduce((s, r) => s + Number(r.totale || 0), 0));
-      setAccontiTot(acc.reduce((s, a) => s + Number(a.importo || 0), 0));
-      setCompetenzeAttive(comp.valore);
-    } catch (err) {
-      console.error('Errore caricamento dati mese:', err);
-    } finally {
-      setLoadingMese(false);
-    }
-  };
+  // Dati del mese scelto
+  useEffect(() => {
+    conteggiApi.list(mese).then(setConteggi).catch(() => setConteggi([]));
+    const mesi = Array.from({ length: 8 }, (_, i) => meseShift(mese, i - 7));
+    // Totale ricariche del mese = somma dei costi finali delle sessioni (come nella pagina Ricariche)
+    Promise.all(mesi.map(m => api.get<{ sessioni: { costoFinale: number }[] }>(`/ricariche?mese=${m}`)
+      .then(r => ({ mese: m, totale: (r.sessioni ?? []).reduce((s, x) => s + Number(x.costoFinale || 0), 0) }))
+      .catch(() => ({ mese: m, totale: 0 }))))
+      .then(setRicariche);
+  }, [mese]);
 
-  useEffect(() => { loadStatic(); }, []);
-  useEffect(() => { loadMese(meseKpi); }, [meseKpi]);
+  // ─── Indicatori ─────────────────────────────────────
+  const nettoMese = conteggi.reduce((s, c) => s + Number(c.netto ?? 0), 0);
+  const nettoA = (a: AndamentoMese) => Number(a.bonifici || 0) + Number(a.daBonificare || 0);
+  const iA = andamento.findIndex(a => a.mese === mese);
+  const curA = iA >= 0 ? andamento[iA] : null;
+  const prevA = iA > 0 ? andamento[iA - 1] : null;
+  const fino = (n: number) => andamento.slice(0, iA >= 0 ? iA + 1 : undefined).slice(-n);
+  const eniFino = eniMesi.filter(e => e.mese <= mese).sort((a, b) => a.mese.localeCompare(b.mese)).slice(-8);
+  const eniCur = eniMesi.find(e => e.mese === mese)?.totale ?? 0;
+  const eniPrev = eniMesi.find(e => e.mese === meseShift(mese, -1))?.totale ?? null;
+  const ricCur = ricariche.find(r => r.mese === mese)?.totale ?? 0;
+  const ricPrev = ricariche.find(r => r.mese === meseShift(mese, -1))?.totale ?? null;
+  const prevNome = nomeMese(meseShift(mese, -1));
 
-  const scadenzeRows = useMemo<ScadenzaRow[]>(() => {
-    const rows: ScadenzaRow[] = [];
-    for (const m of scadenzeMezzi) {
-      const push = (label: string, iso?: string | null) => {
-        if (!iso) return;
-        const g = giorniDaOra(iso);
-        if (g > 60 || g < -90) return;
-        const gravita = g <= 7 ? 'danger' : g <= 30 ? 'warning' : 'info';
-        rows.push({
-          mezzoId: m.id,
-          targa: m.targa,
-          tipo: label,
-          data: new Date(iso).toLocaleDateString('it-IT'),
-          giorni: g,
-          gravita,
-        });
-      };
-      push('Noleggio', m.fineNoleggio);
-      push('Revisione', m.scadenzaRevisione);
-      push('Assicurazione', m.scadenzaAssicurazione);
-    }
-    return rows.sort((a, b) => a.giorni - b.giorni);
-  }, [scadenzeMezzi]);
-
-  const scadenzeFiltrate = useMemo(
-    () => scadenzeRows.filter(s => s.tipo === scadTab).slice(0, 10),
-    [scadenzeRows, scadTab],
-  );
-
-  const alerts = useMemo(() => {
-    const out: Array<{ id: string; tone: Tone; color: string; icon: IconName; titolo: string; desc: string; to: string; cta: string }> = [];
-    if (padronciniStats?.alertDocumenti) {
-      out.push({ id: 'durc', tone: 'ko', color: C.red, icon: 'doc', titolo: `${padronciniStats.alertDocumenti} documenti padroncini in scadenza`, desc: 'DURC o DVR scaduti o in scadenza', to: '/padroncini', cta: 'Padroncini' });
-    }
-    if (mezziStats?.scadenzeImminenti) {
-      out.push({ id: 'mezzi-scad', tone: 'warn', color: C.orange, icon: 'mezzi', titolo: `${mezziStats.scadenzeImminenti} mezzi con scadenze entro 30 giorni`, desc: 'Assicurazione, revisione, bollo o tachigrafo', to: '/flotta', cta: 'Flotta' });
-    }
-    if (conteggiStats && conteggiStats.bozza > 0) {
-      out.push({ id: 'conteggi-bozza', tone: 'info', color: C.blue, icon: 'cont', titolo: `${conteggiStats.bozza} conteggi ancora in bozza`, desc: `${formatMeseLungo(meseKpi)}: non ancora chiusi`, to: '/conteggi', cta: 'Conteggi' });
-    }
-    if (palmariStats && palmariStats.disponibili > 0) {
-      out.push({ id: 'palmari', tone: 'warn', color: C.purple, icon: 'palm', titolo: `${palmariStats.disponibili} palmari senza assegnazione`, desc: 'Disponibili da assegnare', to: '/palmari', cta: 'Palmari' });
-    }
-    return out;
-  }, [padronciniStats, mezziStats, conteggiStats, palmariStats, meseKpi]);
-
-  // Grafico: fatturato imponibile e netto (bonificato + da bonificare) per mese
-  const chartData = useMemo(
-    () => andamento.map(a => ({
-      label: formatMeseShort(a.mese).replace(/ \d{2}$/, ''),
-      total: Number(a.fatturato || 0),
-      part: Number(a.bonifici || 0) + Number(a.daBonificare || 0),
-      valueLabel: Number(a.fatturato) ? `${Math.round(Number(a.fatturato) / 1000)}k` : '—',
-      tip: `${formatMeseLungo(a.mese)} · imponibile ${fmtEur(a.fatturato)} · netto ${fmtEur(Number(a.bonifici || 0) + Number(a.daBonificare || 0))}`,
-      mese: a.mese,
-    })),
-    [andamento],
-  );
-  const selIdx = chartData.findIndex(d => d.mese === meseKpi);
-  const prevMese = andamento[andamento.findIndex(a => a.mese === meseKpi) - 1];
-  const deltaFatt = prevMese && Number(prevMese.fatturato) && conteggiStats
-    ? ((conteggiStats.fatturato - Number(prevMese.fatturato)) / Number(prevMese.fatturato)) * 100
-    : null;
-
-  const netto = (conteggiStats?.bonifici ?? 0) + (conteggiStats?.daBonificare ?? 0);
-  const kpis: KpiItem[] = [
-    { label: 'Fatturato imponibile', value: fmtEur(conteggiStats?.fatturato ?? 0), color: C.green, icon: 'trend',
-      delta: deltaFatt === null ? undefined : { text: `${deltaFatt >= 0 ? '+' : ''}${deltaFatt.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`, good: deltaFatt >= 0 },
-      sub: 'IVA esclusa · distribuzione PDA' },
-    { label: 'Da bonificare', value: fmtEur(conteggiStats?.daBonificare ?? 0), color: C.blue, icon: 'euro',
-      sub: `Netto del mese ${fmtEur(netto)} · bonificati ${fmtEur(conteggiStats?.bonifici ?? 0)}` },
-    { label: 'Addebiti', value: fmtEur(conteggiStats?.addebiti ?? 0), color: C.orange, icon: 'cont', sub: 'Noleggi, ricariche, palmari' },
-    { label: 'Compensazioni', value: fmtEur(conteggiStats?.compensazioni ?? 0), color: C.purple, icon: 'swap', sub: 'Acconti, accrediti, bonus' },
+  const kpi: { c: string; icon: IconName; label: string; value: string; delta: number | null; goodUp: boolean; sub: string; spark: number[] }[] = [
+    { c: C.blue, icon: 'cont', label: 'Netto conteggi', value: k(nettoMese), delta: curA && prevA ? pctDelta(nettoA(curA), nettoA(prevA)) : null, goodUp: true, sub: `vs ${prevNome}`, spark: fino(8).map(nettoA) },
+    { c: C.green, icon: 'euro', label: 'Fatturato imponibile', value: k(Number(curA?.fatturato ?? 0)), delta: curA && prevA ? pctDelta(Number(curA.fatturato), Number(prevA.fatturato)) : null, goodUp: true, sub: `vs ${prevNome} · IVA esclusa`, spark: fino(8).map(a => Number(a.fatturato)) },
+    { c: C.orange, icon: 'eni', label: 'Carburante Eni', value: k(eniCur), delta: pctDelta(eniCur, eniPrev), goodUp: false, sub: `vs ${prevNome}`, spark: eniFino.map(e => e.totale) },
+    { c: C.teal, icon: 'ric', label: 'Ricariche elettriche', value: k(ricCur), delta: pctDelta(ricCur, ricPrev), goodUp: false, sub: `vs ${prevNome}`, spark: ricariche.filter(r => r.totale > 0).map(r => r.totale) },
   ];
 
-  const top = useSort(topBonifici, (r, k: 'nome' | 'stato' | 'netto') => (k === 'nome' ? r.ragioneSociale : k === 'stato' ? STATO_LABEL[r.stato] : Number(r.daBonificare)), { key: 'netto', dir: 'desc' });
+  // ─── Grafico ────────────────────────────────────────
+  const chartData = fino(periodo).map(a => ({
+    label: MESI[Number(a.mese.split('-')[1]) - 1].slice(0, 3),
+    total: Number(a.fatturato || 0),
+    part: nettoA(a),
+    valueLabel: Number(a.fatturato) ? `${Math.round(Number(a.fatturato) / 1000)}k` : '—',
+    tip: `${meseLungo(a.mese)} · imponibile ${fmtEur(a.fatturato)} · netto ${fmtEur(nettoA(a))}`,
+    mese: a.mese,
+  }));
 
-  if (loading && !mezziStats) {
-    return <Page><Empty>Caricamento panoramica…</Empty></Page>;
-  }
+  // ─── Addebiti del mese per tipo (stessa logica di calcolaRighe) ──
+  const addebiti = useMemo(() => {
+    const out = { tot: 0, noleggi: 0, ricariche: 0, palmari: 0, vari: 0 };
+    for (const c of conteggi) {
+      if (!c.righe?.length) continue;
+      const sum = (t: string) => c.righe.filter(r => r.tipo === t).reduce((s, r) => s + Number(r.importo), 0);
+      const nol = sum('NOLEGGIO'), ric = sum('RICARICA'), pal = sum('PALMARE') * 1.22;
+      const tot = calcolaRighe(c.righe).addebiti;
+      out.tot += tot; out.noleggi += nol; out.ricariche += ric; out.palmari += pal; out.vari += tot - nol - ric - pal;
+    }
+    return out;
+  }, [conteggi]);
+  const breakdown = [
+    { l: 'Noleggi mezzi', v: addebiti.noleggi, c: C.teal },
+    { l: 'Ricariche', v: addebiti.ricariche, c: C.green },
+    { l: 'Palmari', v: addebiti.palmari, c: C.blue },
+    { l: 'Addebiti vari e bolli', v: addebiti.vari, c: C.purple },
+  ];
 
-  const tot = conteggiStats?.totali ?? 0;
+  // ─── Da gestire ─────────────────────────────────────
+  const daGestire = useMemo<DaGestire[]>(() => {
+    const out: DaGestire[] = [];
+    const attiviP = padroncini.filter(p => p.attivo !== false);
+    for (const [campo, nome] of [['scadenzaDurc', 'DURC'], ['scadenzaDvr', 'DVR']] as const) {
+      const valido = (p: Padroncino) => !(campo === 'scadenzaDvr' && p.dvrEsente) && !!p[campo];
+      const scaduti = attiviP.filter(p => valido(p) && (giorniDa(p[campo]) ?? 1) < 0)
+        .sort((a, b) => String(a[campo]).localeCompare(String(b[campo])));
+      if (scaduti.length) out.push({ k: 'Documenti', tile: C.red, icon: 'doc', tag: 'Scaduto', tono: 'rosso', ordine: 0, to: '/padroncini',
+        title: `${nome} scaduto · ${scaduti.length} ${scaduti.length === 1 ? 'padroncino attivo' : 'padroncini attivi'}`,
+        detail: scaduti.map(p => `${breve(p.ragioneSociale)} dal ${dataIt(p[campo]!)}`).join(' · ') });
+      attiviP.filter(valido).forEach(p => {
+        const g = giorniDa(p[campo])!;
+        if (g >= 0 && g <= 30) out.push({ k: 'Documenti', tile: C.orange, icon: 'doc', tag: `Tra ${g} giorni`, tono: 'ambra', ordine: 1 + g, to: `/padroncini/${p.id}`,
+          title: `${nome} in scadenza · ${p.ragioneSociale}`, detail: `Scade il ${dataIt(p[campo]!)}` });
+      });
+    }
+    const inFlotta = mezzi.filter(m => !['DISMESSO', 'VENDUTO'].includes(m.stato.toUpperCase()));
+    const gruppo = (campo: 'scadenzaBollo' | 'scadenzaRevisione' | 'fineNoleggio' | 'scadenzaAssicurazione', label: string, entro: number) => {
+      const lista = inFlotta.filter(m => m[campo]).map(m => ({ m, g: giorniDa(m[campo])! })).filter(x => x.g <= entro);
+      const scad = lista.filter(x => x.g < 0), pross = lista.filter(x => x.g >= 0);
+      if (scad.length) {
+        const date = Array.from(new Set(scad.map(x => dataIt(x.m[campo]!))));
+        const anni = Array.from(new Set(scad.map(x => x.m[campo]!.slice(0, 4)))).sort();
+        out.push(campo === 'scadenzaAssicurazione'
+          ? { k: 'Mezzi', tile: '#71717A', icon: 'scudo', tag: 'Da aggiornare', tono: 'grigio', ordine: 50, to: '/flotta', title: `${label} con data superata · ${scad.length} mezzi`, detail: anni.length > 1 ? `Date ferme tra il ${anni[0]} e il ${anni[anni.length - 1]}` : `Date ferme al ${anni[0]}` }
+          : { k: 'Mezzi', tile: C.red, icon: 'mezzi', tag: 'Scaduto', tono: 'rosso', ordine: 0, to: '/flotta', title: `${label} scaduto · ${scad.length} ${scad.length === 1 ? 'mezzo' : 'mezzi'}`, detail: date.length <= 3 ? `Dal ${date.join(', ')}` : `${scad.map(x => x.m.targa).slice(0, 6).join(', ')}${scad.length > 6 ? ` e altri ${scad.length - 6}` : ''}` });
+      }
+      const perData = new Map<string, Mezzo[]>();
+      pross.forEach(x => { const d = dataIt(x.m[campo]!); perData.set(d, [...(perData.get(d) ?? []), x.m]); });
+      perData.forEach((ms, d) => {
+        const g = giorniDa(ms[0][campo])!;
+        const modelli = Array.from(new Set(ms.map(m => `${m.marca} ${m.modello}`.trim())));
+        out.push({ k: 'Mezzi', tile: C.orange, icon: campo === 'scadenzaAssicurazione' ? 'scudo' : 'cal', tag: `Tra ${g} giorni`, tono: 'ambra', ordine: 1 + g,
+          to: ms.length === 1 ? `/flotta/${ms[0].id}` : '/flotta',
+          title: `${label} · ${ms.map(m => m.targa).join(ms.length === 2 ? ' e ' : ', ')}`,
+          detail: `${campo === 'fineNoleggio' ? '' : 'Entro il '}${d} · ${modelli.join(', ')}` });
+      });
+    };
+    gruppo('scadenzaBollo', 'Bollo', 30);
+    gruppo('scadenzaRevisione', 'Revisione', 30);
+    gruppo('fineNoleggio', 'Fine noleggio', 60);
+    gruppo('scadenzaAssicurazione', 'Assicurazione', 30);
+    if (sospesi.length) {
+      const add = sospesi.filter(s => s.tipo !== 'MEMO');
+      const memo = sospesi.length - add.length;
+      const tot = add.reduce((s, x) => s + Number(x.importo ?? 0), 0);
+      const nomi = Array.from(new Set(sospesi.map(s => s.padroncino ? breve(s.padroncino.ragioneSociale) : '').filter(Boolean)));
+      const target = sospesi.map(s => s.meseTarget).sort()[0];
+      out.push({ k: 'Sospesi', tile: C.blue, icon: 'euro', tag: target ? nomeMeseCap(target) : 'In attesa', tono: 'blu', ordine: 90, to: '/addebiti-sospesi',
+        title: `Sospesi da inserire nei conteggi · ${sospesi.length}`,
+        detail: [add.length ? `${add.length} ${add.length === 1 ? 'addebito' : 'addebiti'} per ${k(tot)}` : '', memo ? `${memo} promemoria` : ''].filter(Boolean).join(' e ') + (nomi.length ? ` · ${nomi.join(' e ')}` : '') });
+    }
+    return out.sort((a, b) => a.ordine - b.ordine);
+  }, [padroncini, mezzi, sospesi]);
+  const daGestireVisti = daGestire.filter(x => filtro === 'Tutto' || x.k === filtro);
+
+  // ─── Promemoria (attività dei conteggi ancora aperte) ──
+  const promemoria = tasks.filter(t => !t.completata).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const handleFatto = async (t: TaskItem) => {
+    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, completata: true } : x));
+    try { await taskApi.toggle(t.id, true); } catch (e: any) { alert('Errore aggiornamento attività: ' + e.message); }
+  };
+  const handleNuovaAttivita = async (data: TaskModalSubmitData) => {
+    setTaskSaving(true);
+    try {
+      await taskApi.create({ entityType: 'conteggi', entityId: 'conteggi', ...data });
+      setTaskOpen(false);
+      setTasks(await taskApi.list('conteggi', 'conteggi'));
+    } catch (e: any) { alert('Errore salvataggio attività: ' + e.message); }
+    finally { setTaskSaving(false); }
+  };
+
+  // ─── Padroncini ─────────────────────────────────────
+  const nettoPer = useMemo(() => new Map(conteggi.map(c => [c.padroncinoId, Number(c.netto ?? 0)])), [conteggi]);
+  const durcInfo = (p: Padroncino): { t: string; tono: Tono; ord: number } => {
+    if (!p.scadenzaDurc) return { t: 'Non inserito', tono: 'grigio', ord: -1 };
+    const g = giorniDa(p.scadenzaDurc)!;
+    if (g < 0) return { t: `Scaduto il ${dataIt(p.scadenzaDurc)}`, tono: 'rosso', ord: 0 };
+    if (g <= 30) return { t: `Scade il ${dataIt(p.scadenzaDurc)}`, tono: 'ambra', ord: 1 };
+    return { t: dataIt(p.scadenzaDurc), tono: 'verde', ord: 2 };
+  };
+  const dvrTesto = (p: Padroncino) => (p.dvrEsente ? 'Esente' : p.scadenzaDvr ? dataIt(p.scadenzaDvr) : 'Non inserito');
+  const attivi = useMemo(() => padroncini.filter(p => p.attivo !== false && p.ragioneSociale.toLowerCase().includes(cerca.toLowerCase())), [padroncini, cerca]);
+  type PK = 'nome' | 'mezzi' | 'palmari' | 'codici' | 'durc' | 'dvr' | 'netto';
+  const ps = useSort<Padroncino, PK>(attivi, (p, key) => {
+    switch (key) {
+      case 'nome': return p.ragioneSociale;
+      case 'mezzi': return p.mezziAssegnati?.length ?? 0;
+      case 'palmari': return p.palmariAssegnati?.length ?? 0;
+      case 'codici': return p.codiciAutista?.length ?? 0;
+      case 'durc': { const d = durcInfo(p); return d.ord * 1e9 + (p.scadenzaDurc ? new Date(p.scadenzaDurc).getTime() / 1e5 : 0); }
+      case 'dvr': return p.dvrEsente ? 'Esente' : p.scadenzaDvr ?? '';
+      case 'netto': return nettoPer.get(p.id) ?? '';
+    }
+  }, { key: 'netto', dir: 'desc' });
+  const totAttivi = padroncini.filter(p => p.attivo !== false);
+
+  // ─── Flotta ─────────────────────────────────────────
+  const dismessi = mezzi.filter(m => ['DISMESSO', 'VENDUTO'].includes(m.stato.toUpperCase())).length;
+  const assegnati = mezziStats?.assegnati ?? 0, disponibili = mezziStats?.disponibili ?? 0;
+  const flottaTot = mezziStats?.totali ?? mezzi.length;
+
+  // ─── Testi in alto ──────────────────────────────────
+  const ora = new Date().getHours();
+  const saluto = ora < 13 ? 'Buongiorno' : ora < 18 ? 'Buon pomeriggio' : 'Buonasera';
+  const oggi = new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const chiusi = conteggi.filter(c => c.stato !== 'BOZZA').length;
+
+  if (loading) return <Page><Empty>Caricamento panoramica…</Empty></Page>;
 
   return (
     <Page>
-      <PageHeader
-        eyebrow={new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        title="Panoramica"
-        sub={`Dati del mese di ${formatMeseLungo(meseKpi)}${loadingMese ? ' · aggiornamento…' : ''}`}
-        actions={
-          <label className="ds-select">
-            <span>Mese</span>
-            <select value={meseKpi} onChange={e => setMeseKpi(e.target.value)}>
-              {ultimiMesi(13).map(m => <option key={m} value={m}>{formatMeseLungo(m)}</option>)}
+      <header className="ds-pagehead">
+        <div className="ds-pagehead-text">
+          <span className="ds-eyebrow">Panoramica operativa</span>
+          <h1 className="ds-h1">{saluto}{user?.nome ? `, ${user.nome}` : ''}</h1>
+          <p className="ds-sub">{oggi.charAt(0).toUpperCase() + oggi.slice(1)} · ecco come va il deposito.</p>
+        </div>
+        <div className="ds-actions">
+          <label className="ds-btn dash-mese">
+            <Icon name="cal" size={14} />
+            <span className="sr-only">Mese</span>
+            <select value={mese} onChange={e => setMese(e.target.value)}>
+              {Array.from({ length: 13 }, (_, i) => meseShift(meseCorrente, -i)).map(m => <option key={m} value={m}>{meseLungo(m)}</option>)}
             </select>
+            <Icon name="chevDown" size={12} />
           </label>
-        }
-      />
+          <Link to="/conteggi" className="ds-btn ds-btn-primary" onClick={() => sessionStorage.setItem('conteggi_mese_selezionato', meseCorrente)}>
+            <Icon name="cont" size={14} />Conteggi di {nomeMese(meseCorrente)}
+          </Link>
+        </div>
+      </header>
 
       {error && <div className="ds-alert ds-alert-ko" role="alert">{error}</div>}
 
-      <Kpis items={kpis} />
+      <div className="dash-banner">
+        <span aria-hidden="true" className="dash-banner-mark">GC</span>
+        <div className="dash-banner-text">
+          <span style={{ fontWeight: 600 }}>
+            {conteggi.length === 0 ? `Nessun conteggio per ${nomeMese(mese)}` : chiusi === conteggi.length ? `Conteggi di ${nomeMese(mese)} chiusi · ${chiusi} su ${conteggi.length}` : `Conteggi di ${nomeMese(mese)} · ${chiusi} chiusi su ${conteggi.length}`}
+          </span>
+          <span className="dash-muted12">
+            {totAttivi.length} padroncini attivi · {flottaTot} mezzi · {palmariStats?.totali ?? 0} palmari · {codiciStats?.totali ?? 0} codici autista
+          </span>
+        </div>
+        {aggiornato && <span className="ds-dot ds-dot-ok">Dati aggiornati alle {aggiornato.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
+
+      <section aria-label={`Indicatori di ${nomeMese(mese)}`} className="ds-g4">
+        {kpi.map(x => (
+          <div key={x.label} className="ds-kpi">
+            <div className="ds-kpi-top">
+              <span aria-hidden="true" className="ds-tile" style={{ background: x.c }}><Icon name={x.icon} size={11} stroke={2.6} /></span>
+              <span className="ds-kpi-label">{x.label}</span>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="#A1A1AA"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></svg>
+            </div>
+            <div className="dash-kpi-row">
+              <div className="dash-kpi-col">
+                <span className="ds-kpi-value dash-kpi-big">{x.value}</span>
+                <span className="ds-kpi-sub">
+                  {x.delta !== null && <span style={{ fontWeight: 600, color: (x.delta >= 0) === x.goodUp ? '#15803D' : '#B91C1C' }}>{fmtPct(x.delta)}</span>} {x.sub}
+                </span>
+              </div>
+              {x.spark.length > 0 && <Spark values={x.spark} color={x.c} />}
+            </div>
+          </div>
+        ))}
+      </section>
 
       <div className="ds-g4">
-        <Card pad className="ds-s3">
-          <CardHead title="Fatturato e netto" sub="Ultimi 12 mesi · clic su un mese per vederne i dati" />
+        <section className="ds-card ds-card-pad ds-s3" style={{ gap: 14 }}>
+          <div className="ds-cardhead">
+            <div className="ds-cardhead-text">
+              <h2 className="ds-h2">Fatturato e netto</h2>
+              <span className="ds-cardsub">{nomeMeseCap(mese)}: imponibile {k(Number(curA?.fatturato ?? 0))} · netto {k(nettoMese)}</span>
+            </div>
+            <div role="group" aria-label="Periodo" className="dash-periodo">
+              {([3, 8, 12] as const).map(p => (
+                <button key={p} type="button" aria-pressed={periodo === p} onClick={() => setPeriodo(p)}>{p === 12 ? 'Anno' : `${p}M`}</button>
+              ))}
+            </div>
+          </div>
           {chartData.length === 0 ? <Empty>Nessun dato</Empty> : (
             <BarStrip
               data={chartData}
               palette="blue"
-              legend={['Fatturato imponibile', 'Netto (bonificato + da bonificare)']}
-              selected={selIdx >= 0 ? selIdx : undefined}
-              onSelect={i => setMeseKpi(chartData[i].mese)}
-              ariaLabel="Fatturato imponibile e netto per mese, ultimi 12 mesi"
+              legend={['Fatturato imponibile', 'Netto bonificato']}
+              selected={chartData.findIndex(d => d.mese === mese)}
+              onSelect={i => setMese(chartData[i].mese)}
+              ariaLabel={`Fatturato imponibile e netto per mese, ultimi ${chartData.length} mesi`}
             />
           )}
-        </Card>
-        <Card pad>
-          <CardHead title="Altri dati del mese" sub={formatMeseLungo(meseKpi)} />
-          <div className="dash-kv">
-            <span>Competenze attive</span><strong>{competenzeAttive != null ? fmtEur(competenzeAttive) : '—'}</strong>
-            <span>Ricariche PDA</span><strong>{fmtEur(ricaricheTot)}</strong>
-            <span>Acconti</span><strong>{fmtEur(accontiTot)}</strong>
-          </div>
-          <div className="dash-kv-sep" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontWeight: 500 }}>Stato conteggi</span>
-            <span className="ds-cardsub">{(conteggiStats?.confermato ?? 0) + (conteggiStats?.chiuso ?? 0)} di {tot} chiusi o confermati</span>
-          </div>
-          {tot > 0 ? (
-            <>
-              <SegBar parts={[
-                { value: conteggiStats!.chiuso, color: C.blue },
-                { value: conteggiStats!.confermato, color: C.green },
-                { value: conteggiStats!.bozza, color: '#D4D4D8' },
-              ]} />
-              <div className="dash-legend">
-                <Dot tone="info">Chiusi {conteggiStats!.chiuso}</Dot>
-                <Dot tone="ok">Confermati {conteggiStats!.confermato}</Dot>
-                <Dot tone="na">Bozze {conteggiStats!.bozza}</Dot>
-              </div>
-            </>
-          ) : <span className="ds-cardsub">Nessun conteggio per il mese</span>}
-        </Card>
-      </div>
+        </section>
 
-      <div className="ds-g4">
-        <Card className="ds-s2">
-          <CardHead bar title="Da gestire" sub={alerts.length ? `${alerts.length} ${alerts.length === 1 ? 'avviso' : 'avvisi'}` : 'Nessun avviso'} />
-          <div className="ds-list">
-            {alerts.length === 0 && <Empty>Tutto in ordine.</Empty>}
-            {alerts.map(a => (
-              <div key={a.id} className="ds-listrow">
-                <span aria-hidden="true" className="ds-tile ds-tile-md" style={{ background: a.color }}><Icon name={a.icon} size={12} stroke={2.4} /></span>
-                <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <span style={{ fontWeight: 500 }}>{a.titolo}</span>
-                  <span className="ds-cardsub" style={{ fontSize: 12 }}>{a.desc}</span>
-                </div>
-                <Button size="sm" onClick={() => navigate(a.to)}>{a.cta} <Icon name="chevRight" size={12} /></Button>
+        <section className="ds-card ds-card-pad">
+          <div className="ds-cardhead-text">
+            <h2 className="ds-h2">Addebiti di {nomeMese(mese)}</h2>
+            <span className="ds-cardsub">Cosa addebitiamo ai padroncini</span>
+          </div>
+          <span className="ds-kpi-value">{fmtEur(addebiti.tot)}</span>
+          <div aria-hidden="true" className="dash-seg">
+            {breakdown.filter(b => b.v > 0).map(b => <span key={b.l} style={{ width: `${(b.v / (addebiti.tot || 1)) * 100}%`, background: b.c }} />)}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            {breakdown.map(b => (
+              <div key={b.l} className="dash-legrow">
+                <i style={{ background: b.c }} />
+                <span>{b.l}</span>
+                <strong>{fmtEur(b.v)}</strong>
+                <small>{addebiti.tot ? Math.round((b.v / addebiti.tot) * 100) : 0}%</small>
               </div>
             ))}
           </div>
-        </Card>
-        <Card>
-          <CardHead bar title="Scadenze mezzi" sub="Prossimi 60 giorni" actions={<Link to="/flotta" className="dash-link">Tutte</Link>} />
-          <div style={{ padding: '0 18px 8px' }}>
-            <SegTabs items={SCAD_TABS.map(t => ({ value: t, label: t, count: scadenzeRows.filter(s => s.tipo === t).length }))} value={scadTab} onChange={setScadTab} />
-          </div>
-          <div className="ds-list dash-scroll">
-            {scadenzeFiltrate.length === 0 && <Empty>Nessuna scadenza di tipo {scadTab.toLowerCase()}</Empty>}
-            {scadenzeFiltrate.map((s, i) => (
-              <button key={i} type="button" className="ds-listrow dash-rowbtn" onClick={() => navigate(`/flotta/${s.mezzoId}`)}>
-                <span className="ds-mono" style={{ fontWeight: 600, fontSize: 12 }}>{s.targa}</span>
-                <span className="ds-cardsub" style={{ flex: '1 1 auto', fontSize: 12 }}>{s.data}</span>
-                <Dot tone={s.giorni < 0 || s.giorni <= 7 ? 'ko' : s.giorni <= 30 ? 'warn' : 'na'}>
-                  {s.giorni < 0 ? `Scaduta da ${-s.giorni} gg` : `Tra ${s.giorni} gg`}
-                </Dot>
-              </button>
-            ))}
-          </div>
-        </Card>
-        <Card>
-          <CardHead bar title="Attività recente" actions={<Link to="/log" className="dash-link">Storico</Link>} />
-          <div className="ds-list dash-scroll">
-            {activity.length === 0 && <Empty>Nessuna attività</Empty>}
-            {activity.map(log => {
-              const { azione, dettaglio } = auditLabel(log);
-              const utente = log.user ? log.user.nome || log.user.email.split('@')[0] : 'system';
-              const url = getEntityUrl(log);
-              return (
-                <div key={log.id} className={`ds-listrow dash-act${url ? ' is-link' : ''}`} onClick={url ? () => navigate(url) : undefined} title={url ? 'Vai al dettaglio' : undefined}>
-                  <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span style={{ fontWeight: 500 }}>{azione}</span>
-                    {dettaglio && <span className="dash-act-detail">{dettaglio}</span>}
-                  </div>
-                  <span className="dash-act-meta">{formatRelativeTime(log.createdAt)}<br />{utente}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+          <Link to="/conteggi" className="dash-link" onClick={() => sessionStorage.setItem('conteggi_mese_selezionato', mese)}>Vai ai conteggi ↗</Link>
+        </section>
       </div>
 
       <div className="ds-g4">
-        <Card className="ds-s3">
-          <CardHead bar title="Padroncini da bonificare" sub={`I primi 5 di ${formatMeseLungo(meseKpi)}`} actions={<Link to="/conteggi" className="dash-link">Tutti i conteggi</Link>} />
-          {topBonifici.length === 0 ? <Empty>Nessun importo da bonificare</Empty> : (
-            <div className="ds-tablewrap">
-              <table className="ds-table">
-                <thead>
-                  <tr>
-                    <Th k="nome" sort={top.sort} onSort={top.toggle}>Padroncino</Th>
-                    <Th k="stato" sort={top.sort} onSort={top.toggle}>Stato</Th>
-                    <Th k="netto" sort={top.sort} onSort={top.toggle} right>Da bonificare</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {top.sorted.map(t => (
-                    <tr key={t.conteggioId} className="is-clickable" onClick={() => navigate(`/conteggi/${t.conteggioId}`)}>
-                      <td style={{ fontWeight: 500 }}>{t.ragioneSociale}</td>
-                      <td><Dot tone={STATO_TONE[t.stato] || 'na'}>{STATO_LABEL[t.stato] || t.stato}</Dot></td>
-                      <td className="r" style={{ fontWeight: 600 }}>{fmtEur(t.daBonificare)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section className="ds-card ds-s3" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="ds-cardhead ds-cardhead-bar" style={{ paddingTop: 16 }}>
+            <div className="ds-cardhead-text">
+              <h2 className="ds-h2">Da gestire</h2>
+              <span className="ds-cardsub">{daGestireVisti.length} cose tra scadenze, documenti e sospesi</span>
             </div>
-          )}
-        </Card>
-        <Card pad>
-          <CardHead title="Flotta e risorse" />
-          <div className="dash-kv">
-            <span>Mezzi</span><strong>{mezziStats?.totali ?? 0} · {mezziStats?.assegnati ?? 0} assegnati</strong>
-            <span>Entrate noleggio mensili</span><strong>{fmtEur(mezziStats?.entrateNoleggio ?? 0)}</strong>
-            <span>Margine noleggio</span><strong style={{ color: (mezziStats?.margine ?? 0) >= 0 ? '#15803D' : '#B91C1C' }}>{fmtEur(mezziStats?.margine ?? 0)}</strong>
+            <div role="group" aria-label="Filtra" className="ds-segtabs">
+              {(['Tutto', 'Mezzi', 'Documenti', 'Sospesi'] as const).map(f => (
+                <button key={f} type="button" className="ds-segtab" aria-pressed={filtro === f} onClick={() => setFiltro(f)}>
+                  {f}<small>{f === 'Tutto' ? daGestire.length : daGestire.filter(x => x.k === f).length}</small>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="dash-kv-sep" />
-          <div className="dash-kv">
-            <span>Padroncini attivi</span><strong>{padronciniStats?.attivi ?? 0} di {padronciniStats?.totali ?? 0}</strong>
-            <span>Flotta padroncini</span><strong>{padronciniStats?.flottaMezzi ?? 0} mezzi · {padronciniStats?.flottaDisponibili ?? 0} disp.</strong>
-            <span>Palmari assegnati</span><strong>{palmariStats?.assegnati ?? 0} di {palmariStats?.totali ?? 0}</strong>
-            <span>Palmari attivi (padroncini)</span><strong>{padronciniStats?.palmariAttivi ?? 0} di {padronciniStats?.palmariTotali ?? 0}</strong>
+          {daGestireVisti.length === 0 && <Empty>Niente da gestire.</Empty>}
+          {daGestireVisti.map((t, i) => (
+            <Link key={i} to={t.to} className="dash-todo">
+              <span aria-hidden="true" className="dash-todo-tile" style={{ background: t.tile }}><Icon name={t.icon} size={13} stroke={2.4} /></span>
+              <span className="dash-todo-text">
+                <span style={{ fontWeight: 600 }}>{t.title}</span>
+                <span className="dash-muted12">{t.detail}</span>
+              </span>
+              <span className="dash-todo-tag" style={{ color: TONI[t.tono][0] }}><i style={{ background: TONI[t.tono][1] }} />{t.tag}</span>
+            </Link>
+          ))}
+        </section>
+
+        <section className="ds-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="ds-cardhead ds-cardhead-bar" style={{ paddingTop: 16 }}>
+            <div className="ds-cardhead-text">
+              <h2 className="ds-h2">Promemoria</h2>
+              <span className="ds-cardsub">{promemoria.length} {promemoria.length === 1 ? 'aperto' : 'aperti'}</span>
+            </div>
+            <button type="button" aria-label="Nuovo promemoria" title="Nuovo promemoria" className="dash-plus" onClick={() => setTaskOpen(true)}><Icon name="plus" size={14} /></button>
           </div>
-        </Card>
+          {promemoria.length === 0 && <Empty>Nessun promemoria aperto</Empty>}
+          <div className="dash-promo-list">
+            {promemoria.map(t => (
+              <div key={t.id} className="dash-promo">
+                <span style={{ fontWeight: 600 }}>{t.testo}</span>
+                <div className="dash-promo-foot">
+                  <span className="dash-muted12">{t.padroncino ? breve(t.padroncino) : 'Conteggi'} · dal {new Date(t.createdAt).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })}</span>
+                  <button type="button" className="dash-fatto" onClick={() => handleFatto(t)}>Fatto</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
+
+      <div className="ds-g4">
+        <section className="ds-card ds-s3">
+          <div className="ds-cardhead" style={{ padding: '16px 18px 6px' }}>
+            <div className="ds-cardhead-text">
+              <h2 className="ds-h2">Padroncini da bonificare</h2>
+              <span className="ds-cardsub">Risorse, documenti e netto di {nomeMese(mese)} · clic sulle intestazioni per ordinare</span>
+            </div>
+            <label className="ds-search" style={{ minWidth: 200 }}>
+              <Icon name="search" size={13} />
+              <span className="sr-only">Cerca padroncino</span>
+              <input placeholder="Cerca padroncino…" value={cerca} onChange={e => setCerca(e.target.value)} />
+            </label>
+          </div>
+          <div className="ds-tablewrap" style={{ marginTop: 8 }}>
+            <table className="ds-table dash-ptable">
+              <thead>
+                <tr>
+                  <Th k="nome" sort={ps.sort} onSort={ps.toggle}>Padroncino</Th>
+                  <Th k="mezzi" sort={ps.sort} onSort={ps.toggle} right>Mezzi</Th>
+                  <Th k="palmari" sort={ps.sort} onSort={ps.toggle} right>Palmari</Th>
+                  <Th k="codici" sort={ps.sort} onSort={ps.toggle} right>Codici</Th>
+                  <Th k="durc" sort={ps.sort} onSort={ps.toggle}>DURC</Th>
+                  <Th k="dvr" sort={ps.sort} onSort={ps.toggle}>DVR</Th>
+                  <Th k="netto" sort={ps.sort} onSort={ps.toggle} right>Netto {nomeMese(mese)}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {ps.sorted.map(p => {
+                  const d = durcInfo(p);
+                  const n = nettoPer.get(p.id);
+                  const idx = padroncini.findIndex(x => x.id === p.id);
+                  return (
+                    <tr key={p.id} className="is-clickable" onClick={() => navigate(`/padroncini/${p.id}`)}>
+                      <td>
+                        <span className="dash-pname">
+                          <span aria-hidden="true" className="dash-av" style={{ background: AVATAR[idx % AVATAR.length] }}>{iniziali(p.ragioneSociale)}</span>
+                          <span className="dash-plink">{p.ragioneSociale}</span>
+                        </span>
+                      </td>
+                      <td className="r">{p.mezziAssegnati?.length ?? 0}</td>
+                      <td className="r">{p.palmariAssegnati?.length ?? 0}</td>
+                      <td className="r">{p.codiciAutista?.length ?? 0}</td>
+                      <td><span className="dash-todo-tag" style={{ color: TONI[d.tono][0] }}><i style={{ background: TONI[d.tono][1] }} />{d.t}</span></td>
+                      <td style={{ fontSize: 12, color: '#3F3F46' }}>{dvrTesto(p)}</td>
+                      <td className="r" style={{ fontWeight: 600 }}>{n != null ? fmtEur(n) : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="dash-pfoot">
+            <span>{totAttivi.length} padroncini attivi · totale da bonificare {fmtEur(nettoMese)}</span>
+            <Link to="/padroncini" className="dash-link">Apri padroncini ↗</Link>
+          </div>
+        </section>
+
+        <section className="ds-card ds-card-pad">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span aria-hidden="true" className="ds-tile" style={{ background: C.teal }}><Icon name="mezzi" size={11} stroke={2.6} /></span>
+            <h2 className="ds-h2">Flotta: canoni e rate</h2>
+          </div>
+          <dl className="dash-dl">
+            <div><dt>Canoni noleggio</dt><dd>{fmtEur(mezziStats?.entrateNoleggio ?? 0)}</dd></div>
+            <div><dt>Rate PDA</dt><dd>{fmtEur(mezziStats?.sommaRate ?? 0)}</dd></div>
+            <div className="dash-dl-sep"><dt>Margine (calcolo attuale)</dt><dd>{fmtEur(mezziStats?.margine ?? 0)}</dd></div>
+          </dl>
+          <div aria-hidden="true" className="ds-seg">
+            <span style={{ width: `${(assegnati / (flottaTot || 1)) * 100}%`, background: C.green }} />
+            <span style={{ width: `${(disponibili / (flottaTot || 1)) * 100}%`, background: C.blue }} />
+            <span style={{ width: `${(dismessi / (flottaTot || 1)) * 100}%`, background: '#A1A1AA' }} />
+          </div>
+          <span className="dash-muted12">{flottaTot} mezzi · {assegnati} assegnati · {disponibili} disponibili · {dismessi} dismessi</span>
+          <Link to="/flotta" className="dash-link">Apri flotta ↗</Link>
+        </section>
+      </div>
+
+      <footer className="dash-footer">
+        <span>Gestionale Corriere</span>
+        <span className="ds-dot ds-dot-ok" style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Database collegato</span>
+      </footer>
+
+      <TaskModal open={taskOpen} onClose={() => setTaskOpen(false)} onSubmit={handleNuovaAttivita} saving={taskSaving} />
     </Page>
   );
 }
