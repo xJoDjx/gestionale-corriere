@@ -239,6 +239,8 @@ export class AuditService {
       this.prisma.auditLog.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
       this.prisma.auditLog.count(),
     ]);
+    const accessi = await this.prisma.auditLog.groupBy({ by: ['userId'], where: { azione: 'LOGIN' }, _max: { createdAt: true } });
+    const ultimoAccesso = Object.fromEntries(accessi.map((a) => [a.userId, a._max.createdAt]));
     const ids = perUtente.map((u) => u.userId).filter((x): x is string => !!x);
     const users = ids.length ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true, cognome: true } }) : [];
     const nome = new Map(users.map((u) => [u.id, `${u.nome} ${u.cognome}`.trim()]));
@@ -248,6 +250,7 @@ export class AuditService {
       perTipo: Object.fromEntries(perTipo.map((x) => [x.entityType, x._count._all])),
       perAzione: Object.fromEntries(perAzione.map((x) => [x.azione, x._count._all])),
       perUtente: perUtente.map((x) => ({ userId: x.userId, nome: x.userId ? nome.get(x.userId) ?? '—' : 'Sistema', count: x._count._all })).sort((a, b) => b.count - a.count),
+      ultimoAccesso,
     };
   }
 }

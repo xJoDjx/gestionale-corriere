@@ -1,0 +1,22 @@
+.um-back{position:fixed;inset:0;z-index:9999;background:rgba(11,11,12,.32);display:flex;align-items:center;justify-content:center;padding:20px}
+.um-modal{max-width:100%;max-height:90vh;overflow-y:auto;padding:22px;border-radius:14px;box-shadow:0 24px 60px rgba(11,11,12,.18);box-sizing:border-box}
+.um-modal>div:last-child{display:flex;gap:8px;justify-content:flex-end}
+.um-h{margin:0 0 14px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.um-lbl{display:block;margin-bottom:4px;font-size:12.5px;color:#52525B}
+.um-in{width:100%;box-sizing:border-box}
+.um-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px 10px}
+.um-table{table-layout:fixed;min-width:800px}
+.um-table td,.um-table th{padding-left:10px;padding-right:10px}
+.um-ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.um-mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:#52525B}
+.um-role{display:inline-flex;align-items:center;gap:8px}
+.um-role i{width:7px;height:7px;border-radius:999px;display:block;flex:0 0 7px}
+.um-role select{border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;padding:2px 0;max-width:120px}
+.um-acts{display:inline-flex;gap:2px}
+.um-perm{display:flex;flex-direction:column;gap:12px}
+.um-checks{display:flex;flex-direction:column;gap:2px}
+.um-checks label{display:flex;align-items:center;gap:10px;min-height:30px;cursor:pointer;color:#71717A}
+.um-checks label.is-on{color:#0B0B0C}
+.um-checks input{width:15px;height:15px;accent-color:#3D63F0}
+.um-permfoot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.um-link{border:0;background:none;padding:0;font:inherit;font-size:12.5px;color:#3D63F0;cursor:pointer}
