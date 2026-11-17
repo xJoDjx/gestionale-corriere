@@ -5,6 +5,7 @@ import { padronciniApi } from '../../lib/api';
 import type { Padroncino } from '../../lib/api';
 import { PadroncinoDetail } from './Padroncini';
 import './Padroncini.css';
+import { Page, Card, Empty, Alert, Button } from '../../components/ds';
 
 export default function DettaglioPadroncino() {
   const { id } = useParams<{ id: string }>();
@@ -28,24 +29,18 @@ export default function DettaglioPadroncino() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return (
-    <div className="pd-page">
-      <div className="pd-loading"><div className="pd-spinner" /><span>Caricamento padroncino...</span></div>
-    </div>
-  );
+  if (loading) return <Page><Card pad><Empty>Caricamento padroncino…</Empty></Card></Page>;
   if (error || !p) return (
-    <div className="pd-page">
-      <div className="pd-error">⚠️ {error || 'Padroncino non trovato'} <button className="btn-primary btn-sm" onClick={() => navigate('/padroncini')}>← Torna alla lista</button></div>
-    </div>
+    <Page>
+      <Alert tone="ko" title={error || 'Padroncino non trovato'} actions={<Button size="sm" onClick={() => navigate('/padroncini')}>Torna alla lista</Button>} />
+    </Page>
   );
 
   return (
-    <div className="pd-page">
-      <PadroncinoDetail
-        p={p}
-        onRefresh={load}
-        onBack={() => navigate('/padroncini')}
-      />
-    </div>
+    <PadroncinoDetail
+      p={p}
+      onRefresh={load}
+      onBack={() => navigate('/padroncini')}
+    />
   );
 }
