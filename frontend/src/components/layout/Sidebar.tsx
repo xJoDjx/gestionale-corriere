@@ -70,6 +70,7 @@ export default function Sidebar() {
 
   // Aggiorna il conteggio dei sospesi pendenti a ogni cambio pagina (come prima)
   useEffect(() => {
+    if (!canSee('addebiti-sospesi')) return;
     addebitivSospesoApi.list({ stato: 'PENDENTE' }).then(d => setSospesiCount(d.length)).catch(() => {});
   }, [location.pathname]);
 

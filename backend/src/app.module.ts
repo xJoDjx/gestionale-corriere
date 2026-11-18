@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { SezioniGuard } from './auth/sezioni.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -51,6 +52,8 @@ import { TaskModule } from './task/task.module';
     // Guard JWT applicato globalmente a tutti gli endpoint.
     // Usare @Public() per escludere singoli endpoint (login, register, db-admin).
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Dopo il JWT: blocca le API delle sezioni non abilitate per l'utente
+    { provide: APP_GUARD, useClass: SezioniGuard },
   ],
 })
 export class AppModule {}
