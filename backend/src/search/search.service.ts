@@ -372,23 +372,74 @@ export class SearchService {
     }
 
     // ── NOTE (sistema unico) ───────────────────────────
+    // Una nota matcha se:
+    //  a) il contenuto contiene la query, oppure
+    //  b) l'entità a cui è collegata matcha per identificativo
+    //     (targa mezzo, codice/IMEI palmare, codice/nome autista, ragione sociale padroncino).
+    // Così cercando "GM098FB" escono anche le note del mezzo, anche se il testo non cita la targa.
+    const [mezziId, palmariId, codiciId, padronciniId] = await Promise.all([
+      this.prisma.mezzo.findMany({
+        where: { deletedAt: null, targa: ic },
+        select: { id: true }, take: 50,
+      }),
+      this.prisma.palmare.findMany({
+        where: { deletedAt: null, OR: [{ codice: ic }, { codiceAssociato: ic }, { imei: ic }, { simNumero: ic }] },
+        select: { id: true }, take: 50,
+      }),
+      this.prisma.codiceAutista.findMany({
+        where: { deletedAt: null, OR: [{ codice: ic }, { nome: ic }, { cognome: ic }] },
+        select: { id: true }, take: 50,
+      }),
+      this.prisma.padroncino.findMany({
+        where: { deletedAt: null, ragioneSociale: ic },
+        select: { id: true }, take: 50,
+      }),
+    ]);
+    const entityMatches: Array<{ entityType: string; entityId: { in: string[] } }> = [];
+    if (mezziId.length)      entityMatches.push({ entityType: 'mezzo',          entityId: { in: mezziId.map(x => x.id) } });
+    if (palmariId.length)    entityMatches.push({ entityType: 'palmare',        entityId: { in: palmariId.map(x => x.id) } });
+    if (codiciId.length)     entityMatches.push({ entityType: 'codice_autista', entityId: { in: codiciId.map(x => x.id) } });
+    if (padronciniId.length) entityMatches.push({ entityType: 'padroncino',     entityId: { in: padronciniId.map(x => x.id) } });
+
     const note = await this.prisma.nota.findMany({
-      where: { contenuto: ic },
-      take: 60,
+      where: { OR: [{ contenuto: ic }, ...entityMatches] },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
+
+    // Risolve le etichette (targa, codice, ...) delle entità collegate alle note
+    const idsBy = (t: string) => [...new Set(note.filter(n => n.entityType === t).map(n => n.entityId))];
+    const [lMezzi, lPalmari, lCodici, lPadroncini] = await Promise.all([
+      this.prisma.mezzo.findMany({ where: { id: { in: idsBy('mezzo') } }, select: { id: true, targa: true } }),
+      this.prisma.palmare.findMany({ where: { id: { in: idsBy('palmare') } }, select: { id: true, codice: true } }),
+      this.prisma.codiceAutista.findMany({ where: { id: { in: idsBy('codice_autista') } }, select: { id: true, codice: true, nome: true, cognome: true } }),
+      this.prisma.padroncino.findMany({ where: { id: { in: idsBy('padroncino') } }, select: { id: true, ragioneSociale: true } }),
+    ]);
+    const labels = new Map<string, string>();
+    lMezzi.forEach(x => labels.set(`mezzo:${x.id}`, `mezzo ${x.targa}`));
+    lPalmari.forEach(x => labels.set(`palmare:${x.id}`, `palmare ${x.codice}`));
+    lCodici.forEach(x => labels.set(`codice_autista:${x.id}`,
+      `cod. autista ${x.codice}${x.nome || x.cognome ? ` (${`${x.nome ?? ''} ${x.cognome ?? ''}`.trim()})` : ''}`));
+    lPadroncini.forEach(x => labels.set(`padroncino:${x.id}`, `padroncino ${x.ragioneSociale}`));
+
+    const ql = q.toLowerCase();
     for (const n of note) {
       const route =
-        n.entityType === 'mezzo'      ? `/flotta/${n.entityId}` :
-        n.entityType === 'padroncino' ? `/padroncini/${n.entityId}` : `/`;
+        n.entityType === 'mezzo'          ? `/flotta/${n.entityId}` :
+        n.entityType === 'padroncino'     ? `/padroncini/${n.entityId}` :
+        n.entityType === 'palmare'        ? `/palmari/${n.entityId}` :
+        n.entityType === 'codice_autista' ? `/codici-autista/${n.entityId}` : `/`;
+      const label = labels.get(`${n.entityType}:${n.entityId}`) ?? n.entityType;
+      const matchContenuto = n.contenuto.toLowerCase().includes(ql);
       hits.push({
         entityType: 'nota',
         entityId: n.id,
         parentId: n.entityId,
-        title: `Nota su ${n.entityType}`,
-        field: 'Contenuto',
+        title: `Nota su ${label}`,
+        field: matchContenuto ? 'Contenuto' : 'Collegata a',
         snippet: this.snippet(n.contenuto, q),
         href: route,
-        meta: { entita: n.entityType },
+        meta: { entita: n.entityType, data: n.createdAt.toISOString().slice(0, 10) },
       });
     }
 

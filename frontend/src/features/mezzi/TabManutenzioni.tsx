@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { manutenzioniApi } from '../../lib/api';
 import type { Manutenzione } from '../../lib/api';
 import Modal from '../../components/ui/Modal';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 
 const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -31,6 +33,7 @@ const emptyForm = (): FormState => ({
 interface Props { mezzoId: string }
 
 export default function TabManutenzioni({ mezzoId }: Props) {
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [items, setItems] = useState<Manutenzione[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -122,6 +125,7 @@ export default function TabManutenzioni({ mezzoId }: Props) {
 
   return (
     <>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       {loading ? (
         <section className="dm2-card dm2-empty"><span className="dm2-muted">Caricamento manutenzioni…</span></section>
       ) : items.length === 0 ? (
@@ -153,6 +157,14 @@ export default function TabManutenzioni({ mezzoId }: Props) {
                 </span>
                 <span className="dm2-ev-dopo" style={{ fontVariantNumeric: 'tabular-nums' }}>{m.costo != null ? fmtEur(m.costo) : <span className="dm2-muted">Costo non inserito</span>}</span>
                 <span className="dm2-row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                  {m.fatturaPath && (
+                    <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" title="Anteprima fattura" aria-label="Anteprima fattura" onClick={() => setPreview({
+                      title: m.fatturaNome ?? 'Fattura',
+                      path: `/manutenzioni/${m.id}/fattura`,
+                      fileHint: m.fatturaNome ?? m.fatturaPath,
+                      onDownload: () => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura'),
+                    })}>{ico('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z')}</button>
+                  )}
                   {m.fatturaPath && (
                     <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura')} title="Scarica fattura" aria-label="Scarica fattura">{ico('M12 4v12M6 10l6 6 6-6M4 20h16')}</button>
                   )}

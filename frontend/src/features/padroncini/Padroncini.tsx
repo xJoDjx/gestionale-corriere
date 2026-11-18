@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
+  padronciniApi, mezziApi, palmariApi, codiciAutistaApi, documentiApi,
   Padroncino, CreatePadroncinoPayload,
 } from '../../lib/api';
 import type { PadroncinoMezzo, PadroncinoPalmare, PadroncinoCodiceAutista } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 import { Page, PageHeader, Card, Kpis, Button, SegTabs, Tabs, SearchBox, Select, Th, Dot, Empty, Alert, Tile, Icon, C, useSort, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
 import type { Tone, IconName } from '../../components/ds';
 import './Padroncini2.css';
@@ -1469,6 +1471,29 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
 
 function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promise<void> }) {
   const [docs, setDocs] = useState<Documento[]>((p as any).documenti || []);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [cerca, setCerca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  // Ricerca su nome, tipo, note e date (caricamento/scadenza); più parole = tutte richieste
+  const docsFiltrati = useMemo(() => {
+    const words = cerca.toLowerCase().split(/\s+/).filter(Boolean);
+    const dt = (x?: string | null) => (x ? new Date(x).toLocaleDateString('it-IT') : '');
+    return docs.filter(d => {
+      if (filtroTipo && (d.tipo ?? '') !== filtroTipo) return false;
+      if (!words.length) return true;
+      const h = [d.nome, d.tipo, d.note, dt(d.createdAt), dt(d.scadenza)].filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => h.includes(w));
+    });
+  }, [docs, cerca, filtroTipo]);
+  const tipiPresenti = useMemo(
+    () => Array.from(new Set(docs.map(d => d.tipo).filter(Boolean) as string[])).sort(),
+    [docs],
+  );
+  const openPreview = (d: Documento) => setPreview({
+    title: d.nome, path: `/documenti/${d.id}/download`,
+    fileHint: d.filePath, mimeType: (d as any).mimeType,
+    onDownload: () => documentiApi.download(d.id),
+  });
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1594,10 +1619,9 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
 
   const TIPO_COL: Record<string, string> = { DURC: C.red, DVR: C.green, CONTRATTO: C.blue, VISURA: C.purple, LICENZA: C.orange, IDENTITA: C.teal, ALTRO: '#71717A' };
   const cap = (t: string) => !t ? '' : ['DURC', 'DVR'].includes(t) ? t : t === 'IDENTITA' ? 'Identità' : t.charAt(0) + t.slice(1).toLowerCase();
-  const { sorted, sort, toggle } = useSort<Documento, 'tipo' | 'nome' | 'sca' | 'car' | 'dim'>(docs, (d, k) =>
+  const { sorted, sort, toggle } = useSort<Documento, 'tipo' | 'nome' | 'sca' | 'car' | 'dim'>(docsFiltrati, (d, k) =>
     k === 'tipo' ? d.tipo : k === 'nome' ? d.nome : k === 'sca' ? (d.scadenza ?? null) : k === 'car' ? d.createdAt : (d.dimensione ?? null),
     { key: 'tipo', dir: 'asc' });
-  const docUrl = (d: Documento) => `${API_BASE.replace('/api', '')}/uploads/padroncini/${normalizeDocPath(d.filePath)}`;
 
   const formFields = (f: { nome: string; tipo: string; scadenza: string; note: string }, setF: (fn: (x: typeof f) => typeof f) => void, upload: boolean) => (
     <div className="pdx-form">
@@ -1625,6 +1649,15 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
       actions={<Button size="sm" icon="upload" variant="primary" onClick={() => { setShowUpload(!showUpload); setEditingDocId(null); }}>Carica documento</Button>}
       foot={`${docs.length} document${docs.length === 1 ? 'o' : 'i'}`}
     >
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
+      {docs.length > 0 && (
+        <div className="pdx-docsearch">
+          <SearchBox value={cerca} onChange={setCerca} placeholder="Cerca per nome, tipo, note, data…" width={300} />
+          <Select size="sm" label="Tipo" value={filtroTipo} onChange={setFiltroTipo}
+            options={[{ value: '', label: 'Tutti' }, ...tipiPresenti.map((t) => ({ value: t, label: cap(t) }))]} />
+          {(cerca || filtroTipo) && <span className="pdx-muted" style={{ fontSize: 12 }}>{docsFiltrati.length} di {docs.length}</span>}
+        </div>
+      )}
       {editingDocId && (
         <div className="pdx-panel">
           <span className="ds-h2">Modifica documento</span>
@@ -1682,6 +1715,7 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
               <Th />
             </tr></thead>
             <tbody>
+              {sorted.length === 0 && <tr><td colSpan={7}><VuotoTab msg="Nessun documento corrisponde alla ricerca" /></td></tr>}
               {sorted.map((d) => {
                 const scad = d.scadenza ? scadenzaInfo(d.scadenza) : null;
                 const tone: Tone = !scad ? 'na' : scad.cls === 'pd-scad-expired' ? 'ko' : scad.cls === 'pd-scad-warning' ? 'warn' : 'ok';
@@ -1689,7 +1723,7 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
                   <tr key={d.id}>
                     <td><span className="pdx-tipo"><span aria-hidden="true" style={{ background: TIPO_COL[d.tipo] ?? '#71717A' }} />{cap(d.tipo)}</span></td>
                     <td style={{ maxWidth: 340 }}>
-                      <a className="pdx-doclink" href={docUrl(d)} target="_blank" rel="noreferrer" title={d.nome}>{d.nome}</a>
+                      <button type="button" className="pdx-doclink" title={`Anteprima di ${d.nome}`} onClick={() => openPreview(d)}>{d.nome}</button>
                     </td>
                     <td>
                       {d.scadenza
@@ -1700,7 +1734,8 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
                     <td>{fmtData(d.createdAt)}</td>
                     <td className="r pdx-muted">{fmtSize(d.dimensione)}</td>
                     <td className="r pdx-acts">
-                      <RowAct icon="download" label="Scarica" href={docUrl(d)} />
+                      <RowAct icon="eye" label="Anteprima" onClick={() => openPreview(d)} />
+                      <RowAct icon="download" label="Scarica" onClick={() => documentiApi.download(d.id)} />
                       <RowAct icon="edit" label="Modifica" onClick={() => openEdit(d)} />
                       <RowAct icon="trash" label="Elimina" danger onClick={() => handleDelete(d.id)} />
                     </td>

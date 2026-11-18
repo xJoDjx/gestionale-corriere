@@ -1,8 +1,10 @@
 // TabDocumenti.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { documentiApi } from '../../lib/api';
 import type { Documento } from '../../lib/api';
 import Modal from '../../components/ui/Modal';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 
 const TIPI_DOC = ['ASSICURAZIONE', 'REVISIONE', 'BOLLO', 'LIBRETTO', 'CONTRATTO', 'ALTRO'];
 
@@ -92,6 +94,30 @@ const MetaFields = ({
 
 export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
   const [docs, setDocs] = useState<Documento[]>([]);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [cerca, setCerca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+
+  // Ricerca su nome, tipo, note e date (caricamento/scadenza); più parole = tutte richieste
+  const docsFiltrati = useMemo(() => {
+    const words = cerca.toLowerCase().split(/\s+/).filter(Boolean);
+    return docs.filter(d => {
+      if (filtroTipo && (d.tipo ?? '') !== filtroTipo) return false;
+      if (!words.length) return true;
+      const h = [d.nome, d.tipo, d.note, fmtDate(d.createdAt), d.scadenza ? fmtDate(d.scadenza) : '']
+        .filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => h.includes(w));
+    });
+  }, [docs, cerca, filtroTipo]);
+  const tipiPresenti = useMemo(
+    () => Array.from(new Set(docs.map(d => d.tipo).filter(Boolean) as string[])).sort(),
+    [docs],
+  );
+  const openPreview = (doc: Documento) => setPreview({
+    title: doc.nome, path: `/documenti/${doc.id}/download`,
+    fileHint: doc.filePath, mimeType: doc.mimeType,
+    onDownload: () => documentiApi.download(doc.id),
+  });
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -201,6 +227,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
 
   return (
     <>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       {loading ? (
         <section className="dm2-card dm2-empty"><span className="dm2-muted">Caricamento documenti…</span></section>
       ) : docs.length === 0 ? (
@@ -219,7 +246,20 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
             </div>
             <button type="button" className="dm2-btn dm2-btn-sm" onClick={openUpload}>{ico('M12 5v14M5 12h14')}Carica documento</button>
           </div>
-          {docs.map((doc) => {
+          <div className="dm2-docsearch">
+            <label className="dm2-docq">
+              {ico('M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', 13)}
+              <input value={cerca} onChange={e => setCerca(e.target.value)} placeholder="Cerca per nome, tipo, note, data…" aria-label="Cerca documenti" />
+              {cerca && <button type="button" onClick={() => setCerca('')} aria-label="Pulisci">{ico('M6 6l12 12M18 6L6 18', 12)}</button>}
+            </label>
+            <select className="dm2-docsel" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} aria-label="Tipo documento">
+              <option value="">Tutti i tipi</option>
+              {tipiPresenti.map(t => <option key={t} value={t}>{TIPO_LABEL[t] ?? t}</option>)}
+            </select>
+            {(cerca || filtroTipo) && <span className="dm2-small dm2-muted">{docsFiltrati.length} di {docs.length}</span>}
+          </div>
+          {docsFiltrati.length === 0 && <div className="dm2-muted" style={{ padding: '18px', textAlign: 'center' }}>Nessun documento corrisponde alla ricerca</div>}
+          {docsFiltrati.map((doc) => {
             const expired = isExpired(doc.scadenza);
             const expiring = !expired && isExpiring(doc.scadenza);
             const tone = expired ? ['#B91C1C', '#E5484D'] : expiring ? ['#C2410C', '#EA6A2A'] : ['#15803D', '#15A06A'];
@@ -229,7 +269,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
                 <span className="dm2-ev-data">{fmtDate(doc.createdAt)}</span>
                 <span className="dm2-small dm2-muted">{doc.tipo ? (TIPO_LABEL[doc.tipo] ?? doc.tipo) : '—'}</span>
                 <span className="dm2-col" style={{ minWidth: 0 }}>
-                  <span className="dm2-ev-tit" style={{ whiteSpace: 'nowrap' }} title={doc.nome}>{doc.nome}</span>
+                  <button type="button" className="dm2-ev-tit dm2-doclink" style={{ whiteSpace: 'nowrap' }} title={`Anteprima di ${doc.nome}`} onClick={() => openPreview(doc)}>{doc.nome}</button>
                   {(doc.note || doc.dimensione) && (
                     <span className="dm2-small dm2-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={doc.note ?? undefined}>
                       {[fmtSize(doc.dimensione), doc.note].filter(Boolean).join(' · ')}
@@ -242,6 +282,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
                     : <span className="dm2-small dm2-muted">Senza scadenza</span>}
                 </span>
                 <span className="dm2-row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => openPreview(doc)} title="Anteprima" aria-label={`Anteprima ${doc.nome}`}>{ico('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z')}</button>
                   <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => documentiApi.download(doc.id)} title="Scarica" aria-label={`Scarica ${doc.nome}`}>{ico('M12 4v12M6 10l6 6 6-6M4 20h16')}</button>
                   <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => openEdit(doc)} title="Modifica nome, tipo, scadenza, note" aria-label={`Modifica ${doc.nome}`}>{ico('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z')}</button>
                   <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon dm2-btn-danger" onClick={() => handleDelete(doc.id, doc.nome)} title="Elimina" aria-label={`Elimina ${doc.nome}`}>{ico('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')}</button>

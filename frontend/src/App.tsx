@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Login from './features/auth/Login';
 import { useAuthStore } from './stores/auth.store';
+import { useParams } from 'react-router-dom';
 import { navItems, useCanSee } from './components/layout/Sidebar';
 import { Page, Card, Empty } from './components/ds';
 
@@ -15,6 +16,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
  * Altrimenti porta alla prima sezione consentita (nell'ordine del menu),
  * così chi ha solo "Flotta mezzi" dopo il login atterra su Flotta e non sulla Panoramica.
  */
+/** Storico note/modifiche/attività: visibile a chi vede la sezione da cui si arriva */
+const STORICO_SEZ: Record<string, string> = { mezzi: 'flotta', palmari: 'palmari', 'codici-autista': 'codici-autista' };
+function SezStorico() {
+  const { sezione = 'mezzi' } = useParams();
+  return <Sez k={STORICO_SEZ[sezione] ?? 'flotta'}><StoricoAttivita /></Sez>;
+}
+
 function Sez({ k, children }: { k: string; children: React.ReactNode }) {
   const canSee = useCanSee();
   if (canSee(k)) return <>{children}</>;
@@ -43,6 +51,7 @@ import RicaricheElettriche from './features/ricariche/RicaricheElettriche';
 import CarteEni from './features/carte-eni/CarteEni';
 import Impostazioni from './features/impostazioni/Impostazioni';
 import Ricerca from './features/ricerca/Ricerca';
+import StoricoAttivita from './features/storico/StoricoAttivita';
 import AddebitivSospesiPage from './features/addebiti-sospesi/AddebitivSospesi';
 import AnalisiSpedizioni from './features/analisi-spedizioni/AnalisiSpedizioni';
 import Margini from './features/margini/Margini';
@@ -91,6 +100,7 @@ export default function App() {
           <Route path="/ricariche" element={<Sez k="ricariche"><RicaricheElettriche /></Sez>} />
           <Route path="/carte-eni" element={<Sez k="carte-eni"><CarteEni /></Sez>} />
           <Route path="/ricerca" element={<Sez k="ricerca"><Ricerca /></Sez>} />
+          <Route path="/storico/:sezione" element={<SezStorico />} />
           <Route path="/esportazione" element={<Sez k="esportazione"><Esportazione /></Sez>} />
           <Route path="/impostazioni" element={<Sez k="impostazioni"><Impostazioni /></Sez>} />
           <Route path="*" element={<Navigate to="/" replace />} />

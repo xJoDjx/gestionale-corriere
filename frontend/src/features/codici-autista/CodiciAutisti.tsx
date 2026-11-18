@@ -428,6 +428,9 @@ export default function CodiciAutisti() {
                 onChange={(v) => setPannello(v as typeof pannello)}
               />
             </div>
+            <button type="button" className="fl-drawer-all" onClick={() => navigate(`/storico/codici-autista?tab=${pannello}`)}>
+              Elenco completo con ricerca <Icon name="chevRight" size={12} />
+            </button>
             <div className="fl-drawer-body">
               {pannello === 'attivita' && (
                 <>

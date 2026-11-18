@@ -14,6 +14,13 @@ function useCrumbs() {
   const out: { label: string; to?: string }[] = [];
   if (sec && base !== '/') out.push({ label: sec.label, to: parts.length > 1 ? base : undefined });
   if (!sec && base === '/') out.push({ label: 'Panoramica' });
+  if (parts[0] === 'storico') {
+    // /storico/:sezione → sezione di provenienza, poi "Storico"
+    const from = navItems.find(i => i.path === ({ mezzi: '/flotta', palmari: '/palmari', 'codici-autista': '/codici-autista' } as Record<string, string>)[parts[1] ?? '']);
+    if (from) out.push({ label: from.label, to: from.path });
+    out.push({ label: 'Storico' });
+    return out;
+  }
   if (parts.length > 1) out.push({ label: 'Dettaglio' });
   return out;
 }

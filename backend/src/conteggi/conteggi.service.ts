@@ -571,6 +571,13 @@ export class ConteggiService {
 
     const matchedIds = new Set<string>();          // id DB già abbinati in questo salvataggio
     const toUpdate: { id: string; data: any; prima: any }[] = [];
+    // Righe in cui sono cambiati SOLO campi tecnici (ordine/modificaManuale):
+    // vanno aggiornate nel DB ma NON loggate. Il frontend rinumera `ordine`
+    // in sequenza su tutte le sezioni ad ogni salvataggio, quindi aggiungere
+    // o togliere una riga fa scalare la posizione di tutte quelle successive:
+    // senza questa distinzione il log si riempiva di "Modificata riga X"
+    // per righe con importo/descrizione identici.
+    const toSilentUpdate: { id: string; data: any }[] = [];
     const toInsert: any[] = [];
 
     const imp = (v: any) => Math.round(Number(v ?? 0) * 100);
@@ -609,14 +616,17 @@ export class ConteggiService {
 
       if (ex) {
         matchedIds.add(ex.id);
-        // Confronta solo i campi che il payload ha effettivamente inviato
+        // Confronta solo i campi che il payload ha effettivamente inviato.
+        // `changed` = modifica di contenuto (va nel log);
+        // `techChanged` = solo posizione/flag interni (aggiornati in silenzio).
+        const techChanged =
+          ex.ordine           !== rowData.ordine           ||
+          ex.modificaManuale  !== rowData.modificaManuale;
         const changed =
           ex.tipo             !== rowData.tipo             ||
           ex.descrizione      !== rowData.descrizione      ||
           imp(ex.importo)     !== imp(rowData.importo)     ||
           ex.segno            !== rowData.segno            ||
-          ex.ordine           !== rowData.ordine           ||
-          ex.modificaManuale  !== rowData.modificaManuale  ||
           (r.categoria       !== undefined && str(ex.categoria)       !== str(rowData.categoria)) ||
           (r.riferimentoTipo !== undefined && str(ex.riferimentoTipo) !== str(rowData.riferimentoTipo)) ||
           (r.riferimentoId   !== undefined && str(ex.riferimentoId)   !== str(rowData.riferimentoId)) ||
@@ -627,6 +637,11 @@ export class ConteggiService {
         if (changed) {
           const { conteggioMensileId: _omit, ...updateFields } = rowData;
           toUpdate.push({ id: ex.id, data: updateFields, prima: ex });
+        } else if (techChanged) {
+          toSilentUpdate.push({
+            id: ex.id,
+            data: { ordine: rowData.ordine, modificaManuale: rowData.modificaManuale },
+          });
         }
         // else: dati identici → skip, updatedAt rimane invariato
       } else {
@@ -647,6 +662,9 @@ export class ConteggiService {
       }
       for (const { id, data } of toUpdate) {
         updated.push(await tx.conteggiRiga.update({ where: { id }, data }));
+      }
+      for (const { id, data } of toSilentUpdate) {
+        await tx.conteggiRiga.update({ where: { id }, data });
       }
       // Insert singoli (invece di createMany) per poter loggare ogni riga con
       // il suo id generato.

@@ -114,7 +114,7 @@ const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
 
 // ─── COLUMN PICKER ────────────────────────────────────────────────────────────
 
-type ColKey = 'tipo' | 'tipoMezzo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio';
+type ColKey = 'tipo' | 'tipoMezzo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio' | 'inseritoIl';
 
 const COL_DEFS: { key: ColKey; label: string }[] = [
   { key: 'marcaModello',  label: 'Marca / modello' },
@@ -130,12 +130,13 @@ const COL_DEFS: { key: ColKey; label: string }[] = [
   { key: 'canone',        label: 'Canone noleggio' },
   { key: 'rataPda',       label: 'Rata PDA'        },
   { key: 'fineNoleggio',  label: 'Fine Noleggio'   },
+  { key: 'inseritoIl',    label: 'Inserito il'     },
 ];
 
 const COLS_KEY = 'fm-cols-v5';
 const DEFAULT_COLS: Record<ColKey, boolean> = {
   tipoMezzo: true, tipo: true, marcaModello: true, alimentazione: true, stato: true, assegnatoA: true,
-  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true,
+  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true, inseritoIl: true,
 };
 
 function loadCols(): Record<ColKey, boolean> {
@@ -170,7 +171,7 @@ export default function FlottaMezzi() {
   const [riepChiuso, setRiepChiuso] = useState<boolean>(() => { try { return localStorage.getItem('flotta_riepilogo_chiuso') === '1'; } catch { return false; } });
   const toggleRiep = () => setRiepChiuso((v) => { try { localStorage.setItem('flotta_riepilogo_chiuso', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
 
-  type SortField = 'targa' | 'tipo' | 'tipoMezzo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio';
+  type SortField = 'targa' | 'tipo' | 'tipoMezzo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio' | 'inseritoIl';
   const [sortField, setSortField] = useState<SortField>('targa');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -273,6 +274,10 @@ export default function FlottaMezzi() {
         vb = b.kmAttualiAl ? new Date(b.kmAttualiAl).getTime() : -Infinity;
         break;
       case 'fineNoleggio': va = a.fineNoleggio ?? ''; vb = b.fineNoleggio ?? ''; break;
+      case 'inseritoIl':
+        va = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
+        vb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
+        break;
       default: va = ''; vb = '';
     }
     if (typeof va === 'string') return sortOrder === 'asc' ? va.localeCompare(vb, 'it') : vb.localeCompare(va, 'it');
@@ -554,7 +559,7 @@ export default function FlottaMezzi() {
   const sortState = { key: sortField, dir: sortOrder };
   const alimentazioni = Array.from(new Set(mezzi.map(m => m.alimentazione).filter(Boolean))).sort();
   const nColVisibili = COL_DEFS.filter(c => cols[c.key]).length;
-  const SORT_LABEL: Record<string, string> = { targa: 'targa', tipo: 'possesso', tipoMezzo: 'tipo', marca: 'marca', alimentazione: 'alimentazione', stato: 'stato', padroncino: 'assegnatario', assicurazione: 'assicurazione', revisione: 'revisione', canone: 'canone', rata: 'rata', kmPct: 'km', kmAggiornatiAl: 'data km', fineNoleggio: 'fine noleggio' };
+  const SORT_LABEL: Record<string, string> = { targa: 'targa', tipo: 'possesso', tipoMezzo: 'tipo', marca: 'marca', alimentazione: 'alimentazione', stato: 'stato', padroncino: 'assegnatario', assicurazione: 'assicurazione', revisione: 'revisione', canone: 'canone', rata: 'rata', kmPct: 'km', kmAggiornatiAl: 'data km', fineNoleggio: 'fine noleggio', inseritoIl: 'data di inserimento' };
   const AVC = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
   const padIdx = (nome: string) => { let h = 0; for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AVC[h % AVC.length]; };
   const iniziali = (s2: string) => s2.replace(/[^A-Za-z0-9 ]/g, ' ').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -784,6 +789,7 @@ export default function FlottaMezzi() {
                 {cols.canone        && <Th k="canone" sort={sortState} onSort={handleSort} right>Canone</Th>}
                 {cols.rataPda       && <Th k="rata" sort={sortState} onSort={handleSort} right>Rata PDA</Th>}
                 {cols.fineNoleggio  && <Th k="fineNoleggio" sort={sortState} onSort={handleSort}>Fine noleggio</Th>}
+                {cols.inseritoIl    && <Th k="inseritoIl" sort={sortState} onSort={handleSort}>Inserito il</Th>}
               </tr>
             </thead>
             <tbody>
@@ -848,6 +854,7 @@ export default function FlottaMezzi() {
                     {cols.canone && <td className="r">{m.canoneNoleggio != null ? fmtEur(m.canoneNoleggio) : <span className="fl-empty">—</span>}</td>}
                     {cols.rataPda && <td className="r" style={{ fontWeight: 600 }}>{m.rataNoleggio != null ? fmtEur(m.rataNoleggio) : <span className="fl-empty">—</span>}</td>}
                     {cols.fineNoleggio && <td>{m.fineNoleggio ? fmt(m.fineNoleggio) : <span className="fl-empty">—</span>}</td>}
+                    {cols.inseritoIl && <td title={m.createdAt ? new Date(m.createdAt).toLocaleString('it-IT') : undefined}>{m.createdAt ? fmt(m.createdAt) : <span className="fl-empty">—</span>}</td>}
                   </tr>
                 );
               })}
@@ -876,6 +883,9 @@ export default function FlottaMezzi() {
                 onChange={v => setPannello(v as typeof pannello)}
               />
             </div>
+            <button type="button" className="fl-drawer-all" onClick={() => navigate(`/storico/mezzi?tab=${pannello}`)}>
+              Elenco completo con ricerca <Icon name="chevRight" size={12} />
+            </button>
             <div className="fl-drawer-body">
               {pannello === 'attivita' && (
                 <>
