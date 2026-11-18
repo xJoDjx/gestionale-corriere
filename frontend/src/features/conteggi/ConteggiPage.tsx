@@ -52,6 +52,14 @@ const eur = (n: number | null) =>
 const CHECKLIST_KEY = (padroncinoId: string, mese: string) =>
   `checklist_${padroncinoId}_${mese}`;
 
+// Le quattro voci della checklist mostrate in elenco (stesse chiavi del dettaglio)
+const CHECK_COLS: { k: 'distribuzioneInviata' | 'pdfAddebitiCreato' | 'fatturaCreata' | 'fatturaRicevuta'; label: string; sigla: string; titolo: string }[] = [
+  { k: 'distribuzioneInviata', sigla: 'D', label: 'Distrib.',    titolo: 'Distribuzione inviata' },
+  { k: 'pdfAddebitiCreato', sigla: 'P',    label: 'PDF add.',    titolo: 'PDF addebiti creato' },
+  { k: 'fatturaCreata', sigla: 'F',        label: 'Fatt. creata', titolo: 'Fattura creata' },
+  { k: 'fatturaRicevuta', sigla: 'R',      label: 'Fatt. ric.',  titolo: 'Fattura ricevuta' },
+];
+
 function loadChecklist(padroncinoId: string, mese: string): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(CHECKLIST_KEY(padroncinoId, mese));
@@ -712,7 +720,20 @@ export default function ConteggiPage() {
                     <Th k="addebiti" sort={sortState} onSort={handleSort} right>Addebiti</Th>
                     <Th k="compensazioni" sort={sortState} onSort={handleSort} right>Compensazioni</Th>
                     <Th k="netto" sort={sortState} onSort={handleSort} right>Netto</Th>
-                    <Th>Quota del netto</Th>
+                    <th className="cp2-checkth">
+                      <span className="cp2-checkhead">
+                        <button type="button" onClick={() => handleSort('progresso')} title="Ordina per avanzamento">
+                          Checklist{sortKey === 'progresso' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </button>
+                        <span className="cp2-checkkeys">
+                          {CHECK_COLS.map(cc => (
+                            <button key={cc.k} type="button" className={sortKey === cc.k ? 'is-on' : ''} onClick={() => handleSort(cc.k)} title={`Ordina per: ${cc.titolo}`}>
+                              {cc.sigla}
+                            </button>
+                          ))}
+                        </span>
+                      </span>
+                    </th>
                     <Th></Th>
                   </tr>
                 </thead>
@@ -720,7 +741,8 @@ export default function ConteggiPage() {
                   {sorted.length === 0 ? (
                     <tr><td colSpan={10}><Empty>Nessun padroncino trovato</Empty></td></tr>
                   ) : (
-                    sorted.map(({ padroncino: p, conteggio: c }) => {
+                    sorted.map(({ padroncino: p, conteggio: c, checklist }) => {
+                      const checksDone = CHECK_COLS.filter(cc => checklist[cc.k]).length;
                       const fin = c?.righe?.length ? calcolaRighe(c.righe) : null;
                       const dismesso = p.attivo === false;
                       const idx = righe.findIndex(r => r.padroncino.id === p.id);
@@ -755,16 +777,20 @@ export default function ConteggiPage() {
                           <td className="r">{fin ? fmtEur(fin.fatturato) : '—'}</td>
                           <td className="r" style={{ color: fin && fin.addebiti ? '#B91C1C' : undefined }}>{fin ? fmtEur(fin.addebiti) : '—'}</td>
                           <td className="r" style={{ color: fin && fin.compensazioni ? '#1D4ED8' : undefined }}>{fin ? fmtEur(fin.compensazioni) : '—'}</td>
-                          <td className="r" style={{ fontWeight: 600, color: c?.netto != null && c.netto < 0 ? '#B91C1C' : undefined }}>
+                          <td className="r" title={quota !== null ? `${quota.toLocaleString('it-IT', { maximumFractionDigits: 1 })}% del netto del mese` : undefined} style={{ fontWeight: 600, color: c?.netto != null && c.netto < 0 ? '#B91C1C' : undefined }}>
                             {c?.netto != null ? fmtEur(c.netto) : '—'}
                           </td>
                           <td>
-                            {quota !== null ? (
-                              <span className="cp2-quota">
-                                <span aria-hidden="true"><i style={{ width: `${Math.min(100, quota)}%` }} /></span>
-                                <small>{quota.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%</small>
+                            <span className="cp2-checkcell" title={CHECK_COLS.map(cc => `${cc.titolo}: ${checklist[cc.k] ? 'fatto' : 'da fare'}`).join('\n')}>
+                              <span className="cp2-checkkeys">
+                                {CHECK_COLS.map(cc => (
+                                  <span key={cc.k} className={`cp2-ck${checklist[cc.k] ? ' is-on' : ''}`} aria-label={`${cc.titolo}: ${checklist[cc.k] ? 'fatto' : 'da fare'}`}>
+                                    {checklist[cc.k] ? <Icon name="tick" size={10} /> : null}
+                                  </span>
+                                ))}
                               </span>
-                            ) : <span style={{ color: '#A1A1AA' }}>—</span>}
+                              <small>{checksDone}/{CHECK_COLS.length}</small>
+                            </span>
                           </td>
                           <td onClick={e => e.stopPropagation()}>
                             <span style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
@@ -788,7 +814,7 @@ export default function ConteggiPage() {
                       <td className="r">{fmtEur(totaliTabella.addebiti)}</td>
                       <td className="r">{fmtEur(totaliTabella.compensazioni)}</td>
                       <td className="r">{fmtEur(totaliTabella.netto)}</td>
-                      <td></td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{filtered.filter(r => CHECK_COLS.every(cc => r.checklist[cc.k])).length} completi</td>
                       <td></td>
                     </tr>
                   </tfoot>
