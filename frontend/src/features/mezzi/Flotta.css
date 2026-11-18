@@ -69,3 +69,20 @@ tr:hover .fl-targa-link { color: var(--primary); }
 .fl-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 10px; }
 .fl-drawer-body { flex: 1 1 auto; overflow-y: auto; }
 .fl-drawer .fl-form { margin: 12px 18px; }
+/* barra unica limite km */
+.fl-kmbar { flex-wrap: nowrap; padding: 8px 10px 8px 14px; }
+.fl-kmbar > strong { white-space: nowrap; }
+.fl-kmsub { white-space: nowrap; color: #3F3F46; }
+.fl-kmchips { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; padding: 2px 0; }
+.fl-kmchip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 9px; border-radius: 999px; border: 1px solid #FBDDC4; background: #fff; font: inherit; font-size: 12.5px; font-family: 'JetBrains Mono', monospace; color: var(--ink); cursor: pointer; }
+.fl-kmchip b { font-family: var(--font-body, Inter, sans-serif); font-weight: 600; color: #C2410C; }
+.fl-kmchip.is-ko { border-color: #F5C2C2; }
+.fl-kmchip.is-ko b { color: #B91C1C; }
+.fl-kmchip:hover { border-color: var(--ink); }
+.fl-kmbar .fl-avviso-btn { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 900px) { .fl-kmbar { flex-wrap: wrap; } }
+/* riepilogo richiudibile */
+.fl-riep-toggle { display: flex; justify-content: space-between; gap: 10px; margin: -4px 0; }
+.fl-riep-toggle button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 2px; font: inherit; font-size: 12.5px; color: #52525B; cursor: pointer; }
+.fl-riep-toggle button:hover { color: var(--ink); }
+.fl-scroll { max-height: 260px; }

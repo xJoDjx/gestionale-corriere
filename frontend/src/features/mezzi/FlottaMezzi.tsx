@@ -166,6 +166,9 @@ export default function FlottaMezzi() {
   const [filtroAlim, setFiltroAlim] = useState<string>('TUTTE');
   const [pannello, setPannello] = useState<null | 'attivita' | 'note' | 'modifiche'>(null);
   const [scadTab90, setScadTab90] = useState<string>('Tutte');
+  // Riepilogo (scadenze e composizione) richiudibile; la scelta resta salvata nel browser
+  const [riepChiuso, setRiepChiuso] = useState<boolean>(() => { try { return localStorage.getItem('flotta_riepilogo_chiuso') === '1'; } catch { return false; } });
+  const toggleRiep = () => setRiepChiuso((v) => { try { localStorage.setItem('flotta_riepilogo_chiuso', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
 
   type SortField = 'targa' | 'tipo' | 'tipoMezzo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio';
   const [sortField, setSortField] = useState<SortField>('targa');
@@ -498,6 +501,7 @@ export default function FlottaMezzi() {
       .filter(x => x.g <= 90)
       .sort((a, b) => a.g - b.g),
   }));
+  const scad90Tot = scad90.reduce((n, d) => n + d.items.filter(x => x.g < 0).length, 0);
   const tagScad = (g: number): [string, string] => (g < 0 ? ['ko', `Scaduta da ${-g} gg`] : g <= 30 ? ['warn', `Tra ${g} giorni`] : ['nn', `Tra ${g} giorni`]);
   const padDi = (m: Mezzo) => m.assegnazioni?.find(a => !a.dataFine)?.padroncino.ragioneSociale ?? null;
   const modello = (m: Mezzo) => `${m.marca} ${m.modello}`.trim();
@@ -603,19 +607,39 @@ export default function FlottaMezzi() {
         ))}
       </section>
 
-      {avvisi.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {avvisi.map(a => (
-            <div key={a.key} className={`fl-avviso fl-avviso-${a.tono}`}>
-              <i aria-hidden="true" />
-              <span style={{ flex: '1 1 360px' }}><strong>{a.t}</strong> <span style={{ color: '#3F3F46' }}>{a.s}</span></span>
-              <button type="button" className="fl-avviso-btn" onClick={a.go}>{a.cta}</button>
-            </div>
-          ))}
+      {(oltre.length > 0 || vicini.length > 0) && (
+        <div className={`fl-avviso fl-avviso-${oltre.length ? 'ko' : 'warn'} fl-kmbar`}>
+          <i aria-hidden="true" />
+          <strong>Limite km</strong>
+          <span className="fl-kmsub">
+            {oltre.length > 0 && `${oltre.length} ${oltre.length === 1 ? 'superato' : 'superati'}`}
+            {oltre.length > 0 && vicini.length > 0 && ' · '}
+            {vicini.length > 0 && `${vicini.length} sopra il 90%`}
+          </span>
+          <span className="fl-kmchips">
+            {[...oltre.map(x => ({ ...x, ko: true })), ...vicini.map(x => ({ ...x, ko: false }))].map(x => (
+              <button key={x.m.id} type="button" className={`fl-kmchip${x.ko ? ' is-ko' : ''}`}
+                title={`${x.m.targa}: ${fmtNum(x.m.kmAttuali)} km su ${fmtNum(x.m.kmLimite)} · ${(STATO_BADGE[x.m.stato.toUpperCase()]?.label ?? x.m.stato).toLowerCase()}, ${POSS_LABEL[x.m.tipoPossesso ?? 'NOLEGGIO'] ?? ''}`}
+                onClick={() => navigate(`/flotta/${x.m.id}`)}>
+                {x.m.targa} <b>{x.p}%</b>
+              </button>
+            ))}
+          </span>
+          <button type="button" className="fl-avviso-btn" onClick={() => { setSortField('kmPct'); setSortOrder('desc'); document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' }); }}>Mostra in tabella</button>
         </div>
       )}
 
-      <div className="ds-g4">
+      <div className="fl-riep-toggle">
+        <button type="button" aria-expanded={!riepChiuso} onClick={() => toggleRiep()}>
+          <Icon name={riepChiuso ? 'chevRight' : 'chevDown'} size={13} />
+          {riepChiuso ? `Mostra scadenze e composizione${scad90Tot ? ` · ${scad90Tot} già scadute` : ''}` : 'Nascondi scadenze e composizione'}
+        </button>
+        <button type="button" onClick={() => document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' })}>
+          Vai all'elenco mezzi <Icon name="chevDown" size={13} />
+        </button>
+      </div>
+
+      {!riepChiuso && <div className="ds-g4">
         <section className="ds-card ds-s3" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="ds-cardhead" style={{ padding: '16px 18px 10px' }}>
             <div className="ds-cardhead-text">
@@ -662,7 +686,7 @@ export default function FlottaMezzi() {
             </div>
           ))}
         </section>
-      </div>
+      </div>}
 
       {importResult && (
         <Alert tone="ok" title={`Importazione completata: ${importResult.creati} creati, ${importResult.saltati} saltati`}
