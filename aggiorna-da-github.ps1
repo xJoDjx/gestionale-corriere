@@ -90,8 +90,12 @@ if ($Precedente) { Write-Host "      In produzione adesso: $Precedente" -Foregro
 
 # -- 2. Compila frontend e backend (il servizio e' ancora acceso) -
 Titolo "[2/7] Compilo il frontend..."
+# Il .env di produzione imposta NODE_ENV=production: per compilare servono anche
+# i pacchetti di sviluppo (tsc, vite, nest), quindi lo togliamo solo per la build.
+$NodeEnvProd = $env:NODE_ENV
+Remove-Item Env:NODE_ENV -ErrorAction SilentlyContinue
 Set-Location "$SrcDir\frontend"
-npm ci --legacy-peer-deps
+npm ci --include=dev --legacy-peer-deps
 Assert-Exit "npm ci (frontend)"
 npm run build
 Assert-Exit "npm run build (frontend)"
@@ -100,7 +104,7 @@ Ok "Frontend OK"
 
 Titolo "[3/7] Compilo il backend..."
 Set-Location "$SrcDir\backend"
-npm ci --legacy-peer-deps
+npm ci --include=dev --legacy-peer-deps
 Assert-Exit "npm ci (backend)"
 npx prisma generate
 Assert-Exit "prisma generate"
@@ -108,6 +112,7 @@ npm run build
 Assert-Exit "npm run build (backend)"
 if (-not (Test-Path "$SrcDir\backend\dist\main.js")) { Stop-Con "Build backend senza dist\main.js." }
 Ok "Backend OK"
+if ($NodeEnvProd) { $env:NODE_ENV = $NodeEnvProd }
 
 # -- 3. Backup: database e versione attuale --------------------
 Titolo "[4/7] Backup del database e dei file attuali..."
