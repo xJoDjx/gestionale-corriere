@@ -1,0 +1,82 @@
+/* ============================================
+   STORICO (note / modifiche / cose da fare)
+   ============================================ */
+.st-page { padding: var(--space-lg); max-width: 1200px; }
+.st-header { margin-bottom: var(--space-md); }
+.st-header h1 { font-size: 22px; font-weight: 700; margin: 4px 0; color: var(--text-primary); }
+.st-back { font-size: 13px; color: var(--primary); text-decoration: none; }
+.st-back:hover { text-decoration: underline; }
+.st-sub { font-size: 13px; color: var(--text-muted); margin: 0; }
+
+.st-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: var(--space-md); }
+.st-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+  color: var(--text-secondary); margin-bottom: -1px; font-family: inherit;
+}
+.st-tab:hover { color: var(--text-primary); }
+.st-tab-active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.st-searchbar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0 12px; margin-bottom: var(--space-md);
+}
+.st-searchbar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-muted); }
+.st-search-icon { font-size: 14px; color: var(--text-muted); }
+.st-search {
+  flex: 1; border: none; outline: none; background: transparent;
+  padding: 11px 0; font-size: 14px; color: var(--text-primary); font-family: inherit;
+}
+.st-search-clear { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 13px; }
+
+.st-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--card-shadow); overflow: hidden; }
+.st-count { padding: 10px 16px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.st-empty, .st-loading { padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.st-error { padding: 16px; color: var(--danger); background: var(--danger-bg); border-radius: 10px; }
+
+.st-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.st-table th {
+  text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-muted); padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--bg-tertiary);
+}
+.st-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-primary); }
+.st-row { cursor: pointer; }
+.st-row:hover td { background: var(--table-row-hover); }
+.st-row-done .st-task-text { color: var(--text-muted); text-decoration: line-through; }
+.st-date { white-space: nowrap; color: var(--text-secondary) !important; font-size: 12px; }
+.st-code { font-family: var(--font-mono); font-weight: 700; font-size: 12px; }
+.st-code-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.st-text { white-space: pre-wrap; word-break: break-word; }
+.st-user { font-size: 12px; color: var(--text-secondary) !important; }
+.st-table mark { background: var(--badge-yellow-bg); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+.st-azione { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--badge-gray-bg); color: var(--badge-gray); white-space: nowrap; }
+.st-azione-CREATE { background: var(--badge-green-bg); color: var(--badge-green); }
+.st-azione-UPDATE { background: var(--badge-blue-bg); color: var(--badge-blue); }
+.st-azione-DELETE { background: var(--badge-red-bg); color: var(--badge-red); }
+.st-azione-ASSEGNA { background: var(--badge-purple-bg); color: var(--badge-purple); }
+.st-azione-CHIUDI_ASSEGNAZIONE { background: var(--badge-orange-bg); color: var(--badge-orange); }
+
+.st-more { display: block; width: 100%; padding: 12px; background: none; border: none; border-top: 1px solid var(--border); color: var(--primary); font-weight: 600; cursor: pointer; font-family: inherit; }
+.st-more:hover { background: var(--bg-hover); }
+.st-pager { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px; font-size: 13px; color: var(--text-secondary); }
+.st-pager button { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; color: var(--text-primary); font-family: inherit; }
+.st-pager button:disabled { opacity: .4; cursor: default; }
+
+.st-task-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.st-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.st-chip { background: var(--bg-tertiary); border: 1px solid transparent; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-secondary); font-family: inherit; }
+.st-chip-active { background: var(--primary-muted); color: var(--primary); border-color: var(--primary); }
+.st-btn-primary { background: var(--primary); color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.st-btn-primary:hover { background: var(--primary-hover); }
+.st-task-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 3px; }
+.st-link { background: none; border: none; color: var(--primary); font-size: 11px; cursor: pointer; padding: 0 4px; font-family: inherit; }
+.st-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; opacity: 0; }
+.st-row:hover .st-remove { opacity: 1; }
+.st-remove:hover { color: var(--danger); }
+
+@media (max-width: 760px) {
+  .st-page { padding: 16px; }
+  .st-table th:nth-child(n+4), .st-table td:nth-child(n+4) { display: none; }
+}

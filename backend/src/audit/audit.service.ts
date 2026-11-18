@@ -173,6 +173,15 @@ export class AuditService {
       ? Prisma.sql`AND al.user_id = ${userId}`
       : Prisma.empty;
 
+    // Match anche per identificativo dell'entità (targa, codice palmare, codice
+    // autista, ragione sociale): cercando "GM098FB" escono tutti gli eventi del
+    // mezzo, anche quando il payload JSON di quell'evento non riporta la targa.
+    const entityIdentMatch = Prisma.sql`
+          OR al.entity_id IN (SELECT id FROM mezzi WHERE targa ILIKE ${s})
+          OR al.entity_id IN (SELECT id FROM palmari WHERE codice ILIKE ${s})
+          OR al.entity_id IN (SELECT id FROM codici_autisti WHERE codice ILIKE ${s})
+          OR al.entity_id IN (SELECT id FROM padroncini WHERE ragione_sociale ILIKE ${s})`;
+
     const [rawData, countResult] = await Promise.all([
       this.prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT
@@ -193,6 +202,7 @@ export class AuditService {
           al.entity_id   ILIKE ${s}
           OR al.data_dopo::text  ILIKE ${s}
           OR al.data_prima::text ILIKE ${s}
+          ${entityIdentMatch}
         )
         ${entityTypeFilter}
         ${azioneFilter}
@@ -207,6 +217,7 @@ export class AuditService {
           al.entity_id   ILIKE ${s}
           OR al.data_dopo::text  ILIKE ${s}
           OR al.data_prima::text ILIKE ${s}
+          ${entityIdentMatch}
         )
         ${entityTypeFilter}
         ${azioneFilter}

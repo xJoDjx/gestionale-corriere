@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
+  padronciniApi, mezziApi, palmariApi, codiciAutistaApi, documentiApi,
   Padroncino, CreatePadroncinoPayload,
 } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -1508,6 +1510,24 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
 
 function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promise<void> }) {
   const [docs, setDocs] = useState<Documento[]>((p as any).documenti || []);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [cerca, setCerca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  // Ricerca su nome, tipo, note e date (caricamento/scadenza); più parole = tutte richieste
+  const docsFiltrati = useMemo(() => {
+    const words = cerca.toLowerCase().split(/\s+/).filter(Boolean);
+    const dt = (x?: string | null) => (x ? new Date(x).toLocaleDateString('it-IT') : '');
+    return docs.filter(d => {
+      if (filtroTipo && (d.tipo ?? '') !== filtroTipo) return false;
+      if (!words.length) return true;
+      const h = [d.nome, d.tipo, d.note, dt(d.createdAt), dt(d.scadenza)].filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => h.includes(w));
+    });
+  }, [docs, cerca, filtroTipo]);
+  const tipiPresenti = useMemo(
+    () => Array.from(new Set(docs.map(d => d.tipo).filter(Boolean) as string[])).sort(),
+    [docs],
+  );
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1633,11 +1653,45 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
 
   return (
     <div>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       <div className="pd-tab-actions">
         <button className="btn-primary btn-sm" onClick={() => { setShowUpload(!showUpload); setEditingDocId(null); }}>
           📎 Carica Documento
         </button>
       </div>
+
+      {/* Ricerca documenti */}
+      {docs.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, margin: '0 0 12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{
+            flex: '1 1 260px', display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px',
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>🔍</span>
+            <input
+              value={cerca}
+              onChange={e => setCerca(e.target.value)}
+              placeholder="Cerca per nome, tipo, note, data…"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', padding: '8px 0', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'inherit' }}
+            />
+            {cerca && (
+              <button onClick={() => setCerca('')} title="Pulisci"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>✕</button>
+            )}
+          </div>
+          <select
+            value={filtroTipo}
+            onChange={e => setFiltroTipo(e.target.value)}
+            style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit' }}
+          >
+            <option value="">Tutti i tipi</option>
+            {tipiPresenti.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          {(cerca || filtroTipo) && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{docsFiltrati.length} di {docs.length}</span>
+          )}
+        </div>
+      )}
 
       {editingDocId && (
         <div className="pd-upload-panel">
@@ -1750,18 +1804,26 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
               <tr><th>DOCUMENTO</th><th>TIPO</th><th>SCADENZA</th><th>NOTE</th><th>DIM.</th><th>DATA</th><th></th></tr>
             </thead>
             <tbody>
-              {docs.map((d) => {
+              {docsFiltrati.length === 0 && (
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Nessun documento corrisponde alla ricerca</td></tr>
+              )}
+              {docsFiltrati.map((d) => {
                 const scad = d.scadenza ? scadenzaInfo(d.scadenza) : null;
                 return (
                   <tr key={d.id} className="pd-item-row">
                     <td>
-                      <a
-                        href={`${API_BASE.replace('/api', '')}/uploads/padroncini/${normalizeDocPath(d.filePath)}`}
-                        target="_blank" rel="noreferrer"
-                        style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
+                      <button
+                        type="button"
+                        onClick={() => setPreview({
+                          title: d.nome, path: `/documenti/${d.id}/download`,
+                          fileHint: d.filePath, mimeType: (d as any).mimeType,
+                          onDownload: () => documentiApi.download(d.id),
+                        })}
+                        title="Anteprima"
+                        style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
                       >
                         📄 {d.nome}
-                      </a>
+                      </button>
                     </td>
                     <td>
                       <span className="pd-doc-badge pd-doc-ok">{d.tipo}</span>
@@ -1785,6 +1847,9 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
                         <button className="pd-del-btn" title="Modifica"
                           style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', fontSize: 14 }}
                           onClick={() => openEdit(d)}>✏️</button>
+                        <button className="pd-del-btn" title="Scarica"
+                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', fontSize: 14 }}
+                          onClick={() => documentiApi.download(d.id)}>⬇️</button>
                         <button className="pd-del-btn" title="Elimina" onClick={() => handleDelete(d.id)}>🗑</button>
                       </div>
                     </td>

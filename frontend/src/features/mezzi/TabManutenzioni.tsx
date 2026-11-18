@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { manutenzioniApi } from '../../lib/api';
 import type { Manutenzione } from '../../lib/api';
 import Modal from '../../components/ui/Modal';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 
 const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -31,6 +33,7 @@ const emptyForm = (): FormState => ({
 interface Props { mezzoId: string }
 
 export default function TabManutenzioni({ mezzoId }: Props) {
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [items, setItems] = useState<Manutenzione[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,6 +120,7 @@ export default function TabManutenzioni({ mezzoId }: Props) {
 
   return (
     <div style={{ padding: '20px 24px' }}>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
@@ -175,11 +179,23 @@ export default function TabManutenzioni({ mezzoId }: Props) {
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                     {m.fatturaPath && (
-                      <button
-                        className="btn-outline btn-sm"
-                        onClick={() => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura')}
-                        title="Scarica fattura"
-                      >📄</button>
+                      <>
+                        <button
+                          className="btn-outline btn-sm"
+                          onClick={() => setPreview({
+                            title: m.fatturaNome ?? 'Fattura',
+                            path: `/manutenzioni/${m.id}/fattura`,
+                            fileHint: m.fatturaNome ?? m.fatturaPath,
+                            onDownload: () => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura'),
+                          })}
+                          title="Anteprima fattura"
+                        >👁️</button>
+                        <button
+                          className="btn-outline btn-sm"
+                          onClick={() => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura')}
+                          title="Scarica fattura"
+                        >📄</button>
+                      </>
                     )}
                     <button className="btn-outline btn-sm" onClick={() => openEdit(m)} title="Modifica">✏️</button>
                     <button

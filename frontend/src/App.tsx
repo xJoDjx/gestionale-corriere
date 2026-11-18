@@ -24,6 +24,7 @@ import RicaricheElettriche from './features/ricariche/RicaricheElettriche';
 import CarteEni from './features/carte-eni/CarteEni';
 import Impostazioni from './features/impostazioni/Impostazioni';
 import Ricerca from './features/ricerca/Ricerca';
+import StoricoAttivita from './features/storico/StoricoAttivita';
 import AddebitivSospesiPage from './features/addebiti-sospesi/AddebitivSospesi';
 import AnalisiSpedizioni from './features/analisi-spedizioni/AnalisiSpedizioni';
 import Margini from './features/margini/Margini';
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="/ricariche" element={<RicaricheElettriche />} />
           <Route path="/carte-eni" element={<CarteEni />} />
           <Route path="/ricerca" element={<Ricerca />} />
+          <Route path="/storico/:sezione" element={<StoricoAttivita />} />
           <Route path="/esportazione" element={<Esportazione />} />
           <Route path="/impostazioni" element={<Impostazioni />} />
         </Route>

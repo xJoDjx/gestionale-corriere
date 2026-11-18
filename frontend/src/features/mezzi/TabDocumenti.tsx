@@ -1,8 +1,10 @@
 // TabDocumenti.tsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { documentiApi } from '../../lib/api';
 import type { Documento } from '../../lib/api';
 import Modal from '../../components/ui/Modal';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 
 const TIPI_DOC = ['ASSICURAZIONE', 'REVISIONE', 'BOLLO', 'LIBRETTO', 'CONTRATTO', 'ALTRO'];
 
@@ -92,6 +94,30 @@ const MetaFields = ({
 
 export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
   const [docs, setDocs] = useState<Documento[]>([]);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [cerca, setCerca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+
+  // Ricerca su nome, tipo, note e date (caricamento/scadenza); più parole = tutte richieste
+  const docsFiltrati = useMemo(() => {
+    const words = cerca.toLowerCase().split(/\s+/).filter(Boolean);
+    return docs.filter(d => {
+      if (filtroTipo && (d.tipo ?? '') !== filtroTipo) return false;
+      if (!words.length) return true;
+      const h = [d.nome, d.tipo, d.note, fmtDate(d.createdAt), d.scadenza ? fmtDate(d.scadenza) : '']
+        .filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => h.includes(w));
+    });
+  }, [docs, cerca, filtroTipo]);
+  const tipiPresenti = useMemo(
+    () => Array.from(new Set(docs.map(d => d.tipo).filter(Boolean) as string[])).sort(),
+    [docs],
+  );
+  const openPreview = (doc: Documento) => setPreview({
+    title: doc.nome, path: `/documenti/${doc.id}/download`,
+    fileHint: doc.filePath, mimeType: doc.mimeType,
+    onDownload: () => documentiApi.download(doc.id),
+  });
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -195,6 +221,7 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
 
   return (
     <div style={{ padding: '20px 24px' }}>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
@@ -202,6 +229,39 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
         </h3>
         <button className="btn-primary btn-sm" onClick={openUpload}>+ Carica documento</button>
       </div>
+
+      {/* Ricerca */}
+      {docs.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{
+            flex: '1 1 260px', display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px',
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>🔍</span>
+            <input
+              value={cerca}
+              onChange={e => setCerca(e.target.value)}
+              placeholder="Cerca per nome, tipo, note, data…"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', padding: '8px 0', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'inherit' }}
+            />
+            {cerca && (
+              <button onClick={() => setCerca('')} title="Pulisci"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>✕</button>
+            )}
+          </div>
+          <select
+            value={filtroTipo}
+            onChange={e => setFiltroTipo(e.target.value)}
+            style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit' }}
+          >
+            <option value="">Tutti i tipi</option>
+            {tipiPresenti.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          {(cerca || filtroTipo) && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{docsFiltrati.length} di {docs.length}</span>
+          )}
+        </div>
+      )}
 
       {/* Lista documenti */}
       {loading ? (
@@ -216,7 +276,12 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {docs.map((doc) => {
+          {docsFiltrati.length === 0 && (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32, border: '1px dashed var(--border)', borderRadius: 10 }}>
+              Nessun documento corrisponde alla ricerca
+            </div>
+          )}
+          {docsFiltrati.map((doc) => {
             const expired = isExpired(doc.scadenza);
             const expiring = !expired && isExpiring(doc.scadenza);
             return (
@@ -230,7 +295,11 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
                    doc.mimeType?.includes('image') ? '🖼️' : '📄'}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div
+                    style={{ fontWeight: 600, fontSize: 13, color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                    onClick={() => openPreview(doc)}
+                    title="Anteprima"
+                  >
                     {doc.nome}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
@@ -254,6 +323,11 @@ export default function TabDocumenti({ mezzoId, onDocsChange }: Props) {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    className="btn-outline btn-sm"
+                    onClick={() => openPreview(doc)}
+                    title="Anteprima"
+                  >👁️</button>
                   <button
                     className="btn-outline btn-sm"
                     onClick={() => documentiApi.download(doc.id)}

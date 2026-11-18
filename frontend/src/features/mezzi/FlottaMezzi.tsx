@@ -11,6 +11,7 @@ import BulkContrattoModal from './BulkContrattoModal';
 import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import { type AuditEntry, getHumanReadableDescription, fmtDate as fmtDateOra } from '../../lib/auditFormat';
+import '../../components/ui/PanelLinks.css';
 import './FlottaMezzi.css';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
 
 // ─── COLUMN PICKER ────────────────────────────────────────────────────────────
 
-type ColKey = 'tipo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio';
+type ColKey = 'tipo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio' | 'inseritoIl';
 
 const COL_DEFS: { key: ColKey; label: string }[] = [
   { key: 'tipo',          label: 'Tipo possesso'   },
@@ -106,12 +107,13 @@ const COL_DEFS: { key: ColKey; label: string }[] = [
   { key: 'canone',        label: 'Canone noleggio' },
   { key: 'rataPda',       label: 'Rata PDA'        },
   { key: 'fineNoleggio',  label: 'Fine Noleggio'   },
+  { key: 'inseritoIl',    label: 'Inserito il'     },
 ];
 
 const COLS_KEY = 'fm-cols-v4';
 const DEFAULT_COLS: Record<ColKey, boolean> = {
   tipo: true, marcaModello: true, alimentazione: true, stato: true, assegnatoA: true,
-  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true,
+  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true, inseritoIl: true,
 };
 
 function loadCols(): Record<ColKey, boolean> {
@@ -140,7 +142,7 @@ export default function FlottaMezzi() {
   const [filtroPossesso,  setFiltroPossesso]  = useState<'TUTTI' | TipoPossessoMezzo>('TUTTI');
   const [filtroCategoria, setFiltroCategoria] = useState<'TUTTI' | 'DISTRIBUZIONE' | 'AUTO_AZIENDALE' | 'FLOTTA'>('TUTTI');
 
-  type SortField = 'targa' | 'tipo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio';
+  type SortField = 'targa' | 'tipo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio' | 'inseritoIl';
   const [sortField, setSortField] = useState<SortField>('targa');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -171,6 +173,8 @@ export default function FlottaMezzi() {
   const targheOptions = useMemo(() => Array.from(new Set(mezzi.map(m => m.targa))).sort(), [mezzi]);
 
   const ultimeNote = useMemo(() => tutteLeNote.slice(0, 5), [tutteLeNote]);
+  // Riquadro "Cose da fare": max 5, prima quelle ancora aperte (lista completa in /storico)
+  const tasksWidget = useMemo(() => [...tasks].sort((a, b) => Number(a.completata) - Number(b.completata)).slice(0, 5), [tasks]);
 
   const noteMap = useMemo(() =>
     tutteLeNote.reduce<Record<string, string>>((acc, n) => {
@@ -241,6 +245,10 @@ export default function FlottaMezzi() {
         vb = b.kmAttualiAl ? new Date(b.kmAttualiAl).getTime() : -Infinity;
         break;
       case 'fineNoleggio': va = a.fineNoleggio ?? ''; vb = b.fineNoleggio ?? ''; break;
+      case 'inseritoIl':
+        va = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
+        vb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
+        break;
       default: va = ''; vb = '';
     }
     if (typeof va === 'string') return sortOrder === 'asc' ? va.localeCompare(vb, 'it') : vb.localeCompare(va, 'it');
@@ -520,7 +528,7 @@ export default function FlottaMezzi() {
         {/* Note */}
         <div className="fm-info-panel">
           <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">📝 Ultime Note</span>
+            <span className="fm-info-panel-title panel-title-link" title="Vedi tutte le note" onClick={() => navigate('/storico/mezzi?tab=note')}>📝 Ultime Note ›</span>
             <button className="fm-nota-toggle" onClick={() => setNotaForm(f => ({ ...f, open: !f.open }))}>
               {notaForm.open ? '✕ chiudi' : '+ nota'}
             </button>
@@ -552,12 +560,13 @@ export default function FlottaMezzi() {
                 </div>
               );
             })}
+          {tutteLeNote.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/mezzi?tab=note')}>Vedi tutte le note ({tutteLeNote.length >= 500 ? '500+' : tutteLeNote.length}) →</button>}
         </div>
 
         {/* Log */}
         <div className="fm-info-panel">
           <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">🕐 Ultime Modifiche</span>
+            <span className="fm-info-panel-title panel-title-link" title="Vedi tutto lo storico modifiche" onClick={() => navigate('/storico/mezzi?tab=modifiche')}>🕐 Ultime Modifiche ›</span>
           </div>
           {ultimiLog.length === 0
             ? <div className="fm-info-empty">Nessuna modifica recente</div>
@@ -578,17 +587,18 @@ export default function FlottaMezzi() {
                 </div>
               );
             })}
+          {ultimiLog.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/mezzi?tab=modifiche')}>Vedi tutto lo storico modifiche →</button>}
         </div>
 
         {/* Cose da fare */}
         <div className="fm-info-panel">
           <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">✅ Cose da Fare</span>
+            <span className="fm-info-panel-title panel-title-link" title="Vedi tutte le attività" onClick={() => navigate('/storico/mezzi?tab=attivita')}>✅ Cose da Fare ›</span>
             <button className="fm-nota-toggle" onClick={handleOpenNewTask}>+ attività</button>
           </div>
           {tasks.length === 0
             ? <div className="fm-info-empty">Nessuna attività registrata</div>
-            : tasks.map(t => (
+            : tasksWidget.map(t => (
               <div key={t.id} className={`task-list-item ${t.completata ? 'task-done' : ''}`} onClick={() => handleOpenEditTask(t)}>
                 <input
                   type="checkbox"
@@ -607,6 +617,7 @@ export default function FlottaMezzi() {
                 <button className="task-remove" onClick={e => { e.stopPropagation(); handleRemoveTask(t.id); }} title="Elimina">✕</button>
               </div>
             ))}
+          {tasks.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/mezzi?tab=attivita')}>Vedi tutte le attività ({tasks.length}) →</button>}
         </div>
       </div>
 
@@ -698,16 +709,17 @@ export default function FlottaMezzi() {
                 <th className="fm-th-sort" onClick={() => handleSort('targa')}>TARGA{si('targa')}</th>
                 {cols.tipo         && <th className="fm-th-sort" onClick={() => handleSort('tipo')}>TIPO{si('tipo')}</th>}
                 {cols.marcaModello && <th className="fm-th-sort" onClick={() => handleSort('marca')}>MARCA / MODELLO{si('marca')}</th>}
-                {cols.alimentazione && <th className="fm-th-sort" onClick={() => handleSort('alimentazione')}>ALIMENTAZIONE{si('alimentazione')}</th>}
+                {cols.alimentazione && <th className="fm-th-sort" title="Alimentazione" onClick={() => handleSort('alimentazione')}>ALIM.{si('alimentazione')}</th>}
                 {cols.stato        && <th className="fm-th-sort" onClick={() => handleSort('stato')}>STATO{si('stato')}</th>}
                 {cols.assegnatoA   && <th className="fm-th-sort" onClick={() => handleSort('padroncino')}>ASSEGNATO A{si('padroncino')}</th>}
-                {cols.assicurazione && <th className="fm-th-sort" onClick={() => handleSort('assicurazione')}>ASSICURAZIONE{si('assicurazione')}</th>}
-                {cols.revisione    && <th className="fm-th-sort" onClick={() => handleSort('revisione')}>REVISIONE{si('revisione')}</th>}
+                {cols.assicurazione && <th className="fm-th-sort" title="Scadenza assicurazione" onClick={() => handleSort('assicurazione')}>ASSIC.{si('assicurazione')}</th>}
+                {cols.revisione    && <th className="fm-th-sort" title="Scadenza revisione" onClick={() => handleSort('revisione')}>REVIS.{si('revisione')}</th>}
                 {cols.km           && <th className="fm-th fm-th-sort" onClick={() => handleSort('kmPct')}>KM / LIMITE{si('kmPct')}</th>}
                 {cols.kmAggiornatiAl && <th className="fm-th fm-th-sort" onClick={() => handleSort('kmAggiornatiAl')}>KM AGGIORNATI AL{si('kmAggiornatiAl')}</th>}
                 {cols.canone       && <th className="fm-th fm-th-purple fm-th-sort" style={{ textAlign: 'right' }} onClick={() => handleSort('canone')}>CANONE NLG{si('canone')}</th>}
                 {cols.rataPda      && <th className="fm-th fm-th-amber fm-th-sort" style={{ textAlign: 'right' }} onClick={() => handleSort('rata')}>RATA PDA{si('rata')}</th>}
                 {cols.fineNoleggio  && <th className="fm-th fm-th-sort" onClick={() => handleSort('fineNoleggio')}>FINE NLG{si('fineNoleggio')}</th>}
+                {cols.inseritoIl   && <th className="fm-th fm-th-sort" title="Data di inserimento nel gestionale" onClick={() => handleSort('inseritoIl')}>INSERITO{si('inseritoIl')}</th>}
                 <th className="fm-th" style={{ width: 90 }}></th>
               </tr>
             </thead>
@@ -855,6 +867,15 @@ export default function FlottaMezzi() {
                       <td className="fm-td">
                         {m.fineNoleggio
                           ? (() => { const info = scadenzaCell(m.fineNoleggio); return info ? <span className={`fm-scad-val ${info.cls}`}>{fmt(m.fineNoleggio)}</span> : <span className="fm-data">{fmt(m.fineNoleggio)}</span>; })()
+                          : <span className="fm-empty">—</span>}
+                      </td>
+                    )}
+
+                    {/* INSERITO IL */}
+                    {cols.inseritoIl && (
+                      <td className="fm-td" title={m.createdAt ? new Date(m.createdAt).toLocaleString('it-IT') : undefined}>
+                        {m.createdAt
+                          ? <span className="fm-data">{fmt(m.createdAt)}</span>
                           : <span className="fm-empty">—</span>}
                       </td>
                     )}

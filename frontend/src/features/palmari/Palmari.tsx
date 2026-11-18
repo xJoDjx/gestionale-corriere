@@ -6,6 +6,7 @@ import type { Palmare, PalmariStats, Nota, AuditLogEntry, TaskItem } from '../..
 import NuovoPalmareModal, { NuovoPalmare } from './NuovoPalmareModal';
 import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
+import '../../components/ui/PanelLinks.css';
 import './Palmari.css';
 
 const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
@@ -128,6 +129,8 @@ export default function Palmari() {
   useEffect(() => { load(); }, [load]);
 
   const ultimeNote = useMemo(() => tutteLeNote.slice(0, 5), [tutteLeNote]);
+  // Riquadro "Cose da fare": max 5, prima quelle ancora aperte (lista completa in /storico)
+  const tasksWidget = useMemo(() => [...tasks].sort((a, b) => Number(a.completata) - Number(b.completata)).slice(0, 5), [tasks]);
 
   const codiciOptions = useMemo(() => Array.from(new Set(palmari.map(p => p.codice))).sort(), [palmari]);
 
@@ -298,7 +301,7 @@ export default function Palmari() {
         {/* Ultime Note */}
         <div className="pm-info-panel">
           <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">📝 Ultime Note</span>
+            <span className="pm-info-panel-title panel-title-link" title="Vedi tutte le note" onClick={() => navigate('/storico/palmari?tab=note')}>📝 Ultime Note ›</span>
             <button
               className="pm-nota-toggle"
               onClick={() => setNotaForm(f => ({ ...f, open: !f.open }))}
@@ -372,12 +375,13 @@ export default function Palmari() {
                 );
               })
           }
+          {tutteLeNote.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/palmari?tab=note')}>Vedi tutte le note ({tutteLeNote.length >= 500 ? '500+' : tutteLeNote.length}) →</button>}
         </div>
 
         {/* Ultime Modifiche */}
         <div className="pm-info-panel">
           <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">🕐 Ultime Modifiche</span>
+            <span className="pm-info-panel-title panel-title-link" title="Vedi tutto lo storico modifiche" onClick={() => navigate('/storico/palmari?tab=modifiche')}>🕐 Ultime Modifiche ›</span>
           </div>
           {ultimiLog.length === 0
             ? <div className="pm-info-empty">Nessuna modifica recente</div>
@@ -412,17 +416,18 @@ export default function Palmari() {
                 );
               })
           }
+          {ultimiLog.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/palmari?tab=modifiche')}>Vedi tutto lo storico modifiche →</button>}
         </div>
 
         {/* Cose da fare */}
         <div className="pm-info-panel">
           <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">✅ Cose da Fare</span>
+            <span className="pm-info-panel-title panel-title-link" title="Vedi tutte le attività" onClick={() => navigate('/storico/palmari?tab=attivita')}>✅ Cose da Fare ›</span>
             <button className="pm-nota-toggle" onClick={handleOpenNewTask}>+ attività</button>
           </div>
           {tasks.length === 0
             ? <div className="pm-info-empty">Nessuna attività registrata</div>
-            : tasks.map(t => (
+            : tasksWidget.map(t => (
               <div key={t.id} className={`task-list-item ${t.completata ? 'task-done' : ''}`} onClick={() => handleOpenEditTask(t)}>
                 <input
                   type="checkbox"
@@ -441,6 +446,7 @@ export default function Palmari() {
                 <button className="task-remove" onClick={e => { e.stopPropagation(); handleRemoveTask(t.id); }} title="Elimina">✕</button>
               </div>
             ))}
+          {tasks.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/palmari?tab=attivita')}>Vedi tutte le attività ({tasks.length}) →</button>}
         </div>
 
       </div>

@@ -7,6 +7,7 @@ import NuovoCodiceAutistaModal, { NuovoCodiceAutista } from './NuovoCodiceAutist
 import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import { getHumanReadableDescription } from '../../lib/auditFormat';
+import '../../components/ui/PanelLinks.css';
 import './CodiciAutisti.css';
 
 function describeAudit(log: AuditLogEntry): string {
@@ -88,6 +89,8 @@ export default function CodiciAutisti() {
   useEffect(() => { load(); }, [load]);
 
   const ultimeNote = useMemo(() => tutteLeNote.slice(0, 5), [tutteLeNote]);
+  // Riquadro "Cose da fare": max 5, prima quelle ancora aperte (lista completa in /storico)
+  const tasksWidget = useMemo(() => [...tasks].sort((a, b) => Number(a.completata) - Number(b.completata)).slice(0, 5), [tasks]);
 
   const codiciOptions = useMemo(() => Array.from(new Set(autisti.map(c => c.codice))).sort(), [autisti]);
 
@@ -260,7 +263,7 @@ export default function CodiciAutisti() {
       <div className="ca-info-row">
         <div className="ca-info-panel">
           <div className="ca-info-panel-head">
-            <span className="ca-info-panel-title">📝 Ultime Note</span>
+            <span className="ca-info-panel-title panel-title-link" title="Vedi tutte le note" onClick={() => navigate('/storico/codici-autista?tab=note')}>📝 Ultime Note ›</span>
             <button
               className="ca-nota-toggle"
               onClick={() => setNotaForm(f => ({ ...f, open: !f.open }))}
@@ -334,12 +337,13 @@ export default function CodiciAutisti() {
                 );
               })
           }
+          {tutteLeNote.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/codici-autista?tab=note')}>Vedi tutte le note ({tutteLeNote.length >= 500 ? '500+' : tutteLeNote.length}) →</button>}
         </div>
 
         {/* Ultime Modifiche */}
         <div className="ca-info-panel">
           <div className="ca-info-panel-head">
-            <span className="ca-info-panel-title">🕐 Ultime Modifiche</span>
+            <span className="ca-info-panel-title panel-title-link" title="Vedi tutto lo storico modifiche" onClick={() => navigate('/storico/codici-autista?tab=modifiche')}>🕐 Ultime Modifiche ›</span>
           </div>
           {ultimiLog.length === 0
             ? <div className="ca-info-empty">Nessuna modifica recente</div>
@@ -374,17 +378,18 @@ export default function CodiciAutisti() {
                 );
               })
           }
+          {ultimiLog.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/codici-autista?tab=modifiche')}>Vedi tutto lo storico modifiche →</button>}
         </div>
 
         {/* Cose da fare */}
         <div className="ca-info-panel">
           <div className="ca-info-panel-head">
-            <span className="ca-info-panel-title">✅ Cose da Fare</span>
+            <span className="ca-info-panel-title panel-title-link" title="Vedi tutte le attività" onClick={() => navigate('/storico/codici-autista?tab=attivita')}>✅ Cose da Fare ›</span>
             <button className="ca-nota-toggle" onClick={handleOpenNewTask}>+ attività</button>
           </div>
           {tasks.length === 0
             ? <div className="ca-info-empty">Nessuna attività registrata</div>
-            : tasks.map(t => (
+            : tasksWidget.map(t => (
               <div key={t.id} className={`task-list-item ${t.completata ? 'task-done' : ''}`} onClick={() => handleOpenEditTask(t)}>
                 <input
                   type="checkbox"
@@ -403,6 +408,7 @@ export default function CodiciAutisti() {
                 <button className="task-remove" onClick={e => { e.stopPropagation(); handleRemoveTask(t.id); }} title="Elimina">✕</button>
               </div>
             ))}
+          {tasks.length > 0 && <button className="panel-more-link" onClick={() => navigate('/storico/codici-autista?tab=attivita')}>Vedi tutte le attività ({tasks.length}) →</button>}
         </div>
       </div>
 

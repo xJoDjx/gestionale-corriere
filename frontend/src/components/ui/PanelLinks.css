@@ -1,0 +1,9 @@
+/* Link "vedi tutte" dei riquadri Ultime Note / Ultime Modifiche / Cose da Fare */
+.panel-title-link { cursor: pointer; }
+.panel-title-link:hover { color: var(--primary) !important; text-decoration: underline; }
+.panel-more-link {
+  display: block; width: 100%; text-align: center;
+  padding: 8px 12px; background: none; border: none; border-top: 1px solid var(--border);
+  color: var(--primary); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.panel-more-link:hover { background: var(--bg-hover); }
