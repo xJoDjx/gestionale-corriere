@@ -181,11 +181,11 @@ try {
     Set-Location $AppDir
     npm install --omit=dev --legacy-peer-deps
     if ($LASTEXITCODE -ne 0) { throw "npm install fallito" }
-    # Client Prisma gia' generato in fase di build
-    foreach ($p in @(".prisma", "@prisma\client")) {
-        if (Test-Path "$AppDir\node_modules\$p") { Remove-Item "$AppDir\node_modules\$p" -Recurse -Force }
-        Copy-Item "$SrcDir\backend\node_modules\$p" "$AppDir\node_modules\$p" -Recurse
-    }
+    # Il client Prisma va generato QUI, nella cartella di produzione: e' lui che legge
+    # il .env di $AppDir all'avvio (DATABASE_URL, JWT_SECRET, PORT...). Un client generato
+    # nella cartella sorgente cercherebbe il .env li' e il servizio non partirebbe.
+    & "$AppDir\node_modules\.bin\prisma.cmd" generate --schema="$AppDir\prisma\schema.prisma"
+    if ($LASTEXITCODE -ne 0) { throw "prisma generate fallito" }
     & "$AppDir\node_modules\.bin\prisma.cmd" migrate deploy --schema="$AppDir\prisma\schema.prisma"
     if ($LASTEXITCODE -ne 0) { throw "prisma migrate deploy fallito" }
     Ok "Dipendenze e migrazioni OK"
