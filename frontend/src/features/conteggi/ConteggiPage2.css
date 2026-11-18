@@ -40,3 +40,18 @@
 .cp2-table th, .cp2-table td { padding-left: 10px; padding-right: 10px; }
 .cp2-table th:first-child, .cp2-table td:first-child { padding-left: 18px; }
 .cp2-table th:last-child, .cp2-table td:last-child { padding-right: 12px; }
+/* checklist in elenco */
+.cp2-check { text-align: center; }
+.cp2-ck { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #D4D4D8; background: #fff; color: #fff; }
+.cp2-ck.is-on { background: #15A06A; border-color: #15A06A; }
+.cp2-table th { white-space: nowrap; }
+.cp2-checkhead { display: inline-flex; align-items: center; gap: 8px; }
+.cp2-checkhead > button { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; font-weight: inherit; }
+.cp2-checkkeys { display: inline-flex; gap: 3px; }
+.cp2-checkhead .cp2-checkkeys button { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #E4E4E7; background: #fff; font: inherit; font-size: 10.5px; font-weight: 600; color: #6B6B73; padding: 0; cursor: pointer; }
+.cp2-checkhead .cp2-checkkeys button.is-on, .cp2-checkhead .cp2-checkkeys button:hover { border-color: #0B0B0C; color: #0B0B0C; }
+.cp2-checkcell { display: inline-flex; align-items: center; gap: 8px; }
+.cp2-checkcell small { font-size: 11.5px; color: var(--text-muted); min-width: 22px; }
+.cp2-table th, .cp2-table td { padding-left: 8px; padding-right: 8px; }
+.cp2-checkcell .cp2-ck { width: 16px; height: 16px; }
+.cp2-checkkeys { gap: 2px; }
