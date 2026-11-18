@@ -33,7 +33,40 @@ Estrai in `C:\nssm\` — il file che ti serve è `win64\nssm.exe`
 
 ---
 
-## Procedura di Deploy
+## Aggiornamento da GitHub (metodo consigliato)
+
+Sul server va **esattamente** la versione del ramo `main` su GitHub: niente file del PC di sviluppo, niente modifiche non salvate.
+
+### Una volta sola, sul server
+1. Installa **Git per Windows** (https://git-scm.com/download/win), lasciando le opzioni predefinite.
+2. In PowerShell come Amministratore:
+```powershell
+git clone https://github.com/xJoDjx/gestionale-corriere.git C:\GestionaleCorriere-sorgente
+```
+   La prima volta Git apre il browser per l'accesso a GitHub (il repository e' privato): entra con il tuo account e autorizza. Le credenziali restano salvate.
+
+### Ogni aggiornamento
+1. Sul PC di sviluppo: modifiche caricate su GitHub e PR unita in `main`.
+2. Sul server, PowerShell come Amministratore:
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GestionaleCorriere-sorgente\aggiorna-da-github.ps1
+```
+Lo script:
+- scarica `main` da GitHub e la compila in `C:\GestionaleCorriere-sorgente` (il servizio resta acceso);
+- salva il database e la versione attuale in `C:\GestionaleCorriere-backup\<data-ora>`;
+- ferma il servizio, copia la nuova versione (`.env`, `uploads` e `logs` non vengono toccati), applica le migrazioni e riavvia;
+- se qualcosa va storto rimette la versione precedente;
+- scrive in `C:\GestionaleCorriere\VERSIONE.txt` quale versione e' in produzione.
+
+### Tornare a una versione precedente
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GestionaleCorriere-sorgente\aggiorna-da-github.ps1 -Ref <codice-versione>
+```
+Il codice della versione precedente lo stampa lo script alla fine di ogni aggiornamento (o si trova nella cronologia di GitHub).
+
+---
+
+## Procedura di Deploy (metodo manuale, dal PC di sviluppo)
 
 ### Fase A — Sul PC di sviluppo
 
