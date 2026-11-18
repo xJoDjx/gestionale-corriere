@@ -16,7 +16,6 @@ export const navGroups: NavGroup[] = [
     { path: '/', label: 'Panoramica', icon: 'oggi', key: 'dashboard' },
     { path: '/padroncini', label: 'Padroncini', icon: 'pad', key: 'padroncini' },
     { path: '/conteggi', label: 'Conteggi', icon: 'cont', key: 'conteggi' },
-    { path: '/acconti', label: 'Acconti', icon: 'acconti', key: 'acconti' },
     { path: '/addebiti-sospesi', label: 'Sospesi e memo', icon: 'sospesi', key: 'addebiti-sospesi' },
   ] },
   { title: 'Risorse', items: [
@@ -27,6 +26,7 @@ export const navGroups: NavGroup[] = [
   { title: 'Costi', items: [
     { path: '/ricariche', label: 'Ricariche elettriche', icon: 'ric', key: 'ricariche', color: C.green },
     { path: '/carte-eni', label: 'Carte Eni', icon: 'eni', key: 'carte-eni', color: C.orange },
+    { path: '/acconti', label: 'Acconti', icon: 'acconti', key: 'acconti', color: C.purple },
   ] },
   { title: 'Analisi', items: [
     { path: '/analisi-spedizioni', label: 'Spedizioni e doppi', icon: 'sped', key: 'analisi-spedizioni', color: C.yellow },
