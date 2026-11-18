@@ -2,10 +2,29 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Login from './features/auth/Login';
 import { useAuthStore } from './stores/auth.store';
+import { navItems, useCanSee } from './components/layout/Sidebar';
+import { Page, Card, Empty } from './components/ds';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+/**
+ * Mostra la pagina solo se l'utente ha quella sezione tra le visibili.
+ * Altrimenti porta alla prima sezione consentita (nell'ordine del menu),
+ * così chi ha solo "Flotta mezzi" dopo il login atterra su Flotta e non sulla Panoramica.
+ */
+function Sez({ k, children }: { k: string; children: React.ReactNode }) {
+  const canSee = useCanSee();
+  if (canSee(k)) return <>{children}</>;
+  const prima = navItems.find((i) => i.key !== 'ricerca' && canSee(i.key)) ?? navItems.find((i) => canSee(i.key));
+  if (prima) return <Navigate to={prima.path} replace />;
+  return (
+    <Page>
+      <Card pad><Empty>Il tuo utente non ha sezioni abilitate. Chiedi a un amministratore di assegnartene almeno una in Utenti.</Empty></Card>
+    </Page>
+  );
 }
 import Dashboard from './features/dashboard/Dashboard';
 import FlottaMezzi from './features/mezzi/FlottaMezzi';
@@ -52,28 +71,29 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/flotta" element={<FlottaMezzi />} />
-          <Route path="/flotta/:id" element={<DettaglioMezzo />} />
-          <Route path="/conteggi" element={<ConteggiPage />} />
-          <Route path="/conteggi/:id" element={<DettaglioConteggio />} />
-          <Route path="/padroncini" element={<PadronciniPage />} />
-          <Route path="/padroncini/:id" element={<DettaglioPadroncino />} />
-          <Route path="/palmari" element={<PalmariPage />} />
-          <Route path="/palmari/:id" element={<DettaglioPalmare />} />
-          <Route path="/codici-autista" element={<CodiciAutistiPage />} />
-          <Route path="/codici-autista/:id" element={<DettaglioCodiceAutista />} />
-          <Route path="/acconti" element={<AccontiPage />} />
-          <Route path="/addebiti-sospesi" element={<AddebitivSospesiPage />} />
-          <Route path="/analisi-spedizioni" element={<AnalisiSpedizioni />} />
-          <Route path="/margini" element={<Margini />} />
-          <Route path="/utenti" element={<GestioneUtenti />} />
-          <Route path="/log" element={<LogStorico />} />
-          <Route path="/ricariche" element={<RicaricheElettriche />} />
-          <Route path="/carte-eni" element={<CarteEni />} />
-          <Route path="/ricerca" element={<Ricerca />} />
-          <Route path="/esportazione" element={<Esportazione />} />
-          <Route path="/impostazioni" element={<Impostazioni />} />
+          <Route path="/" element={<Sez k="dashboard"><Dashboard /></Sez>} />
+          <Route path="/flotta" element={<Sez k="flotta"><FlottaMezzi /></Sez>} />
+          <Route path="/flotta/:id" element={<Sez k="flotta"><DettaglioMezzo /></Sez>} />
+          <Route path="/conteggi" element={<Sez k="conteggi"><ConteggiPage /></Sez>} />
+          <Route path="/conteggi/:id" element={<Sez k="conteggi"><DettaglioConteggio /></Sez>} />
+          <Route path="/padroncini" element={<Sez k="padroncini"><PadronciniPage /></Sez>} />
+          <Route path="/padroncini/:id" element={<Sez k="padroncini"><DettaglioPadroncino /></Sez>} />
+          <Route path="/palmari" element={<Sez k="palmari"><PalmariPage /></Sez>} />
+          <Route path="/palmari/:id" element={<Sez k="palmari"><DettaglioPalmare /></Sez>} />
+          <Route path="/codici-autista" element={<Sez k="codici-autista"><CodiciAutistiPage /></Sez>} />
+          <Route path="/codici-autista/:id" element={<Sez k="codici-autista"><DettaglioCodiceAutista /></Sez>} />
+          <Route path="/acconti" element={<Sez k="acconti"><AccontiPage /></Sez>} />
+          <Route path="/addebiti-sospesi" element={<Sez k="addebiti-sospesi"><AddebitivSospesiPage /></Sez>} />
+          <Route path="/analisi-spedizioni" element={<Sez k="analisi-spedizioni"><AnalisiSpedizioni /></Sez>} />
+          <Route path="/margini" element={<Sez k="margini"><Margini /></Sez>} />
+          <Route path="/utenti" element={<Sez k="utenti"><GestioneUtenti /></Sez>} />
+          <Route path="/log" element={<Sez k="log"><LogStorico /></Sez>} />
+          <Route path="/ricariche" element={<Sez k="ricariche"><RicaricheElettriche /></Sez>} />
+          <Route path="/carte-eni" element={<Sez k="carte-eni"><CarteEni /></Sez>} />
+          <Route path="/ricerca" element={<Sez k="ricerca"><Ricerca /></Sez>} />
+          <Route path="/esportazione" element={<Sez k="esportazione"><Esportazione /></Sez>} />
+          <Route path="/impostazioni" element={<Sez k="impostazioni"><Impostazioni /></Sez>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
