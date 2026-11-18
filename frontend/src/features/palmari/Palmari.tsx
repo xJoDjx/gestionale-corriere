@@ -7,6 +7,11 @@ import NuovoPalmareModal, { NuovoPalmare } from './NuovoPalmareModal';
 import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import './Palmari.css';
+import '../mezzi/Flotta.css';
+import './Palmari2.css';
+import TaskList from '../../components/ds/TaskList';
+import { Page, PageHeader, Card, Kpis, Button, IconButton, SegTabs, Tabs, SearchBox, Th, Dot, Empty, Alert, Icon, C, fmtEur as fmtEur2 } from '../../components/ds';
+import type { Tone } from '../../components/ds';
 
 const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
   CREATE:              { label: 'Creato',       cls: 'pm-audit-create'  },
@@ -241,209 +246,285 @@ export default function Palmari() {
     } catch (e: any) { alert('Errore eliminazione: ' + e.message); }
   };
 
-  const STATI_FILTRO = ['TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'GUASTO', 'DISMESSO'];
+  // ── Solo visualizzazione ──
+  const oggi = new Date().toISOString().slice(0, 10);
+  const conteggi = useMemo(() => ({
+    TUTTI: palmari.length,
+    ASSEGNATO: palmari.filter((p) => p.stato === 'ASSEGNATO').length,
+    DISPONIBILE: palmari.filter((p) => p.stato === 'DISPONIBILE').length,
+    GUASTO: palmari.filter((p) => p.stato === 'GUASTO').length,
+    DISMESSO: palmari.filter((p) => p.stato === 'DISMESSO').length,
+  }), [palmari]);
+  // Assegnazioni da verificare: inizio nel futuro, periodi sovrapposti, tariffa a zero
+  const verifiche = useMemo(() => {
+    const out: { id: string; testo: string }[] = [];
+    for (const p of palmari) {
+      const att = p.assegnazioni?.find((x) => !x.dataFine);
+      const motivi: string[] = [];
+      if (att && att.dataInizio.slice(0, 10) > oggi) motivi.push(`risulta assegnato a ${att.ragioneSociale} dal ${fmt(att.dataInizio)} (data nel futuro)`);
+      const ass = [...(p.assegnazioni ?? [])].sort((x, y) => x.dataInizio.localeCompare(y.dataInizio));
+      for (let i = 1; i < ass.length; i++) {
+        const prevFine = ass[i - 1].dataFine ?? '9999';
+        if (ass[i].dataInizio.slice(0, 10) < prevFine.slice(0, 10)) { motivi.push(`ha due assegnazioni sovrapposte (${ass[i - 1].ragioneSociale} e ${ass[i].ragioneSociale})`); break; }
+      }
+      if (p.stato === 'ASSEGNATO' && (p.tariffaMensile == null || Number(p.tariffaMensile) === 0)) motivi.push('ha tariffa € 0');
+      if (motivi.length) out.push({ id: p.id, testo: `${p.codice} ${motivi.join(' e ')}` });
+    }
+    return out;
+  }, [palmari, oggi]);
+  const [selId, setSelId] = useState<string | null>(null);
+  const sel = palmari.find((p) => p.id === selId) ?? filtered[0] ?? null;
+  const [pannello, setPannello] = useState<null | 'attivita' | 'note' | 'modifiche'>(null);
+  const [notaSel, setNotaSel] = useState('');
+  const salvaNotaSel = async () => {
+    if (!sel || !notaSel.trim()) return;
+    setNotaSaving(true);
+    try {
+      await noteApi.create({ entityType: 'palmare', entityId: sel.id, contenuto: notaSel.trim() });
+      setNotaSel('');
+      setTutteLeNote(await noteApi.list('palmare', undefined, 500));
+    } catch (e: any) { alert('Errore: ' + e.message); }
+    finally { setNotaSaving(false); }
+  };
+  const TONE: Record<string, Tone> = { ASSEGNATO: 'ok', DISPONIBILE: 'info', GUASTO: 'ko', DISMESSO: 'na' };
+  const TILE: Record<string, string> = { ASSEGNATO: C.green, DISPONIBILE: C.blue, GUASTO: C.red, DISMESSO: '#A1A1AA' };
+  const guasti = palmari.filter((p) => p.stato === 'GUASTO');
+  const nPad = new Set(palmari.map((p) => p.assegnazioni?.find((a) => !a.dataFine)?.padroncinoId).filter(Boolean)).size;
+  const tot = palmari.length || 1;
 
-  if (loading) return (
-    <div className="pm-page">
-      <div className="pm-loading"><div className="pm-spinner" /><span>Caricamento palmari...</span></div>
-    </div>
-  );
-  if (error) return (
-    <div className="pm-page">
-      <div className="pm-error">⚠️ {error} <button className="pm-btn-primary pm-btn-sm" onClick={load}>Riprova</button></div>
-    </div>
-  );
+  if (loading) return <Page><Card pad><Empty>Caricamento palmari…</Empty></Card></Page>;
+  if (error) return <Page><Alert tone="ko" title="Errore di caricamento" actions={<Button size="sm" onClick={load}>Riprova</Button>}>{error}</Alert></Page>;
 
   return (
-    <div className="pm-page">
+    <Page>
+      <PageHeader
+        eyebrow="Risorse"
+        title="Palmari"
+        sub={`${palmari.length} dispositivi · assegnazioni, tariffe e storico`}
+        actions={<>
+          <Button icon="check" onClick={() => setPannello('attivita')}>Promemoria</Button>
+          <Button icon="plus" variant="primary" onClick={() => setNuovoOpen(true)}>Nuovo palmare</Button>
+        </>}
+      />
 
-      {/* ── HEADER ── */}
-      <div className="pm-header">
-        <div>
-          <h1 className="pm-title">Palmari</h1>
-          <span className="pm-subtitle">{palmari.length} dispositivi totali</span>
-        </div>
-        <div className="pm-header-actions">
-          <button className="pm-btn-primary" onClick={() => setNuovoOpen(true)}>+ Nuovo Palmare</button>
-        </div>
-      </div>
+      <Kpis items={[
+        { label: 'Assegnati', value: stats?.assegnati ?? conteggi.ASSEGNATO, sub: `A ${nPad} padroncin${nPad === 1 ? 'o' : 'i'}`, color: C.green, icon: 'ok',
+          seg: [{ w: (conteggi.ASSEGNATO / tot) * 100, color: C.green }, { w: (conteggi.DISPONIBILE / tot) * 100, color: C.blue }, { w: (conteggi.GUASTO / tot) * 100, color: C.red }] },
+        { label: 'Disponibili', value: stats?.disponibili ?? conteggi.DISPONIBILE, sub: 'Pronti da assegnare', color: C.blue, icon: 'palm' },
+        { label: 'Guasti', value: stats?.guasti ?? conteggi.GUASTO, sub: guasti.length ? guasti.slice(0, 3).map((g) => g.codice).join(', ') : 'Nessuno da riparare', color: C.red, icon: 'alert' },
+        { label: 'Entrate mensili', value: fmtEur2(stats?.entrateMensili ?? 0), sub: 'Tariffe giornaliere × giorni del mese', color: C.purple, icon: 'euro' },
+      ]} />
 
-      {/* ── KPI ── */}
-      <div className="pm-kpi-row">
-        <div className="pm-kpi-card pm-kpi-blue">
-          <span className="pm-kpi-label">DISPONIBILI</span>
-          <span className="pm-kpi-val pm-kpi-val-blue">{stats?.disponibili ?? 0}</span>
-          <span className="pm-kpi-sub">pronti</span>
+      {verifiche.length > 0 && (
+        <div className="pm2-alert">
+          <span aria-hidden="true" className="pm2-dot" />
+          <span style={{ flex: '1 1 360px' }}>
+            <span style={{ fontWeight: 600 }}>{verifiche.length} assegnazion{verifiche.length === 1 ? 'e' : 'i'} da verificare.</span>{' '}
+            <span style={{ color: '#3F3F46' }}>{verifiche.slice(0, 3).map((v) => v.testo).join('; ')}{verifiche.length > 3 ? '; …' : ''}.</span>
+          </span>
+          <Button size="sm" onClick={() => setSelId(verifiche[0].id)}>Mostra il primo</Button>
         </div>
-        <div className="pm-kpi-card pm-kpi-purple">
-          <span className="pm-kpi-label">ASSEGNATI</span>
-          <span className="pm-kpi-val pm-kpi-val-purple">{stats?.assegnati ?? 0}</span>
-          <span className="pm-kpi-sub">in uso</span>
-        </div>
-        <div className="pm-kpi-card pm-kpi-red">
-          <span className="pm-kpi-label">GUASTI</span>
-          <span className="pm-kpi-val pm-kpi-val-red">{stats?.guasti ?? 0}</span>
-          <span className="pm-kpi-sub">da riparare</span>
-        </div>
-        <div className="pm-kpi-card pm-kpi-green">
-          <span className="pm-kpi-label">ENTRATE MENSILI</span>
-          <span className="pm-kpi-val pm-kpi-val-green">{fmtEur(stats?.entrateMensili)}</span>
-          <span className="pm-kpi-sub">tariffe giornaliere × giorni del mese</span>
-        </div>
-      </div>
+      )}
 
-      {/* ── INFO PANELS ── */}
-      <div className="pm-info-row">
-
-        {/* Ultime Note */}
-        <div className="pm-info-panel">
-          <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">📝 Ultime Note</span>
-            <button
-              className="pm-nota-toggle"
-              onClick={() => setNotaForm(f => ({ ...f, open: !f.open }))}
-            >
-              {notaForm.open ? '✕ chiudi' : '+ nota'}
-            </button>
+      <div className="ds-g4">
+        <Card className="ds-s3">
+          <div className="pl2-toolbar">
+            <SegTabs<string>
+              value={filtroStato}
+              onChange={setFiltroStato}
+              label="Stato"
+              items={[
+                { value: 'TUTTI', label: 'Tutti', count: conteggi.TUTTI },
+                { value: 'ASSEGNATO', label: 'Assegnati', count: conteggi.ASSEGNATO },
+                { value: 'DISPONIBILE', label: 'Disponibili', count: conteggi.DISPONIBILE },
+                { value: 'GUASTO', label: 'Guasti', count: conteggi.GUASTO },
+                { value: 'DISMESSO', label: 'Dismessi', count: conteggi.DISMESSO },
+              ]}
+            />
+            <SearchBox value={search} onChange={setSearch} placeholder="Cerca seriale, modello, padroncino…" width={280} />
           </div>
-          {notaForm.open && (
-            <div className="pm-nota-form">
-              <select
-                className="pm-nota-select"
-                value={notaForm.entityId}
-                onChange={e => setNotaForm(f => ({ ...f, entityId: e.target.value }))}
-              >
-                <option value="">— Seleziona palmare —</option>
-                {palmari.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.codice}{p.marca ? ' – ' + p.marca + ' ' + (p.modello ?? '') : ''}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                className="pm-nota-textarea"
-                rows={2}
-                placeholder="Testo nota…"
-                value={notaForm.testo}
-                onChange={e => setNotaForm(f => ({ ...f, testo: e.target.value }))}
-              />
-              <div className="pm-nota-actions">
-                <button
-                  className="pm-btn-outline pm-btn-sm"
-                  onClick={() => setNotaForm({ open: false, entityId: '', testo: '' })}
-                >
-                  Annulla
-                </button>
-                <button
-                  className="pm-btn-primary pm-btn-sm"
-                  onClick={handleAddNota}
-                  disabled={notaSaving || !notaForm.entityId || !notaForm.testo.trim()}
-                >
-                  {notaSaving ? 'Salvo…' : 'Salva nota'}
-                </button>
-              </div>
-            </div>
-          )}
-          {ultimeNote.length === 0
-            ? <div className="pm-info-empty">Nessuna nota registrata</div>
-            : ultimeNote.map(n => {
-                const p = palmari.find(x => x.id === n.entityId);
-                return (
-                  <div
-                    key={n.id}
-                    className="pm-info-row-item"
-                    onClick={() => navigate('/palmari/' + n.entityId)}
-                  >
-                    <span className="pm-info-codice">{p?.codice ?? '—'}</span>
-                    <div className="pm-info-body">
-                      <span className="pm-info-nome">
-                        {[p?.marca, p?.modello].filter(Boolean).join(' ') || p?.codice || '—'}
-                      </span>
-                      <span className="pm-info-nota">
-                        {n.contenuto.length > 55 ? n.contenuto.slice(0, 55) + '…' : n.contenuto}
-                      </span>
-                    </div>
-                    <span className="pm-info-ago">
-                      {n.user ? n.user.nome[0] + '.' + n.user.cognome[0] + '.' : '—'}
-                      {' · '}
-                      {new Date(n.createdAt).toLocaleDateString('it-IT')}
-                    </span>
+          <div className="ds-tablewrap">
+            <table className="ds-table pm2-table">
+              <thead><tr>
+                <Th k="codice" sort={{ key: sortKey, dir: sortDir }} onSort={handleSort}>Seriale / modello</Th>
+                <Th k="padroncino" sort={{ key: sortKey, dir: sortDir }} onSort={handleSort}>Padroncino</Th>
+                <Th k="stato" sort={{ key: sortKey, dir: sortDir }} onSort={handleSort}>Stato</Th>
+                <Th k="dataAss" sort={{ key: sortKey, dir: sortDir }} onSort={handleSort}>Data assegnazione</Th>
+                <Th k="tariffa" sort={{ key: sortKey, dir: sortDir }} onSort={handleSort} right>Tariffa</Th>
+                <Th>Note</Th>
+              </tr></thead>
+              <tbody>
+                {filtered.length === 0 && <tr><td colSpan={6}><Empty>Nessun palmare trovato</Empty></td></tr>}
+                {filtered.map((p) => {
+                  const attiva = p.assegnazioni?.find((a) => !a.dataFine);
+                  const futura = !!attiva && attiva.dataInizio.slice(0, 10) > oggi;
+                  const nota = ultimaNotaMap[p.id]?.contenuto ?? p.note ?? '';
+                  return (
+                    <tr key={p.id} className={`is-clickable${sel?.id === p.id ? ' is-open' : ''}`} onClick={() => setSelId(p.id)} onDoubleClick={() => navigate('/palmari/' + p.id)}>
+                      <td>
+                        <div className="pm2-cod">
+                          <span aria-hidden="true" className="pm2-tile" style={{ background: TILE[p.stato] ?? '#A1A1AA' }}><Icon name="palm" size={12} stroke={2.2} /></span>
+                          <span className="pm2-cod-t">
+                            <span className="ds-mono" style={{ fontWeight: 600, fontSize: 12.5 }}>{p.codice}</span>
+                            <span className="pm2-sub">{[p.marca, p.modello].filter(Boolean).join(' ') || '—'}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="pm2-ell" style={{ color: attiva ? undefined : '#6B6B73' }}>{attiva?.ragioneSociale ?? '—'}</td>
+                      <td><Dot tone={TONE[p.stato] ?? 'na'}>{STATO_LABEL[p.stato] ?? p.stato}</Dot></td>
+                      <td style={{ color: futura ? '#B91C1C' : undefined }}>{attiva ? fmt(attiva.dataInizio) : '—'}</td>
+                      <td className="r" style={{ color: p.tariffaMensile != null && Number(p.tariffaMensile) === 0 ? '#B91C1C' : undefined }}>{p.tariffaMensile != null ? fmtEur2(p.tariffaMensile) : '—'}</td>
+                      <td className="pm2-ell pm2-sub" title={nota}>{nota}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="pl2-foot">Mostrati {filtered.length} di {palmari.length} · clic su un palmare per vederne il dettaglio a destra, doppio clic per aprire la scheda</div>
+        </Card>
+
+        <Card className="pm2-side">
+          {!sel ? <Empty>Nessun palmare selezionato</Empty> : (() => {
+            const attiva = sel.assegnazioni?.find((a) => !a.dataFine);
+            const storico = [...(sel.assegnazioni ?? [])].sort((x, y) => y.dataInizio.localeCompare(x.dataInizio));
+            const campi: [string, string | null | undefined][] = [
+              ['Modello', [sel.marca, sel.modello].filter(Boolean).join(' ')], ['IMEI / seriale', sel.imei],
+              ['SIM / numero', sel.simNumero], ['Tariffa al giorno', sel.tariffaMensile != null ? fmtEur2(sel.tariffaMensile) : null],
+              ['Padroncino', attiva?.ragioneSociale], ['Dal', attiva ? fmt(attiva.dataInizio) : null],
+            ];
+            const noteSel = tutteLeNote.filter((n) => n.entityId === sel.id).slice(0, 3);
+            return (
+              <>
+                <div className="pm2-side-head">
+                  <span aria-hidden="true" className="pm2-tile pm2-tile-lg" style={{ background: TILE[sel.stato] ?? '#A1A1AA' }}><Icon name="palm" size={17} stroke={2.2} /></span>
+                  <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <h2 className="ds-mono" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{sel.codice}</h2>
+                    <Dot tone={TONE[sel.stato] ?? 'na'}>{STATO_LABEL[sel.stato] ?? sel.stato}</Dot>
                   </div>
-                );
-              })
-          }
-        </div>
-
-        {/* Ultime Modifiche */}
-        <div className="pm-info-panel">
-          <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">🕐 Ultime Modifiche</span>
-          </div>
-          {ultimiLog.length === 0
-            ? <div className="pm-info-empty">Nessuna modifica recente</div>
-            : ultimiLog.map(l => {
-                // Gli eventi di assegnazione/fine-assegnazione hanno entityType
-                // 'assegnazione_palmare' ed entityId = id dell'assegnazione, non del
-                // palmare: il payload porta solo il "codicePalmare", quindi risolviamo
-                // il palmare per codice per poter mostrare/collegare quello giusto.
-                const relatedCodice = l.dataDopo?.codicePalmare ?? l.dataPrima?.codicePalmare;
-                const pal = palmari.find(p => p.id === l.entityId)
-                  ?? (relatedCodice ? palmari.find(p => p.codice === relatedCodice) : undefined);
-                const codice = pal?.codice ?? relatedCodice ?? l.dataDopo?.codice ?? l.dataPrima?.codice ?? '—';
-                const desc = describeAudit(l);
-                const ms = Date.now() - new Date(l.createdAt).getTime();
-                const h = Math.floor(ms / 3_600_000);
-                const d = Math.floor(h / 24);
-                const ago = h < 1 ? 'Adesso' : d === 0 ? h + 'h fa' : d === 1 ? 'Ieri' : d + 'gg fa';
-                return (
-                  <div
-                    key={l.id}
-                    className="pm-info-row-item"
-                    onClick={() => navigate('/palmari/' + (pal?.id ?? l.entityId))}
-                  >
-                    <span className="pm-info-codice">{codice}</span>
-                    <div className="pm-info-body">
-                      <span className="pm-info-nota" title={desc}>{desc}</span>
-                    </div>
-                    <span className="pm-info-ago">
-                      {l.user ? l.user.nome?.[0] + '.' + l.user.cognome?.[0] + '.' : '—'}{' · '}{ago}
-                    </span>
-                  </div>
-                );
-              })
-          }
-        </div>
-
-        {/* Cose da fare */}
-        <div className="pm-info-panel">
-          <div className="pm-info-panel-head">
-            <span className="pm-info-panel-title">✅ Cose da Fare</span>
-            <button className="pm-nota-toggle" onClick={handleOpenNewTask}>+ attività</button>
-          </div>
-          {tasks.length === 0
-            ? <div className="pm-info-empty">Nessuna attività registrata</div>
-            : tasks.map(t => (
-              <div key={t.id} className={`task-list-item ${t.completata ? 'task-done' : ''}`} onClick={() => handleOpenEditTask(t)}>
-                <input
-                  type="checkbox"
-                  className="task-checkbox"
-                  checked={t.completata}
-                  onClick={e => e.stopPropagation()}
-                  onChange={() => handleToggleTask(t)}
-                />
-                <div className="task-body">
-                  {t.targa && <span className="task-tag">🚚 {t.targa}</span>}
-                  {t.codiceAutista && <span className="task-tag">👤 {t.codiceAutista}</span>}
-                  {t.palmare && <span className="task-tag">📱 {t.palmare}</span>}
-                  {t.padroncino && <span className="task-tag task-tag-pad">🏢 {t.padroncino}</span>}
-                  <span className="task-text" title={t.testo}>{t.testo}</span>
+                  <IconButton icon="edit" label="Modifica palmare" onClick={() => navigate('/palmari/' + sel.id)} />
+                  <IconButton icon="trash" label="Elimina palmare" danger onClick={() => handleDelete(sel.id, sel.codice)} />
                 </div>
-                <button className="task-remove" onClick={e => { e.stopPropagation(); handleRemoveTask(t.id); }} title="Elimina">✕</button>
-              </div>
-            ))}
-        </div>
-
+                <dl className="pm2-dl">
+                  {campi.map(([l, v]) => (
+                    <div key={l}><dt>{l}</dt><dd style={{ color: v ? undefined : '#71717A' }}>{v || 'Non inserito'}</dd></div>
+                  ))}
+                </dl>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 18px 14px' }}>
+                  <Button size="sm" style={{ flex: '1 1 110px', justifyContent: 'center' }} onClick={() => navigate('/palmari/' + sel.id)}>Cambia stato</Button>
+                  <Button size="sm" variant="primary" style={{ flex: '1 1 150px', justifyContent: 'center' }} onClick={() => navigate('/palmari/' + sel.id)}>{attiva ? 'Chiudi assegnazione' : 'Assegna'}</Button>
+                </div>
+                <div className="pm2-side-sec">Storico assegnazioni</div>
+                {storico.length === 0
+                  ? <div className="pm2-hist"><span aria-hidden="true" style={{ background: '#D4D4D8' }} /><div><span style={{ fontWeight: 500 }}>Nessuna assegnazione</span><span className="pm2-sub">Il palmare non è mai stato assegnato</span></div></div>
+                  : storico.map((a) => (
+                    <div key={a.id} className="pm2-hist">
+                      <span aria-hidden="true" style={{ background: a.dataFine ? '#D4D4D8' : C.green }} />
+                      <div><span style={{ fontWeight: 500 }}>{a.ragioneSociale}</span><span className="pm2-sub">Dal {fmt(a.dataInizio)}{a.dataFine ? ` al ${fmt(a.dataFine)}` : ' · in corso'}</span></div>
+                    </div>
+                  ))}
+                {noteSel.length > 0 && (
+                  <>
+                    <div className="pm2-side-sec">Ultime note</div>
+                    {noteSel.map((n) => (
+                      <div key={n.id} className="pm2-hist"><span aria-hidden="true" style={{ background: C.orange }} />
+                        <div><span>{n.contenuto}</span><span className="pm2-sub">{n.user ? `${n.user.nome} ${n.user.cognome}` : '—'} · {fmt(n.createdAt)}</span></div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <div className="pm2-side-foot">
+                  <label htmlFor="pm2-nota" style={{ fontSize: 12, fontWeight: 600, color: '#3F3F46' }}>Nota</label>
+                  <textarea id="pm2-nota" rows={2} className="ds-input" placeholder="Aggiungi una nota su questo palmare…" value={notaSel}
+                    onChange={(e) => setNotaSel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) salvaNotaSel(); }} />
+                  {notaSel.trim() && <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button size="sm" variant="primary" onClick={salvaNotaSel} disabled={notaSaving}>{notaSaving ? 'Salvo…' : 'Salva nota'}</Button></div>}
+                  <button type="button" className="pm2-link" onClick={() => navigate('/palmari/' + sel.id)}>Scheda e storico modifiche del palmare ↗</button>
+                </div>
+              </>
+            );
+          })()}
+        </Card>
       </div>
+
+      {/* Pannello laterale: promemoria, note e modifiche (come prima nei riquadri della pagina) */}
+      {pannello && (
+        <div className="fl-drawer-wrap" onClick={() => setPannello(null)}>
+          <aside className="fl-drawer" role="dialog" aria-label="Promemoria, note e modifiche" onClick={(e) => e.stopPropagation()}>
+            <div className="fl-drawer-head">
+              <h2 className="ds-h2" style={{ fontSize: 16 }}>Palmari: promemoria e note</h2>
+              <IconButton icon="close" label="Chiudi" onClick={() => setPannello(null)} />
+            </div>
+            <div style={{ padding: '0 18px' }}>
+              <Tabs
+                items={[
+                  { value: 'attivita', label: 'Cose da fare', count: tasks.filter((t) => !t.completata).length },
+                  { value: 'note', label: 'Ultime note', count: ultimeNote.length },
+                  { value: 'modifiche', label: 'Ultime modifiche' },
+                ]}
+                value={pannello}
+                onChange={(v) => setPannello(v as typeof pannello)}
+              />
+            </div>
+            <button type="button" className="fl-drawer-all" onClick={() => navigate(`/storico/palmari?tab=${pannello}`)}>
+              Elenco completo con ricerca <Icon name="chevRight" size={12} />
+            </button>
+            <div className="fl-drawer-body">
+              {pannello === 'attivita' && (
+                <>
+                  <div style={{ padding: '12px 18px' }}><Button size="sm" variant="primary" icon="plus" onClick={handleOpenNewTask}>Nuova attività</Button></div>
+                  <TaskList tasks={tasks} onToggle={handleToggleTask} onEdit={handleOpenEditTask} onRemove={handleRemoveTask} />
+                </>
+              )}
+              {pannello === 'note' && (
+                <>
+                  <div className="fl-form">
+                    <label className="ds-field"><span>Palmare</span>
+                      <select className="ds-input" value={notaForm.entityId} onChange={(e) => setNotaForm((f) => ({ ...f, entityId: e.target.value }))}>
+                        <option value="">Scegli un palmare…</option>
+                        {palmari.map((p) => <option key={p.id} value={p.id}>{p.codice}{p.marca ? ' – ' + p.marca + ' ' + (p.modello ?? '') : ''}</option>)}
+                      </select>
+                    </label>
+                    <label className="ds-field"><span>Nuova nota</span>
+                      <textarea className="ds-input" rows={2} value={notaForm.testo} onChange={(e) => setNotaForm((f) => ({ ...f, testo: e.target.value }))} />
+                    </label>
+                    <div className="ds-actions" style={{ justifyContent: 'flex-end' }}>
+                      <Button size="sm" variant="blue" onClick={handleAddNota} disabled={notaSaving || !notaForm.entityId || !notaForm.testo.trim()}>{notaSaving ? 'Salvo…' : 'Salva nota'}</Button>
+                    </div>
+                  </div>
+                  <div className="ds-list">
+                    {ultimeNote.length === 0 ? <Empty>Nessuna nota registrata</Empty> : ultimeNote.map((n) => {
+                      const p = palmari.find((x) => x.id === n.entityId);
+                      return (
+                        <button key={n.id} type="button" className="ds-listrow fl-rowbtn fl-stack" onClick={() => navigate('/palmari/' + n.entityId)}>
+                          <span className="fl-line"><span className="ds-mono fl-targa">{p?.codice ?? '—'}</span><span className="fl-meta">{n.user ? `${n.user.nome} ${n.user.cognome[0]}.` : '—'} · {fmt(n.createdAt)}</span></span>
+                          <span className="fl-text" title={n.contenuto}>{n.contenuto}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {pannello === 'modifiche' && (
+                <div className="ds-list">
+                  {ultimiLog.length === 0 ? <Empty>Nessuna modifica recente</Empty> : ultimiLog.map((l) => {
+                    // Gli eventi di assegnazione hanno entityId = id dell'assegnazione: risolviamo il palmare per codice.
+                    const relatedCodice = l.dataDopo?.codicePalmare ?? l.dataPrima?.codicePalmare;
+                    const pal = palmari.find((p) => p.id === l.entityId) ?? (relatedCodice ? palmari.find((p) => p.codice === relatedCodice) : undefined);
+                    const codice = pal?.codice ?? relatedCodice ?? l.dataDopo?.codice ?? l.dataPrima?.codice ?? '—';
+                    const desc = describeAudit(l);
+                    return (
+                      <button key={l.id} type="button" className="ds-listrow fl-rowbtn fl-stack" onClick={() => navigate('/palmari/' + (pal?.id ?? l.entityId))}>
+                        <span className="fl-line"><span className="ds-mono fl-targa">{codice}</span><span className="fl-meta">{l.user ? `${l.user.nome} ${l.user.cognome?.[0] ?? ''}.` : '—'} · {fmt(l.createdAt)}</span></span>
+                        <span className="fl-text" title={desc}>{desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       <TaskModal
         open={taskModalOpen}
@@ -456,114 +537,7 @@ export default function Palmari() {
         editingTask={editingTask}
       />
 
-      {/* ── TOOLBAR ── */}
-      <div className="pm-toolbar">
-        <div className="pm-search-wrap">
-          <span>🔍</span>
-          <input
-            className="pm-search"
-            placeholder="Cerca seriale, modello, padroncino..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="pm-filters">
-          {STATI_FILTRO.map(s => (
-            <button
-              key={s}
-              className={'pm-filter-btn' + (filtroStato === s ? ' pm-filter-active' : '')}
-              onClick={() => setFiltroStato(s)}
-            >
-              {s === 'TUTTI' ? 'TUTTI' : STATO_LABEL[s] ?? s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── TABELLA ── */}
-      <div className="pm-table-wrap">
-        <table className="pm-table">
-          <thead>
-            <tr>
-              <SortTh label="SERIALE / MODELLO" col="codice"     sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortTh label="STATO"              col="stato"      sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortTh label="PADRONCINO"         col="padroncino" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="pm-th-sort pm-th-purple" onClick={() => handleSort('tariffa')}>TARIFFA €/GG {sortKey === 'tariffa' ? (sortDir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.3 }}>↕</span>}</th>
-              <SortTh label="DATA ASSEGNAZIONE"  col="dataAss"    sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="pm-th">NOTE</th>
-              <th className="pm-th"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="pm-empty-row">Nessun palmare trovato</td>
-              </tr>
-            )}
-            {filtered.map(p => {
-              const attiva = p.assegnazioni?.find(a => !a.dataFine);
-              const badgeCls = STATO_BADGE[p.stato] ?? 'pm-badge-dismesso';
-              return (
-                <tr key={p.id} className="pm-row">
-                  <td className="pm-td">
-                    <div className="pm-codice-cell">
-                      <span className="pm-codice">{p.codice}</span>
-                      {(p.marca || p.modello) && (
-                        <span className="pm-modello-sub">
-                          {[p.marca, p.modello].filter(Boolean).join(' ')}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="pm-td">
-                    <span className={'pm-badge ' + badgeCls}>
-                      {(STATO_LABEL[p.stato] ?? p.stato).toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="pm-td">
-                    {attiva
-                      ? <span className="pm-padroncino">{attiva.ragioneSociale}</span>
-                      : <span className="pm-empty">—</span>
-                    }
-                  </td>
-                  <td className="pm-td pm-td-purple">
-                    {p.tariffaMensile != null
-                      ? <span className="pm-tariffa">{fmtEur(p.tariffaMensile)}<small style={{ opacity: 0.7 }}>/gg</small></span>
-                      : <span className="pm-empty">—</span>
-                    }
-                  </td>
-                  <td className="pm-td">
-                    {attiva ? fmt(attiva.dataInizio) : <span className="pm-empty">—</span>}
-                  </td>
-                  <td className="pm-td">
-                    {ultimaNotaMap[p.id]
-                      ? <span className="pm-note-cell" title={ultimaNotaMap[p.id].contenuto}>
-                          {ultimaNotaMap[p.id].contenuto.length > 40
-                            ? ultimaNotaMap[p.id].contenuto.slice(0, 40) + '…'
-                            : ultimaNotaMap[p.id].contenuto}
-                        </span>
-                      : <span className="pm-empty">—</span>}
-                  </td>
-                  <td className="pm-td" style={{ textAlign: 'right' }}>
-                    <button
-                      className="pm-btn-primary pm-btn-sm"
-                      onClick={() => navigate('/palmari/' + p.id)}
-                    >
-                      Dettaglio
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <div className="pm-table-footer">
-          {filtered.length} di {palmari.length} palmari
-        </div>
-      </div>
-
       <NuovoPalmareModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />
-
-    </div>
+    </Page>
   );
 }

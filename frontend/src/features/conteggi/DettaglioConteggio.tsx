@@ -13,8 +13,14 @@ import { generaPdfDistribuzione } from './generaPdfDistribuzione';
 import { addebitivSospesoApi } from '../../lib/addebiti-sospesi.api';
 import type { AddebitoSospeso } from '../../lib/addebiti-sospesi.api';
 import LogConteggio from './LogConteggio';
+import TaskModal from '../../components/ui/TaskModal';
+import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
+import { taskApi } from '../../lib/api';
+import type { TaskItem } from '../../lib/api';
+import { fmtEur, fmtNum as fmtNum2 } from '../../components/ds';
 import * as XLSX from 'xlsx';
 import './DettaglioConteggio.css';
+import './DettaglioConteggio2.css';
 
 // ─── TIPI ──────────────────────────────────────────────────────────────────────
 interface RigaFatturato {
@@ -94,8 +100,9 @@ function assegnazioneAttivaNelMese(
   }
   return true;
 }
+// Solo formattazione a video ("€ 1.234,56"): i valori e i calcoli non cambiano
 const eur = (n: number | null | undefined) =>
-  n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  n == null ? '—' : fmtEur(n);
 const fmtData = (d: string) => {
   if (!d) return '';
   // Formato italiano DD/MM/YYYY (come prodotto da estraiData nel backend) — evita new Date(MM/DD)
@@ -146,11 +153,53 @@ const newId = () => `new-${++_id}`;
 
 // ─── CHECKLIST CONFIG ──────────────────────────────────────────────────────────
 const CHECKLIST_ITEMS = [
-  { key: 'distribuzioneInviata', label: 'Distribuzione Inviata', icon: '📤' },
-  { key: 'pdfAddebitiCreato', label: 'PDF Addebiti Creato', icon: '📄' },
-  { key: 'fatturaCreata', label: 'Fattura Tu Creata', icon: '🧾' },
-  { key: 'fatturaRicevuta', label: 'Fattura Ricevuta', icon: '✅' },
+  { key: 'distribuzioneInviata', label: 'Distribuzione inviata', icon: '📤' },
+  { key: 'pdfAddebitiCreato', label: 'PDF addebiti creato', icon: '📄' },
+  { key: 'fatturaCreata', label: 'Fattura TU creata', icon: '🧾' },
+  { key: 'fatturaRicevuta', label: 'Fattura ricevuta', icon: '✅' },
 ];
+
+// ─── GRAFICA (restyling) ───────────────────────────────────────────────────────
+const C2 = { B: '#3D63F0', V: '#15A06A', O: '#EA6A2A', P: '#7C5CF0', R: '#DC4446', T: '#0E9494', K: '#0B0B0C', D: '#18181B', GR: '#71717A' };
+const P2 = {
+  riep: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', fat: 'M12 3v18M17 7H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+  add: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6', comp: 'M12 3v18M5 7h14', mese: 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8',
+  palm: 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', van: 'M3 6h11v10H3zM14 9h4l3 3v4h-7z',
+  bolt: 'M13 2L4 14h7l-1 8 9-12h-7z', vari: 'M12 3l9.5 17h-19zM12 10v5M12 18h.01', cassa: 'M3 7h18v12H3zM3 11h18',
+  edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z', nota: 'M4 4h16v12H8l-4 4zM8 9h8M8 12h5', check: 'M9 11l3 3 8-8',
+  plus: 'M12 5v14M5 12h14', up: 'M12 15V3M7 8l5-5 5 5M4 21h16', down: 'M12 3v12M7 10l5 5 5-5M4 21h16', copy: 'M8 8h12v12H8zM4 16V4h12',
+  doc: 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5', lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z',
+  save: 'M5 3h11l3 3v15H5zM8 3v6h8M8 21v-7h8v7', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', x: 'M6 6l12 12M18 6L6 18',
+  storno: 'M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3', tick: 'M5 12l5 5 9-10', ext: 'M7 17L17 7M9 7h8v8', chev: 'M9 6l6 6-6 6',
+};
+type TileKey = 'fat' | 'tratt' | 'acc' | 'totfat' | 'palm' | 'van' | 'bolt' | 'vari' | 'storno' | 'fm' | 'cassa' | 'totadd' | 'totcomp';
+const TILES: Record<TileKey, [string, string]> = {
+  fat: [C2.V, P2.fat], tratt: [C2.R, P2.vari], acc: [C2.O, P2.cassa], totfat: [C2.K, P2.add],
+  palm: [C2.B, P2.palm], van: [C2.T, P2.van], bolt: [C2.V, P2.bolt], vari: [C2.P, P2.vari],
+  storno: [C2.T, P2.storno], fm: [C2.B, P2.add], cassa: [C2.D, P2.cassa], totadd: [C2.R, P2.add], totcomp: [C2.B, P2.comp],
+};
+function Svg2({ d, size = 14, sw = 2, color }: { d: string; size?: number; sw?: number; color?: string }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color ?? 'currentColor'} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
+function Tile2({ c, d, size = 26, icon = 13, r = 7 }: { c: string; d: string; size?: number; icon?: number; r?: number }) {
+  return <span aria-hidden="true" className="dc2-tile" style={{ flex: `0 0 ${size}px`, width: size, height: size, borderRadius: r, background: c }}><Svg2 d={d} size={icon} sw={2.4} /></span>;
+}
+
+/** Mostra l'importo formattato ("€ 1.234,56") sopra il campo numerico quando non è in modifica.
+ *  Il campo resta lo stesso input di prima: cambia solo come appare a riposo. */
+function NumBox({ v, children }: { v: number | null | undefined; children: React.ReactNode }) {
+  const n = v == null || (v as any) === '' ? null : Number(v);
+  return (
+    <span className={`dc2-numbox${n != null && n < 0 ? ' is-neg' : ''}`}>
+      {children}
+      <span aria-hidden="true" className="dc2-numfmt">{n == null || Number.isNaN(n) ? '' : eur(n)}</span>
+    </span>
+  );
+}
 
 // ─── COMPONENTI TABELLA EXCEL ──────────────────────────────────────────────────
 function ExcelTable({ children, headers, colWidths }: {
@@ -169,7 +218,9 @@ function ExcelTable({ children, headers, colWidths }: {
           </colgroup>
         )}
         <thead>
-          <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+          <tr>{headers.map((h, i) => (
+            <th key={i} style={typeof h === 'string' && /^(Importo|Rata|Totale|Tariffa|Valore|Giorni|N° )/.test(h) ? { textAlign: 'right', paddingRight: 16 } : undefined}>{h}</th>
+          ))}</tr>
         </thead>
         <tbody>{children}</tbody>
       </table>
@@ -178,47 +229,109 @@ function ExcelTable({ children, headers, colWidths }: {
 }
 
 function SectionBlock({
-  title, icon, onAdd, children, totaleLabel, totale, subTotaleLabel, subTotale,
+  title, tile, onAdd, addLabel = 'Aggiungi riga', children, totaleLabel, totale, subTotaleLabel, subTotale, actions, sub,
 }: {
-  title: string; icon: string; onAdd: () => void; children: React.ReactNode;
+  title: string; tile: TileKey; onAdd?: () => void; addLabel?: string; children: React.ReactNode;
   totaleLabel?: string; totale?: number;
   subTotaleLabel?: string; subTotale?: number;
+  actions?: React.ReactNode; sub?: React.ReactNode;
 }) {
+  const [c, d] = TILES[tile];
   return (
-    <div className="dc-addebiti-section">
-      <div className="dc-section-subheader">
-        <div className="dc-section-subheader-title"><span>{icon}</span><span>{title}</span></div>
-        <button className="dc-btn-add-small" onClick={onAdd}>+ Aggiungi riga</button>
+    <section className="dc2-card dc-addebiti-section">
+      <div className="dc2-shead">
+        <div className="dc2-shead-l">
+          <Tile2 c={c} d={d} />
+          <div className="dc2-col">
+            <h2 className="dc2-h2">{title}</h2>
+            {sub && <span className="dc2-small dc2-muted">{sub}</span>}
+          </div>
+        </div>
+        <div className="dc2-shead-r">
+          {subTotaleLabel != null && subTotale != null && (
+            <span className="dc2-small dc2-muted">{subTotaleLabel}: <span className="dc2-num">{eur(subTotale)}</span></span>
+          )}
+          {totale != null && <span className="dc2-stot" title={totaleLabel}>{eur(totale)}</span>}
+          {actions}
+          {onAdd && <button type="button" className="dc2-btn dc2-btn-xs" onClick={onAdd}><Svg2 d={P2.plus} size={12} />{addLabel}</button>}
+        </div>
       </div>
       {children}
-      {(totaleLabel != null && totale != null) && (
-        <div className="dc-section-tot">
-          {subTotaleLabel != null && subTotale != null && (
-            <span className="dc-tot-sub">{subTotaleLabel}: <strong>{eur(subTotale)}</strong></span>
-          )}
-          <span>{totaleLabel}</span>
-          <span className="dc-tot-val">{eur(totale)}</span>
+    </section>
+  );
+}
+
+/** Riga di totale nello stile del mockup (sfondo chiaro, grassetto) */
+function TotRows({ rows }: { rows: { label: React.ReactNode; value: React.ReactNode; bold?: boolean; tone?: 'neg' | 'pos' | 'muted' }[] }) {
+  return (
+    <div className="dc2-totrows">
+      {rows.map((r, i) => (
+        <div key={i} className={`dc2-totrow${r.bold ? ' is-bold' : ''}`}>
+          <span>{r.label}</span>
+          <span className={`dc2-num${r.tone === 'neg' ? ' dc2-neg' : r.tone === 'pos' ? ' dc2-pos' : r.tone === 'muted' ? ' dc2-muted' : ''}`}>{r.value}</span>
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
 // ─── TAB RIEPILOGO ─────────────────────────────────────────────────────────────
-function TabRiepilogo({ padroncino, mese, totFatturato, totAddebitiConIva, totCompen, checklist, onChecklistChange, conteggioId, noteIniziale, onNoteSaved }: {
+interface ParteImporto { a: string; v: number; c: string }
+function CardImporti({ label, value, c, d, parti }: { label: string; value: number; c: string; d: string; parti: ParteImporto[] }) {
+  const tot = parti.reduce((s, p) => s + Math.abs(p.v), 0);
+  return (
+    <section className="dc2-card dc2-kcard">
+      <div className="dc2-row" style={{ gap: 8 }}>
+        <Tile2 c={c} d={d} size={18} icon={11} r={5} />
+        <h2 className="dc2-klabel">{label}</h2>
+      </div>
+      <span className="dc2-kval">{eur(value)}</span>
+      <div aria-hidden="true" className="dc2-segbar">
+        {parti.map((p) => <span key={p.a} style={{ width: tot ? `${(Math.abs(p.v) / tot) * 100}%` : 0, background: p.c }} />)}
+      </div>
+      <div className="dc2-klist">
+        {parti.map((p) => (
+          <div key={p.a} className="dc2-row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+            <span aria-hidden="true" className="dc2-sq" style={{ background: p.c }} />
+            <span style={{ flex: '1 1 auto', color: '#3F3F46' }}>{p.a}</span>
+            <span className="dc2-num" style={{ fontWeight: 500 }}>{eur(p.v)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function scadInfo(d: string | null | undefined): { t: string; sc: string; sd: string } {
+  if (!d) return { t: 'Non inserito', sc: '#52525B', sd: '#A1A1AA' };
+  const giorni = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+  const data = new Date(d).toLocaleDateString('it-IT');
+  if (giorni < 0) return { t: `Scaduto il ${data}`, sc: '#B91C1C', sd: '#E5484D' };
+  if (giorni <= 30) return { t: `Scade il ${data}`, sc: '#C2410C', sd: '#EA6A2A' };
+  return { t: `Valido fino al ${data}`, sc: '#15803D', sd: '#15A06A' };
+}
+
+function TabRiepilogo({ padroncino, mese, totFatturato, totAddebitiConIva, totCompen, parti, compParti, distribuzione, checklist, onChecklistChange, conteggioId, noteIniziale, onNoteSaved, tasks, onToggleTask, onNewTask, onEditTask, onApriPadroncino }: {
   padroncino: Padroncino; mese: string;
   totFatturato: number; totAddebitiConIva: number; totCompen: number;
+  parti: { palmari: number; mezzi: number; ricariche: number; vari: number; bollo: number };
+  compParti: { accrediti: number; fineMese: number; cassa: number };
+  distribuzione: DistribuzioneJson | null | undefined;
   checklist: Record<string, boolean>; onChecklistChange: (key: string, val: boolean) => void;
   conteggioId: string | null;
   noteIniziale: string;
   onNoteSaved: (note: string) => void;
+  tasks: TaskItem[];
+  onToggleTask: (t: TaskItem) => void;
+  onNewTask: () => void;
+  onEditTask: (t: TaskItem) => void;
+  onApriPadroncino: () => void;
 }) {
-  const netto = totFatturato * 1.22 - totAddebitiConIva - totCompen;
-
   // ── Blocco note con autosave ──────────────────────────
   const [noteText, setNoteText] = useState(noteIniziale);
   const [noteSaveStatus, setNoteSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // Sincronizza se cambia il conteggio (cambio mese)
   useEffect(() => { setNoteText(noteIniziale); setNoteSaveStatus('idle'); }, [noteIniziale]);
@@ -240,147 +353,130 @@ function TabRiepilogo({ padroncino, mese, totFatturato, totAddebitiConIva, totCo
     }, 900);
   };
 
+  // Resa del mese dalla fattura proforma (solo lettura)
+  const rp = distribuzione?.riepilogo;
+  const resa = rp ? [
+    { l: 'Consegne', f: rp.consegneFatte, a: rp.consegneAffidate, u: 'fatte' },
+    { l: 'Consegne Shop', f: rp.consegneFatteShop, a: rp.consegneAffidateShop, u: 'fatte' },
+    { l: 'Ritiri', f: rp.ritiriFatti, a: rp.ritiriAffidati, u: 'fatti' },
+  ].map((x) => {
+    const p = x.a ? ((x.f ?? 0) / x.a) * 100 : null;
+    const col = p == null ? ['#A1A1AA', '#52525B'] : p >= 90 ? ['#15A06A', '#15803D'] : p >= 50 ? ['#EA6A2A', '#C2410C'] : ['#E5484D', '#B91C1C'];
+    return { ...x, p, c: col[0], tc: col[1] };
+  }) : [];
+
+  const durc = scadInfo(padroncino.scadenzaDurc);
+  const dvr = padroncino.dvrEsente ? { t: 'Esente', sc: '#52525B', sd: '#A1A1AA' } : scadInfo(padroncino.scadenzaDvr);
+  const fatte = CHECKLIST_ITEMS.filter((i) => checklist[i.key]).length;
+
   return (
-    <div className="dc-riepilogo">
-      <div className="dc-riepilogo-grid">
-        <div className="dc-riepilogo-numeri">
-          {/* Info padroncino */}
-          <div className="dc-riepilogo-section">
-            <h3>📊 Dati Padroncino</h3>
-            <div className="dc-riepilogo-table">
-              {[
-                ['Ragione Sociale', padroncino.ragioneSociale],
-                ['Partita IVA', padroncino.partitaIva],
-                ['Mese', formatMese(mese)],
-                ['Mezzi assegnati', (padroncino.mezziAssegnati ?? []).filter((m: any) => assegnazioneAttivaNelMese(m.dataInizio, m.dataFine, mese)).length],
-                ['Palmari assegnati', (padroncino.palmariAssegnati ?? []).filter((p: any) => assegnazioneAttivaNelMese(p.dataInizio, p.dataFine, mese)).length],
-              ].map(([label, val]) => (
-                <div key={String(label)} className="dc-riepilogo-row">
-                  <span className="dc-riepilogo-label">{label}</span>
-                  <span className="dc-riepilogo-val">{val}</span>
+    <div className="dc-riepilogo dc2-stack">
+      <div className="dc2-g4">
+        <CardImporti label="Fatturato distribuzione" value={totFatturato * 1.22} c={C2.V} d={P2.fat} parti={[
+          { a: 'Imponibile', v: totFatturato, c: C2.V },
+          { a: 'IVA 22%', v: totFatturato * 0.22, c: '#9FDCC2' },
+        ]} />
+        <CardImporti label="Addebiti (con IVA)" value={totAddebitiConIva} c={C2.R} d={P2.add} parti={[
+          { a: 'Noleggi', v: parti.mezzi, c: C2.T },
+          { a: 'Palmari', v: parti.palmari, c: C2.B },
+          { a: 'Ricariche, vari, bollo', v: parti.ricariche + parti.vari + parti.bollo, c: C2.P },
+        ]} />
+        <CardImporti label="Compensazioni" value={totCompen} c={C2.B} d={P2.comp} parti={[
+          { a: 'Fattura fine mese', v: compParti.fineMese, c: C2.B },
+          { a: 'Acconti e cassa', v: compParti.cassa, c: '#AFC0FA' },
+          ...(compParti.accrediti ? [{ a: 'Accrediti e storni', v: compParti.accrediti, c: C2.T }] : []),
+        ]} />
+        <section className="dc2-card dc2-kcard" style={{ gap: 12 }}>
+          <div className="dc2-row" style={{ gap: 8 }}>
+            <Tile2 c={C2.P} d={P2.mese} size={18} icon={11} r={5} />
+            <h2 className="dc2-klabel">Resa del mese</h2>
+          </div>
+          {resa.length === 0
+            ? <span className="dc2-small dc2-muted">Importa la fattura proforma per vedere consegne e ritiri del mese.</span>
+            : resa.map((x) => (
+              <div key={x.l} className="dc2-col" style={{ gap: 5 }}>
+                <div className="dc2-row dc2-num" style={{ justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontWeight: 500 }}>{x.l}</span>
+                  <span style={{ fontWeight: 600, color: x.tc }}>{x.p == null ? '—' : `${fmtNum2(x.p, 1)}%`}</span>
                 </div>
-              ))}
+                <div aria-hidden="true" className="dc2-bar"><div style={{ width: `${Math.min(100, x.p ?? 0)}%`, background: x.c }} /></div>
+                <span className="dc2-small dc2-muted dc2-num">{fmtNum2(x.f ?? 0)} {x.u} su {fmtNum2(x.a ?? 0)}</span>
+              </div>
+            ))}
+        </section>
+      </div>
+
+      <div className="dc2-g4">
+        <section className="dc2-card dc2-s3 dc2-list">
+          <div className="dc2-lhead">
+            <div className="dc2-col" style={{ gap: 2 }}>
+              <h2 className="dc2-h2">Note, attività e modifiche</h2>
+              <span className="dc2-muted">Le attività di {padroncino.ragioneSociale} aperte in Conteggi compaiono anche qui</span>
+            </div>
+            <div className="dc2-row" style={{ gap: 6 }}>
+              <button type="button" className="dc2-btn dc2-btn-xs" onClick={() => noteRef.current?.focus()} disabled={!conteggioId}><Svg2 d={P2.edit} size={12} />Nota</button>
+              <button type="button" className="dc2-btn dc2-btn-xs" onClick={onNewTask}><Svg2 d={P2.check} size={12} />Attività</button>
             </div>
           </div>
-
-          {/* Fatturato */}
-          <div className="dc-riepilogo-section">
-            <h3>💶 Fatturato Distribuzione</h3>
-            <div className="dc-riepilogo-table">
-              <div className="dc-riepilogo-row">
-                <span className="dc-riepilogo-label">Totale imponibile</span>
-                <span className="dc-riepilogo-val dc-val-pos">{eur(totFatturato)}</span>
-              </div>
-              <div className="dc-riepilogo-row">
-                <span className="dc-riepilogo-label">IVA (22%)</span>
-                <span className="dc-riepilogo-val">{eur(totFatturato * 0.22)}</span>
-              </div>
-              <div className="dc-riepilogo-row dc-riepilogo-row-bold">
-                <span className="dc-riepilogo-label">Totale Fattura</span>
-                <span className="dc-riepilogo-val dc-val-pos">{eur(totFatturato * 1.22)}</span>
-              </div>
+          {tasks.map((t) => (
+            <div key={t.id} className={`dc2-ev${t.completata ? ' is-done' : ''}`}>
+              <span aria-hidden="true" className="dc2-tile" style={{ width: 26, height: 26, borderRadius: 7, background: C2.P }}><Svg2 d={P2.check} size={12} sw={2.4} /></span>
+              <span className="dc2-ev-data">{new Date(t.createdAt).toLocaleDateString('it-IT')}</span>
+              <span className="dc2-tag" style={{ color: '#6D28D9' }}><span aria-hidden="true" className="dc2-dot" style={{ background: C2.P }} />Promemoria</span>
+              <button type="button" className="dc2-ev-tit dc2-link" onClick={() => onEditTask(t)} title="Modifica attività">{t.testo}</button>
+              <span className="dc2-row" style={{ gap: 8, justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                <span className="dc2-ev-txt">{[t.targa, t.codiceAutista, t.palmare].filter(Boolean).join(' · ') || (t.user ? `${t.user.nome} ${t.user.cognome}` : '')}</span>
+                <label className="dc2-check" title={t.completata ? 'Segna come da fare' : 'Segna come fatta'}>
+                  <input type="checkbox" checked={t.completata} onChange={() => onToggleTask(t)} />Fatta
+                </label>
+              </span>
             </div>
+          ))}
+          <LogConteggio conteggioId={conteggioId} limit={8} />
+          <div className="dc2-notefoot">
+            <label htmlFor="dc2-note" className="sr-only">Note del mese</label>
+            <textarea
+              id="dc2-note"
+              ref={noteRef}
+              className="dc2-ta"
+              placeholder={conteggioId ? `Note del conteggio di ${formatMese(mese).toLowerCase()}…` : 'Salva prima il conteggio per abilitare le note'}
+              value={noteText}
+              onChange={(e) => handleNoteChange(e.target.value)}
+              rows={Math.min(8, Math.max(2, noteText.split('\n').length))}
+              disabled={!conteggioId}
+            />
+            <span className="dc2-small" style={{ minWidth: 90, textAlign: 'right', color: noteSaveStatus === 'error' ? '#B91C1C' : '#6B6B73' }}>
+              {noteSaveStatus === 'saving' && 'Salvataggio…'}
+              {noteSaveStatus === 'saved' && 'Salvato'}
+              {noteSaveStatus === 'error' && 'Errore'}
+              {noteSaveStatus === 'idle' && (conteggioId ? 'Salvataggio automatico' : '')}
+            </span>
           </div>
+        </section>
 
-          {/* Addebiti */}
-          <div className="dc-riepilogo-section">
-            <h3>📋 Addebiti Totali (con IVA)</h3>
-            <div className="dc-riepilogo-table">
-              <div className="dc-riepilogo-row dc-riepilogo-row-bold">
-                <span className="dc-riepilogo-label">Totale addebiti</span>
-                <span className={`dc-riepilogo-val ${totAddebitiConIva < 0 ? 'dc-val-pos' : 'dc-val-neg'}`}>
-                  {totAddebitiConIva < 0 ? '+ ' : '- '}{eur(Math.abs(totAddebitiConIva))}
-                </span>
-              </div>
+        <section className="dc2-card dc2-pad">
+          <h2 className="dc2-h2">Padroncino</h2>
+          <dl className="dc2-dl">
+            <div><dt>Sede</dt><dd>{padroncino.indirizzo || <span className="dc2-muted">Non inserita</span>}</dd></div>
+            <div><dt>DURC</dt><dd style={{ color: durc.sc }}><span aria-hidden="true" className="dc2-dot" style={{ background: durc.sd }} />{durc.t}</dd></div>
+            <div><dt>DVR</dt><dd style={{ color: dvr.sc }}><span aria-hidden="true" className="dc2-dot" style={{ background: dvr.sd }} />{dvr.t}</dd></div>
+            {padroncino.iban && <div><dt>IBAN</dt><dd className="dc2-mono" style={{ fontSize: 12 }}>{padroncino.iban}</dd></div>}
+          </dl>
+          <div className="dc2-col" style={{ gap: 6 }}>
+            <div className="dc2-row" style={{ justifyContent: 'space-between' }}>
+              <span className="dc2-small dc2-muted">Stato avanzamento</span>
+              <span className="dc2-small dc2-num" style={{ fontWeight: 600 }}>{fatte} di {CHECKLIST_ITEMS.length}</span>
             </div>
+            <div aria-hidden="true" className="dc2-bar"><div style={{ width: `${(fatte / CHECKLIST_ITEMS.length) * 100}%`, background: C2.V }} /></div>
+            {CHECKLIST_ITEMS.map((item) => (
+              <label key={item.key} className="dc2-check dc2-checkrow">
+                <input type="checkbox" checked={checklist[item.key] ?? false} onChange={() => onChecklistChange(item.key, !(checklist[item.key] ?? false))} />
+                {item.label}
+              </label>
+            ))}
           </div>
-
-          {/* Compensazioni */}
-          <div className="dc-riepilogo-section">
-            <h3>⚖️ Compensazioni</h3>
-            <div className="dc-riepilogo-table">
-              <div className="dc-riepilogo-row dc-riepilogo-row-bold">
-                <span className="dc-riepilogo-label">Totale compensazioni</span>
-                <span className={`dc-riepilogo-val ${totCompen < 0 ? 'dc-val-pos' : 'dc-val-neg'}`}>
-                  {totCompen < 0 ? '+ ' : '- '}{eur(Math.abs(totCompen))}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Saldo finale */}
-          <div className="dc-riepilogo-section dc-riepilogo-section-finale">
-            <h3>🏁 Saldo Netto da Bonificare</h3>
-            <div className="dc-riepilogo-table">
-              <div className="dc-riepilogo-row dc-riepilogo-row-bold dc-riepilogo-row-netto">
-                <span className="dc-riepilogo-label">Netto da bonificare</span>
-                <span className={`dc-riepilogo-val dc-val-big ${netto >= 0 ? 'dc-val-pos' : 'dc-val-neg'}`}>
-                  {eur(netto)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Colonna destra: log + checklist + note */}
-        <div className="dc-riepilogo-destra">
-          {/* ── BLOCCO LOG CONTEGGIO ── */}
-          <LogConteggio conteggioId={conteggioId} />
-
-          <div className="dc-riepilogo-checklist">
-            <h3>✅ Stato Avanzamento</h3>
-            <div className="dc-checklist-items">
-              {CHECKLIST_ITEMS.map((item, i) => {
-                const done = checklist[item.key] ?? false;
-                return (
-                  <div key={item.key} className={`dc-checklist-item ${done ? 'dc-check-done' : ''}`}
-                    onClick={() => onChecklistChange(item.key, !done)}>
-                    <div className="dc-check-step">{i + 1}</div>
-                    <div className="dc-check-icon">{item.icon}</div>
-                    <div className="dc-check-content">
-                      <span className="dc-check-label">{item.label}</span>
-                      <span className="dc-check-status">{done ? 'Completato' : 'Da fare'}</span>
-                    </div>
-                    <div className={`dc-check-toggle ${done ? 'dc-toggle-on' : ''}`}>{done ? '✓' : '○'}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="dc-checklist-progress">
-              <div className="dc-checklist-prog-bar">
-                <div className="dc-checklist-prog-fill"
-                  style={{ width: `${(Object.values(checklist).filter(Boolean).length / 4) * 100}%` }} />
-              </div>
-              <span>{Object.values(checklist).filter(Boolean).length}/4 completati</span>
-            </div>
-
-            {/* ── BLOCCO NOTE MESE ── */}
-            <div className="dc-note-mese">
-              <div className="dc-note-mese-header">
-                <div className="dc-note-mese-title">
-                  <span className="dc-note-mese-icon">📝</span>
-                  <span>Note del Mese</span>
-                </div>
-                <span className={`dc-note-save-status dc-note-status--${noteSaveStatus}`}>
-                  {noteSaveStatus === 'saving' && '⟳ Salvataggio…'}
-                  {noteSaveStatus === 'saved'  && '✓ Salvato'}
-                  {noteSaveStatus === 'error'  && '⚠ Errore'}
-                </span>
-              </div>
-              <textarea
-                className="dc-note-mese-textarea"
-                placeholder={`Annotazioni e cose da fare per ${formatMese(mese)}…\n\nEs:\n• Verificare fattura proforma\n• Chiedere documentazione DURC\n• Contattare per cambio mezzo`}
-                value={noteText}
-                onChange={(e) => handleNoteChange(e.target.value)}
-                rows={7}
-                disabled={!conteggioId}
-              />
-              {!conteggioId && (
-                <span className="dc-note-mese-hint">Salva prima il conteggio per abilitare le note</span>
-              )}
-            </div>
-          </div>
-        </div>
+          <button type="button" className="dc2-alink" onClick={onApriPadroncino}>Apri scheda padroncino ↗</button>
+        </section>
       </div>
     </div>
   );
@@ -400,7 +496,7 @@ function VoceSelector({ voci, onPick }: { voci: VoceConteggio[]; onPick: (v: Voc
         e.target.value = '';
       }}
     >
-      <option value="">📋 Voce…</option>
+      <option value="">Voce…</option>
       {voci.map((v) => (
         <option key={v.id} value={v.id}>
           {v.descrizione}{v.contoVoce ? ` · ${v.contoVoce}` : ''}
@@ -472,78 +568,18 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
   const totAcconti      = righeAcconto.reduce((s, r) => s + (r.valore ?? 0), 0);    // già negativi
   const totTrattenute   = righeTrattenute.reduce((s, r) => s + (r.valore ?? 0), 0); // già negativi
   const totImponibile   = totLordo + totAcconti + totTrattenute;
-  return (
-    <div className="dc-tab-content">
-      <div className="dc-section-header">
-        <h3>💶 Fatturato Distribuzione</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-          <button
-            className="btn-outline btn-sm"
-            onClick={() => fileRef.current?.click()}
-            disabled={importing}
-            title="Carica un file XLS/CSV con le righe della fattura proforma"
-          >
-            {importing ? '⏳' : '📥'} Importa da XLS
-          </button>
-          <button
-            className="btn-outline btn-sm"
-            onClick={() => {
-              if (!padroncino) {
-                alert('Padroncino non disponibile');
-                return;
-              }
-              generaPdfDistribuzione({
-                padroncino: { ragioneSociale: padroncino.ragioneSociale },
-                mese,
-                righe: righe.map((r) => ({ descrizione: r.descrizione, valore: r.valore, nota: r.nota })),
-              });
-            }}
-            title="Esporta un PDF semplice con elenco voci e totali finali"
-          >
-            📄 Esporta PDF Distribuzione
-          </button>
-          <button className="dc-btn-add-row" onClick={onAdd}>+ Aggiungi riga</button>
-          <button
-            className="dc-btn-add-row"
-            onClick={onAddAcconto}
-            title="Aggiungi un acconto già pagato al padroncino: verrà scalato dalla fattura ma NON dal fatturato nelle statistiche"
-            style={{ background: 'var(--color-warning, #f59e0b)', color: '#fff', borderColor: 'transparent' }}
-          >
-            💳 Aggiungi Acconto
-          </button>
-        </div>
-      </div>
-      <ExcelTable
-        headers={['#','Voce','Descrizione','Conto','Valore (€)','Nota','Mod.','']}
-        colWidths={['40px','130px','','90px','120px','','60px','36px']}
-      >
-        {righe.length === 0 ? (
-          <tr><td colSpan={8} className="dc-excel-empty">Nessuna voce. Aggiungi una riga.</td></tr>
-        ) : righe.map((r, i) => (
+  // Una riga della tabella (input e logica invariati: cambia solo la grafica)
+  const renderRiga = (r: RigaFatturato, i: number) => (
           <tr
             key={r.id}
             className="dc-excel-row"
-            style={
-              (r as any).isTrattenuta
-                ? { background: 'rgba(239,68,68,0.06)', borderLeft: '3px solid #ef4444' }
-                : r.isAcconto
-                ? { background: 'var(--color-warning-bg, #fffbeb)', borderLeft: '3px solid var(--color-warning, #f59e0b)' }
-                : undefined
-            }
           >
             <td className="dc-excel-idx">{i + 1}</td>
             <td>
               {(r as any).isTrattenuta
-                ? <span style={{ fontSize: 11, fontWeight: 600, color: '#ef4444', padding: '0 4px' }}>🔻 Trattenuta</span>
+                ? <span className="dc2-kind" style={{ color: '#B91C1C' }}><span aria-hidden="true" className="dc2-dot" style={{ background: '#E5484D' }} />Trattenuta</span>
                 : r.isAcconto
-                ? <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-warning, #f59e0b)', padding: '0 4px' }}>💳 Acconto</span>
+                ? <span className="dc2-kind" style={{ color: '#C2410C' }}><span aria-hidden="true" className="dc2-dot" style={{ background: '#EA6A2A' }} />Acconto</span>
                 : <VoceSelector voci={voci} onPick={(v) => {
                     onChange(r.id, 'descrizione', v.descrizione);
                     onChange(r.id, 'contoVoce', v.contoVoce ?? '');
@@ -558,7 +594,7 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
               onChange={(e) => onChange(r.id, 'contoVoce', e.target.value)}
               placeholder="—" /></td>
             <td>
-              <input
+              <NumBox v={r.valore}><input
                 className="dc-excel-input dc-excel-num"
                 type="number" step="0.01"
                 value={r.valore ?? ''}
@@ -576,7 +612,7 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
                     ? { color: 'var(--color-warning, #f59e0b)', fontWeight: 600 }
                     : undefined
                 }
-              />
+              /></NumBox>
             </td>
             <td><input className="dc-excel-input" value={r.nota}
               onChange={(e) => onChange(r.id, 'nota', e.target.value)}
@@ -586,49 +622,91 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
               <button className="dc-del-btn" onClick={() => onDelete(r.id)}>×</button>
             </td>
           </tr>
-        ))}
-      </ExcelTable>
-      <div className="dc-fatturato-totali">
-        {(righeAcconto.length > 0 || righeTrattenute.length > 0) && (
-          <>
-            <div className="dc-tot-row">
-              <span>Fatturato Lordo (imponibile)</span>
-              <span className="dc-tot-val">{eur(totLordo)}</span>
-            </div>
-            {righeAcconto.length > 0 && (
-              <div className="dc-tot-row" style={{ color: 'var(--color-warning, #f59e0b)' }}>
-                <span>💳 Acconti già pagati</span>
-                <span className="dc-tot-val">{eur(totAcconti)}</span>
-              </div>
-            )}
-            {righeTrattenute.length > 0 && (
-              <div className="dc-tot-row" style={{ color: '#ef4444' }}>
-                <span>🔻 Trattenute</span>
-                <span className="dc-tot-val">{eur(totTrattenute)}</span>
-              </div>
-            )}
-            <div className="dc-tot-row" style={{ borderTop: '1px dashed var(--border-color)' }}>
-              <span>Totale Imponibile netto</span>
-              <span className="dc-tot-val">{eur(totImponibile)}</span>
-            </div>
-          </>
-        )}
-        {righeAcconto.length === 0 && righeTrattenute.length === 0 && (
-          <div className="dc-tot-row">
-            <span>Totale Imponibile</span>
-            <span className="dc-tot-val">{eur(totImponibile)}</span>
-          </div>
-        )}
-        {[
-          ['IVA (22%)', totImponibile * 0.22, ''],
-          ['Totale Fattura da Ricevere', totImponibile * 1.22, 'dc-val-pos'],
-        ].map(([label, val, cls]) => (
-          <div key={String(label)} className={`dc-tot-row ${label === 'Totale Fattura da Ricevere' ? 'dc-tot-finale' : ''}`}>
-            <span>{label}</span>
-            <span className={`dc-tot-val ${cls}`}>{eur(val as number)}</span>
-          </div>
-        ))}
-      </div>
+  );
+  const HEAD = ['#', 'Voce', 'Descrizione', 'Conto', 'Importo', 'Nota', 'Modificata', ''];
+  const COLS = ['40px', '130px', '', '90px', '130px', '', '84px', '40px'];
+  const tabella = (rows: RigaFatturato[], vuoto: string) => (
+    <ExcelTable headers={HEAD} colWidths={COLS}>
+      {rows.length === 0
+        ? <tr><td colSpan={8} className="dc-excel-empty">{vuoto}</td></tr>
+        : rows.map((r, i) => renderRiga(r, i))}
+    </ExcelTable>
+  );
+
+  return (
+    <div className="dc-tab-content dc2-stack">
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <SectionBlock
+        title="Fatturato" tile="fat" totale={totLordo} totaleLabel="Fatturato lordo (imponibile)"
+        sub="Righe della fattura proforma di distribuzione"
+        onAdd={onAdd}
+        actions={<>
+          <button
+            type="button" className="dc2-btn dc2-btn-xs"
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+            title="Carica un file XLS/CSV con le righe della fattura proforma"
+          ><Svg2 d={P2.up} size={12} />{importing ? 'Importazione…' : 'Importa da XLS'}</button>
+          <button
+            type="button" className="dc2-btn dc2-btn-xs"
+            onClick={() => {
+              if (!padroncino) {
+                alert('Padroncino non disponibile');
+                return;
+              }
+              generaPdfDistribuzione({
+                padroncino: { ragioneSociale: padroncino.ragioneSociale },
+                mese,
+                righe: righe.map((r) => ({ descrizione: r.descrizione, valore: r.valore, nota: r.nota })),
+              });
+            }}
+            title="Esporta un PDF semplice con elenco voci e totali finali"
+          ><Svg2 d={P2.doc} size={12} color="#DC4446" />PDF distribuzione</button>
+          <button
+            type="button" className="dc2-btn dc2-btn-xs"
+            onClick={onAddAcconto}
+            title="Aggiungi un acconto già pagato al padroncino: verrà scalato dalla fattura ma NON dal fatturato nelle statistiche"
+          ><Svg2 d={P2.cassa} size={12} color="#EA6A2A" />Aggiungi acconto</button>
+        </>}
+      >
+        {tabella(righeNormali, 'Nessuna voce. Aggiungi una riga.')}
+      </SectionBlock>
+
+      {righeAcconto.length > 0 && (
+        <SectionBlock title="Acconti già pagati" tile="acc" totale={totAcconti} totaleLabel="Acconti già pagati"
+          sub="Scalati dalla fattura, non dal fatturato nelle statistiche" onAdd={onAddAcconto} addLabel="Aggiungi acconto">
+          {tabella(righeAcconto, '')}
+        </SectionBlock>
+      )}
+
+      {righeTrattenute.length > 0 && (
+        <SectionBlock title="Trattenute" tile="tratt" totale={totTrattenute} totaleLabel="Trattenute">
+          {tabella(righeTrattenute, '')}
+        </SectionBlock>
+      )}
+
+      <SectionBlock title="Totale fattura" tile="totfat" totale={totImponibile * 1.22} totaleLabel="Totale fattura da ricevere">
+        <div className="dc-fatturato-totali">
+          <TotRows rows={[
+            ...((righeAcconto.length > 0 || righeTrattenute.length > 0) ? [
+              { label: 'Fatturato lordo (imponibile)', value: eur(totLordo) },
+              ...(righeAcconto.length > 0 ? [{ label: 'Acconti già pagati', value: eur(totAcconti), tone: 'neg' as const }] : []),
+              ...(righeTrattenute.length > 0 ? [{ label: 'Trattenute', value: eur(totTrattenute), tone: 'neg' as const }] : []),
+              { label: 'Totale imponibile netto', value: eur(totImponibile), bold: true },
+            ] : [
+              { label: 'Totale imponibile', value: eur(totImponibile), bold: true },
+            ]),
+            { label: 'IVA 22%', value: eur(totImponibile * 0.22) },
+            { label: 'Totale fattura da ricevere', value: eur(totImponibile * 1.22), bold: true },
+          ]} />
+        </div>
+      </SectionBlock>
     </div>
   );
 }
@@ -689,12 +767,12 @@ function TabAddebiti({
     <div className="dc-tab-content">
 
       {/* ── PALMARI: tabella editabile ── */}
-      <SectionBlock title="Addebiti Noleggio Palmari" icon="📱" onAdd={onPalmariAdd}
+      <SectionBlock title="Palmari" tile="palm" onAdd={onPalmariAdd}
         totaleLabel="Totale Palmari (con IVA)" totale={costoPalmariConIva}
-        subTotaleLabel="Senza IVA (da fatturare)" subTotale={costoPalmariNoIva}>
+        subTotaleLabel="Senza IVA" subTotale={costoPalmariNoIva}>
         <ExcelTable
-          headers={['N° Palmari', 'Tariffa/giorno (€)', 'Giorni', 'IVA %', 'Totale (con IVA)', 'Note', 'Mod.', '']}
-          colWidths={['100px', '160px', '80px', '70px', '150px', '', '60px', '36px']}
+          headers={['N° palmari', 'Tariffa al giorno', 'Giorni', 'IVA', 'Totale con IVA', 'Nota', 'Modificata', '']}
+          colWidths={['100px', '140px', '80px', '84px', '140px', '', '84px', '40px']}
         >
           {palmari.length === 0 ? (
             <tr><td colSpan={8} className="dc-excel-empty">Nessun palmare assegnato. Usa "+ Aggiungi riga" per inserirne uno manuale.</td></tr>
@@ -708,10 +786,10 @@ function TabAddebiti({
                     onChange={(e) => onPalmariChange(rp.id, 'numeroPalmari', Math.max(1, parseInt(e.target.value) || 1))} />
                 </td>
                 <td>
-                  <input className="dc-excel-input dc-excel-num" type="number" min={0} step={0.01}
+                  <NumBox v={rp.tariffa}><input className="dc-excel-input dc-excel-num" type="number" min={0} step={0.01}
                     value={rp.tariffa}
                     onChange={(e) => onPalmariChange(rp.id, 'tariffa', parseFloat(e.target.value) || 0)}
-                    placeholder="0,00" />
+                    placeholder="0,00" /></NumBox>
                 </td>
                 <td>
                   <input className="dc-excel-input dc-excel-num" type="number" min={1} max={31} step={1}
@@ -741,11 +819,11 @@ function TabAddebiti({
       </SectionBlock>
 
       {/* ── MEZZI ── */}
-      <SectionBlock title="Addebiti Noleggi Mezzi" icon="🚛" onAdd={onMezziAdd}
+      <SectionBlock title="Noleggio mezzi" tile="van" onAdd={onMezziAdd}
         totaleLabel="Totale Mezzi (con IVA)" totale={totMezziConIva}>
         <ExcelTable
-          headers={['Targa','Rata No IVA (€)','IVA %','Rata Ivata (€)','Alimentazione','Note','Mod.','']}
-          colWidths={['90px','150px','80px','160px','140px','','60px','36px']}
+          headers={['Targa','Rata senza IVA','IVA','Rata con IVA','Alimentazione','Nota','Modificata','']}
+          colWidths={['100px','140px','84px','140px','130px','','84px','40px']}
         >
           {mezzi.length === 0 ? (
             <tr><td colSpan={8} className="dc-excel-empty">Nessun mezzo assegnato.</td></tr>
@@ -755,9 +833,9 @@ function TabAddebiti({
               <tr key={r.id} className="dc-excel-row">
                 <td><input className="dc-excel-input dc-targa" value={r.targa} maxLength={8}
                   onChange={(e) => onMezziChange(r.id, 'targa', e.target.value.toUpperCase())} /></td>
-                <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valoreRataNoIva ?? ''}
+                <td><NumBox v={r.valoreRataNoIva}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valoreRataNoIva ?? ''}
                   onChange={(e) => onMezziChange(r.id, 'valoreRataNoIva', e.target.value === '' ? null : parseFloat(e.target.value))}
-                  placeholder="0,00" /></td>
+                  placeholder="0,00" /></NumBox></td>
                 <td><select className="dc-excel-select dc-excel-num" value={r.percIva}
                   onChange={(e) => onMezziChange(r.id, 'percIva', parseFloat(e.target.value))}>
                   <option value={0}>0%</option>
@@ -767,10 +845,10 @@ function TabAddebiti({
                 <td>
                   <select className="dc-excel-select" value={r.alimentazione}
                     onChange={(e) => onMezziChange(r.id, 'alimentazione', e.target.value)}>
-                    <option value="DIESEL">🛢 Diesel</option>
-                    <option value="ELETTRICO">⚡ Elettrico</option>
-                    <option value="BENZINA">⛽ Benzina</option>
-                    <option value="IBRIDO">🔋 Ibrido</option>
+                    <option value="DIESEL">Diesel</option>
+                    <option value="ELETTRICO">Elettrico</option>
+                    <option value="BENZINA">Benzina</option>
+                    <option value="IBRIDO">Ibrido</option>
                   </select>
                 </td>
                 <td><input className="dc-excel-input" value={r.note}
@@ -790,11 +868,11 @@ function TabAddebiti({
       </SectionBlock>
 
       {/* ── RICARICHE ELETTRICHE ── */}
-      <SectionBlock title="Addebiti Ricariche Elettriche" icon="⚡" onAdd={onRicaricheAdd}
+      <SectionBlock title="Ricariche elettriche" tile="bolt" onAdd={onRicaricheAdd}
         totaleLabel="Totale Ricariche" totale={totRicaricheConIva}>
         <ExcelTable
-          headers={['Targa','Importo Addebito (€)','IVA %','Totale','Note','Mod.','']}
-          colWidths={['72px','180px','80px','100px','','60px','36px']}
+          headers={['Targa','Importo addebito','IVA','Totale','Nota','Modificata','']}
+          colWidths={['100px','160px','70px','130px','','84px','40px']}
         >
           {ricariche.length === 0 ? (
             <tr><td colSpan={7} className="dc-excel-empty">Nessun mezzo elettrico assegnato.</td></tr>
@@ -802,9 +880,9 @@ function TabAddebiti({
             <tr key={r.id} className="dc-excel-row">
               <td><input className="dc-excel-input dc-targa" value={r.targa} maxLength={8}
                 onChange={(e) => onRicaricheChange(r.id, 'targa', e.target.value.toUpperCase())} /></td>
-              <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.costoRicarica != null ? Number(r.costoRicarica).toFixed(2) : ''}
+              <td><NumBox v={r.costoRicarica}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.costoRicarica != null ? Number(r.costoRicarica).toFixed(2) : ''}
                 onChange={(e) => onRicaricheChange(r.id, 'costoRicarica', e.target.value === '' ? null : parseFloat(e.target.value))}
-                placeholder="0,00" title="Valore finale già comprensivo di maggiorazione, IVA 0%" /></td>
+                placeholder="0,00" title="Valore finale già comprensivo di maggiorazione, IVA 0%" /></NumBox></td>
               <td><span className="dc-excel-computed" title="Le ricariche sono sempre IVA 0% — il valore è l'addebito finale">0%</span></td>
               <td className="dc-excel-computed dc-computed-highlight">
                 {eur(r.costoRicarica ?? null)}
@@ -825,11 +903,11 @@ function TabAddebiti({
       </SectionBlock>
 
       {/* ── ADDEBITI VARI ── */}
-      <SectionBlock title="Addebiti Vari" icon="📝" onAdd={onAddebitiVariAdd}
-        totaleLabel="Totale Vari (con IVA)" totale={totVariConIva}>
+      <SectionBlock title={bolloAttivo ? 'Addebiti vari e bollo' : 'Addebiti vari'} tile="vari" onAdd={onAddebitiVariAdd}
+        totaleLabel="Totale vari (con IVA)" totale={totVariConIva + (bolloAttivo ? COSTO_BOLLO : 0)}>
         <ExcelTable
-          headers={['Voce','Descrizione','Conto','Valore No IVA (€)','IVA %','Valore IVA (€)','Note','Mod.','']}
-          colWidths={['130px','','100px','160px','65px','92px','','60px','36px']}
+          headers={['Voce','Descrizione','Conto','Importo senza IVA','IVA','Valore IVA','Nota','Modificata','']}
+          colWidths={['130px','','90px','140px','84px','100px','','84px','40px']}
         >
           {addebitiVari.length === 0 ? (
             <tr><td colSpan={9} className="dc-excel-empty">Nessun addebito vario.</td></tr>
@@ -849,9 +927,9 @@ function TabAddebiti({
                   onChange={(e) => onAddebitiVariChange(r.id, 'descrizione', e.target.value)} placeholder="Descrizione..." /></td>
                 <td><input className="dc-excel-input dc-conto-voce" value={r.contoVoce ?? ''}
                   onChange={(e) => onAddebitiVariChange(r.id, 'contoVoce', e.target.value)} placeholder="—" /></td>
-                <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valoreNoIva ?? ''}
+                <td><NumBox v={r.valoreNoIva}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valoreNoIva ?? ''}
                   onChange={(e) => onAddebitiVariChange(r.id, 'valoreNoIva', e.target.value === '' ? null : parseFloat(e.target.value))}
-                  placeholder="0,00" /></td>
+                  placeholder="0,00" /></NumBox></td>
                 <td><select className="dc-excel-select dc-excel-num" value={r.percIva}
                   onChange={(e) => onAddebitiVariChange(r.id, 'percIva', parseFloat(e.target.value))}>
                   <option value={0}>0%</option>
@@ -865,40 +943,30 @@ function TabAddebiti({
               </tr>
             );
           })}
+          {/* Bollo: attivato automaticamente, stessa regola di prima */}
+          {bolloAttivo && (
+            <tr className="dc-excel-row dc2-row-auto" title="Totale addebiti esenti IVA (ricariche + vari con IVA ≠ 22%) sopra la soglia di legge">
+              <td colSpan={3}><span className="dc2-b">Bollo su importi esenti</span> <span className="dc2-muted">· automatico</span></td>
+              <td colSpan={4} className="dc2-muted">Esenti {eur(totEsentiIva)}, sopra la soglia di {eur(SOGLIA_BOLLO)}</td>
+              <td colSpan={2} className="dc-excel-computed dc-computed-highlight">{eur(COSTO_BOLLO)}</td>
+            </tr>
+          )}
         </ExcelTable>
       </SectionBlock>
 
-      {/* Bollo */}
-      {bolloAttivo && (
-        <div className="dc-bollo-alert">
-          <span className="dc-bollo-icon">📮</span>
-          <div>
-            <strong>Addebito Bollo €2,00 — attivato automaticamente</strong>
-            <p>Totale addebiti esenti IVA (ricariche + vari con IVA ≠ 22%) ≥ {SOGLIA_BOLLO.toFixed(2)} € → somma esente: {eur(totEsentiIva)}</p>
-          </div>
-          <span className="dc-bollo-val">{eur(COSTO_BOLLO)}</span>
-        </div>
-      )}
-
       {/* Totale finale */}
-      <div className="dc-addebiti-finale">
-        {[
-          ['Noleggio Palmari (con IVA)', costoPalmariConIva],
-          ['Noleggi Mezzi (con IVA)', totMezziConIva],
-          ['Ricariche Elettriche (IVA 0%)', totRicaricheConIva],
-          ['Addebiti Vari (con IVA)', totVariConIva],
-          ...(bolloAttivo ? [['Bollo virtuale', COSTO_BOLLO]] : []),
-        ].map(([label, val]) => (
-          <div key={String(label)} className="dc-addebiti-finale-row">
-            <span>{label}</span>
-            <span>{eur(val as number)}</span>
-          </div>
-        ))}
-        <div className="dc-addebiti-finale-row dc-addebiti-finale-total">
-          <span>TOTALE ADDEBITI DA INSERIRE IN FATTURA</span>
-          <span className="dc-val-neg">{eur(totaleAddebiti)}</span>
+      <SectionBlock title="Totale addebiti da inserire in fattura" tile="totadd" totale={totaleAddebiti} totaleLabel="Totale addebiti">
+        <div className="dc-addebiti-finale">
+          <TotRows rows={[
+            { label: 'Noleggio palmari (con IVA)', value: eur(costoPalmariConIva) },
+            { label: 'Noleggio mezzi (con IVA)', value: eur(totMezziConIva) },
+            { label: 'Ricariche elettriche (IVA 0%)', value: eur(totRicaricheConIva) },
+            { label: 'Addebiti vari (con IVA)', value: eur(totVariConIva) },
+            ...(bolloAttivo ? [{ label: 'Bollo virtuale', value: eur(COSTO_BOLLO) }] : []),
+            { label: 'Totale addebiti da inserire in fattura', value: eur(totaleAddebiti), bold: true },
+          ]} />
         </div>
-      </div>
+      </SectionBlock>
     </div>
   );
 }
@@ -910,8 +978,7 @@ function EffettoNetto({ valore }: { valore: number | null | undefined }) {
   if (valore == null || valore === 0 || Number.isNaN(valore)) return null;
   const trattiene = valore > 0;
   return (
-    <div style={{ fontSize: 10.5, fontWeight: 600, textAlign: 'right', marginTop: 2,
-      color: trattiene ? 'var(--danger)' : 'var(--success)' }}>
+    <div className="dc2-effetto" style={{ color: trattiene ? '#B91C1C' : '#15803D' }}>
       {trattiene ? `− ${eur(valore)} dal netto` : `+ ${eur(Math.abs(valore))} al netto`}
     </div>
   );
@@ -919,10 +986,9 @@ function EffettoNetto({ valore }: { valore: number | null | undefined }) {
 
 function SegnoHint() {
   return (
-    <div style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
-      <strong>Valore positivo</strong> = trattenuto al padroncino (riduce il netto) ·{' '}
-      <strong>valore negativo</strong> = restituito al padroncino (es. restituzione banconota sospetta, aumenta il netto)
-    </div>
+    <span title="Valore positivo = trattenuto al padroncino (riduce il netto) · valore negativo = restituito al padroncino (es. restituzione banconota sospetta, aumenta il netto)">
+      Positivo = trattenuto dal netto · negativo = restituito nel netto
+    </span>
   );
 }
 
@@ -957,12 +1023,11 @@ function TabCompensazioni({
     <div className="dc-tab-content">
 
       {/* ── ACCREDITI E STORNI ── */}
-      <SectionBlock title="Accrediti e Storni" icon="↩️" onAdd={onAccreditiAdd}
-        totaleLabel="Totale Accrediti/Storni" totale={totAccrediti}>
-        <SegnoHint />
+      <SectionBlock title="Accrediti e storni" tile="storno" onAdd={onAccreditiAdd}
+        totaleLabel="Totale accrediti e storni" totale={totAccrediti} sub={<SegnoHint />}>
         <ExcelTable
-          headers={['#', 'Voce', 'Descrizione', 'Conto', 'Valore (€)', 'Nota', 'Mod.', '']}
-          colWidths={['32px','130px','','85px','120px','','60px','36px']}
+          headers={['#', 'Voce', 'Descrizione', 'Conto', 'Importo', 'Nota', 'Modificata', '']}
+          colWidths={['40px','130px','','90px','140px','','84px','40px']}
         >
           {accrediti.length === 0 ? (
             <tr><td colSpan={8} className="dc-excel-empty">Nessun accredito o storno inserito.</td></tr>
@@ -981,9 +1046,9 @@ function TabCompensazioni({
                 placeholder="es. Storno fattura n.123..." /></td>
               <td><input className="dc-excel-input dc-conto-voce" value={r.contoVoce ?? ''}
                 onChange={(e) => onAccreditiChange(r.id, 'contoVoce', e.target.value)} placeholder="—" /></td>
-              <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
+              <td><NumBox v={r.valore}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
                 onChange={(e) => onAccreditiChange(r.id, 'valore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                placeholder="0,00" /><EffettoNetto valore={r.valore} /></td>
+                placeholder="0,00" /></NumBox><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onAccreditiChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
               <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
@@ -994,12 +1059,11 @@ function TabCompensazioni({
       </SectionBlock>
 
       {/* ── FATTURA FINE MESE ── */}
-      <SectionBlock title="Fattura Fine Mese" icon="🧾" onAdd={onFineMeseAdd}
-        totaleLabel="Totale Fattura Fine Mese" totale={totFineMese}>
-        <SegnoHint />
+      <SectionBlock title="Fatture fine mese" tile="fm" onAdd={onFineMeseAdd}
+        totaleLabel="Totale fattura fine mese" totale={totFineMese} sub={<SegnoHint />}>
         <ExcelTable
-          headers={['#', 'Voce', 'Descrizione', 'Conto', 'Valore (€)', 'Nota', 'Mod.', '']}
-          colWidths={['32px','130px','','85px','120px','','60px','36px']}
+          headers={['#', 'Voce', 'Descrizione', 'Conto', 'Importo', 'Nota', 'Modificata', '']}
+          colWidths={['40px','130px','','90px','140px','','84px','40px']}
         >
           {fineMese.length === 0 ? (
             <tr><td colSpan={8} className="dc-excel-empty">Nessuna voce di fine mese inserita.</td></tr>
@@ -1018,9 +1082,9 @@ function TabCompensazioni({
                 placeholder="es. Fattura fine mese..." /></td>
               <td><input className="dc-excel-input dc-conto-voce" value={r.contoVoce ?? ''}
                 onChange={(e) => onFineMeseChange(r.id, 'contoVoce', e.target.value)} placeholder="—" /></td>
-              <td><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
+              <td><NumBox v={r.valore}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
                 onChange={(e) => onFineMeseChange(r.id, 'valore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                placeholder="0,00" /><EffettoNetto valore={r.valore} /></td>
+                placeholder="0,00" /></NumBox><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onFineMeseChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
               <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
@@ -1031,14 +1095,15 @@ function TabCompensazioni({
       </SectionBlock>
 
       {/* ── CASSA PRIMA NOTA (acconti automatici) ── */}
-      <SectionBlock title="Cassa Prima Nota — Acconti" icon="💰" onAdd={onCassaAdd}
-        totaleLabel="Totale Acconti" totale={totCassa}>
+      <SectionBlock title="Acconti e cassa" tile="cassa" onAdd={onCassaAdd}
+        totaleLabel="Totale acconti" totale={totCassa}
+        sub="Le righe automatiche arrivano dagli acconti registrati per i codici autista del padroncino nel mese">
         <ExcelTable
-          headers={['Codice', 'Descrizione / Data', 'Valore (€)', 'Nota', 'Mod.', '']}
-          colWidths={['80px','','100px','','60px','36px']}
+          headers={['Codice', 'Descrizione', 'Data', 'Nota', 'Importo', 'Modificata', '']}
+          colWidths={['84px', '', '110px', '', '130px', '84px', '40px']}
         >
           {cassa.length === 0 ? (
-            <tr><td colSpan={6} className="dc-excel-empty">Nessun acconto associato a questo padroncino nel mese.</td></tr>
+            <tr><td colSpan={7} className="dc-excel-empty">Nessun acconto associato a questo padroncino nel mese.</td></tr>
           ) : cassa.map((r) => (
             <tr key={r.id} className={`dc-excel-row ${r.readonly ? 'dc-row-readonly' : ''}`}>
               <td>
@@ -1046,24 +1111,25 @@ function TabCompensazioni({
               </td>
               <td>
                 {r.readonly ? (
-                  <span className="dc-readonly-text">{r.descrizione} {r.data ? `— ${fmtData(r.data)}` : ''}</span>
+                  <span className="dc-readonly-text">{r.descrizione}</span>
                 ) : (
                   <input className="dc-excel-input" value={r.descrizione}
                     onChange={(e) => onCassaChange(r.id, 'descrizione', e.target.value)} placeholder="Descrizione..." />
                 )}
               </td>
+              <td><span className="dc2-muted dc2-num" style={{ padding: '0 8px' }}>{r.data ? fmtData(r.data) : '—'}</span></td>
+              <td>
+                <input className="dc-excel-input" value={r.nota}
+                  onChange={(e) => onCassaChange(r.id, 'nota', e.target.value)} placeholder="Note..." />
+              </td>
               <td>
                 {r.readonly ? (
                   <span className="dc-excel-computed dc-computed-highlight">{eur(r.valore)}</span>
                 ) : (
-                  <input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
+                  <NumBox v={r.valore}><input className="dc-excel-input dc-excel-num" type="number" step="0.01" value={r.valore ?? ''}
                     onChange={(e) => onCassaChange(r.id, 'valore', e.target.value === '' ? null : parseFloat(e.target.value))}
-                    placeholder="0,00" />
+                    placeholder="0,00" /></NumBox>
                 )}
-              </td>
-              <td>
-                <input className="dc-excel-input" value={r.nota}
-                  onChange={(e) => onCassaChange(r.id, 'nota', e.target.value)} placeholder="Note..." />
               </td>
               <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
               <td>
@@ -1076,38 +1142,25 @@ function TabCompensazioni({
             </tr>
           ))}
         </ExcelTable>
-        <div className="dc-cassa-note">
-          <span className="dc-cassa-badge">ℹ️ Auto</span>
-          Le righe automatiche provengono dagli acconti registrati nella pagina Acconti per i codici autista associati a questo padroncino nel mese.
-        </div>
       </SectionBlock>
 
       {/* ── RIEPILOGO FINALE COMPENSAZIONI ── */}
-      <div className="dc-compensazioni-finale">
-        <h3>📊 Riepilogo Finale Compensazioni</h3>
-        <div className="dc-compen-rows">
-          <div className="dc-compen-row">
-            <span>Accrediti e Storni</span>
-            <span>{eur(totAccrediti)}</span>
-          </div>
-          <div className="dc-compen-row">
-            <span>Fattura Fine Mese</span>
-            <span>{eur(totFineMese)}</span>
-          </div>
-          <div className="dc-compen-row">
-            <span>Acconti (Cassa Prima Nota)</span>
-            <span>{eur(totCassa)}</span>
-          </div>
-          <div className="dc-compen-separator" />
-          <div className="dc-compen-row dc-compen-saldo">
-            <span>Compensati su distribuzione {compensatiSuDistribuzione >= 0 ? '(trattenuti dal netto)' : '(restituiti nel netto)'}</span>
-            <span className={compensatiSuDistribuzione >= 0 ? 'dc-val-neg' : 'dc-val-pos'}>{eur(compensatiSuDistribuzione)}</span>
-          </div>
-          <div className="dc-compen-note" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+      <SectionBlock title="Totale compensazioni" tile="totcomp" totale={compensatiSuDistribuzione} totaleLabel="Compensati su distribuzione">
+        <div className="dc-compensazioni-finale">
+          <TotRows rows={[
+            { label: 'Accrediti e storni', value: eur(totAccrediti) },
+            { label: 'Fatture fine mese', value: eur(totFineMese) },
+            { label: 'Acconti e cassa', value: eur(totCassa) },
+            {
+              label: `Compensati su distribuzione ${compensatiSuDistribuzione >= 0 ? '(trattenuti dal netto)' : '(restituiti nel netto)'}`,
+              value: eur(compensatiSuDistribuzione), bold: true, tone: compensatiSuDistribuzione >= 0 ? 'neg' : 'pos',
+            },
+          ]} />
+          <div className="dc2-foot dc2-muted">
             Gli addebiti da fattura (mezzi, palmari, ricariche, addebiti vari) restano in fattura e non sono inclusi qui.
           </div>
         </div>
-      </div>
+      </SectionBlock>
     </div>
   );
 }
@@ -1115,16 +1168,19 @@ function TabCompensazioni({
 // ─── TAB RIEPILOGO MESE (distribuzione da Fattura Proforma) ───────────────────
 type RmSortDir = 'asc' | 'desc';
 
-function RmThSort({ label, col, sortKey, sortDir, onSort }: {
-  label: string; col: string; sortKey: string; sortDir: RmSortDir; onSort: (c: string) => void;
+function RmThSort({ label, col, sortKey, sortDir, onSort, left }: {
+  label: string; col: string; sortKey: string; sortDir: RmSortDir; onSort: (c: string) => void; left?: boolean;
 }) {
   const active = sortKey === col;
   return (
-    <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(col)}>
-      {label}{' '}
-      <span style={{ opacity: active ? 0.9 : 0.3, fontSize: 10 }}>
-        {active ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-      </span>
+    <th aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ textAlign: left ? 'left' : 'right' }}>
+      <button type="button" className={`dc2-sort${active ? ' is-on' : ''}`} onClick={() => onSort(col)}>
+        {label}
+        <svg aria-hidden="true" width="9" height="12" viewBox="0 0 9 12">
+          <path d="M4.5 1L8 5H1z" fill={active && sortDir === 'asc' ? '#0B0B0C' : '#D4D4D8'} />
+          <path d="M4.5 11L1 7h7z" fill={active && sortDir === 'desc' ? '#0B0B0C' : '#D4D4D8'} />
+        </svg>
+      </button>
     </th>
   );
 }
@@ -1141,9 +1197,8 @@ function TabRiepilogoMese({ distribuzione }: { distribuzione: DistribuzioneJson 
   };
 
   const fmtNum = (n: number | null | undefined) =>
-    n == null ? '—' : n.toLocaleString('it-IT');
-  const fmtEur = (n: number | null | undefined) =>
-    n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    n == null ? '—' : fmtNum2(n);
+  const fmtEur = (n: number | null | undefined) => eur(n);
 
   // % di consegne effettivamente fatte rispetto a quelle affidate
   const pctConsegne = (fatte: number | null | undefined, affidate: number | null | undefined) =>
@@ -1151,7 +1206,7 @@ function TabRiepilogoMese({ distribuzione }: { distribuzione: DistribuzioneJson 
   const fmtPct = (pct: number | null) =>
     pct == null ? '—' : pct.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
   const pctClass = (pct: number | null) =>
-    pct == null ? '' : pct >= 100 ? 'dc-rm-pct-good' : pct >= 80 ? 'dc-rm-pct-warn' : 'dc-rm-pct-bad';
+    pct == null ? '' : pct >= 90 ? 'dc-rm-pct-good' : pct >= 85 ? 'dc-rm-pct-warn' : 'dc-rm-pct-bad';
 
   const sortValue = (c: DistribuzioneCodice, key: string): string | number => {
     switch (key) {
@@ -1184,103 +1239,96 @@ function TabRiepilogoMese({ distribuzione }: { distribuzione: DistribuzioneJson 
   if (!distribuzione || !distribuzione.codici || distribuzione.codici.length === 0) {
     return (
       <div className="dc-tab-content">
-        <div className="dc-rm-empty">
-          <strong>📦 Nessun dato di distribuzione</strong>
-          Carica il file <b>Fattura Proforma</b> dalla pagina principale Conteggi
-          (pulsante "📂 Importa Fattura Proforma") per popolare automaticamente
-          il riepilogo mensile di questo padroncino.
-        </div>
+        <section className="dc2-card dc2-empty">
+          <Tile2 c={C2.P} d={P2.mese} size={40} icon={18} r={10} />
+          <span className="dc2-empty-t">Nessun dato di distribuzione</span>
+          <span className="dc2-muted" style={{ maxWidth: 460 }}>
+            Carica il file Fattura Proforma dalla pagina Conteggi (Importa fattura proforma) per popolare
+            automaticamente il riepilogo mensile di questo padroncino.
+          </span>
+        </section>
       </div>
     );
   }
 
   const { riepilogo } = distribuzione;
+  const cells = (x: { consegneFatte?: number | null; consegneAffidate?: number | null; ritiriFatti?: number | null; ritiriAffidati?: number | null; consegneFatteShop?: number | null; consegneAffidateShop?: number | null; fatturato?: number | null }) => (<>
+    <td>{fmtNum(x.consegneFatte)}</td>
+    <td className="dc2-muted">{fmtNum(x.consegneAffidate)}</td>
+    <td className={`dc2-b ${pctClass(pctConsegne(x.consegneFatte, x.consegneAffidate))}`}>{fmtPct(pctConsegne(x.consegneFatte, x.consegneAffidate))}</td>
+    <td>{fmtNum(x.ritiriFatti)}</td>
+    <td className="dc2-muted">{fmtNum(x.ritiriAffidati)}</td>
+    <td>{fmtNum(x.consegneFatteShop)}</td>
+    <td className="dc2-muted">{fmtNum(x.consegneAffidateShop)}</td>
+    <td className="dc2-b">{fmtEur(x.fatturato)}</td>
+  </>);
 
   return (
     <div className="dc-tab-content">
-      <div className="dc-section-header">
-        <h3>📦 Riepilogo Mese — Distribuzione per Codice Autista</h3>
-      </div>
-      <div className="dc-rm-wrap">
-        <table className="dc-rm-table">
-          <thead>
-            <tr>
-              <RmThSort label="Codice / Data" col="codice" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Consegne Fatte" col="consegneFatte" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Consegne Affidate" col="consegneAffidate" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="% Consegne" col="pctConsegne" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Ritiri Fatti" col="ritiriFatti" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Ritiri Affidati" col="ritiriAffidati" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Shop Fatte" col="shopFatte" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Shop Affidate" col="shopAffidate" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <RmThSort label="Fatturato (€)" col="fatturato" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-            </tr>
-          </thead>
-          <tbody>
-            {/* Riga TOTALE */}
-            <tr className="dc-rm-row-totale">
-              <td>TOTALE MESE</td>
-              <td>{fmtNum(riepilogo.consegneFatte)}</td>
-              <td>{fmtNum(riepilogo.consegneAffidate)}</td>
-              <td className={pctClass(pctConsegne(riepilogo.consegneFatte, riepilogo.consegneAffidate))}>
-                {fmtPct(pctConsegne(riepilogo.consegneFatte, riepilogo.consegneAffidate))}
-              </td>
-              <td>{fmtNum(riepilogo.ritiriFatti)}</td>
-              <td>{fmtNum(riepilogo.ritiriAffidati)}</td>
-              <td>{fmtNum(riepilogo.consegneFatteShop)}</td>
-              <td>{fmtNum(riepilogo.consegneAffidateShop)}</td>
-              <td>{fmtEur(riepilogo.fatturato)}</td>
-            </tr>
-
-            {/* Righe per codice + expand */}
-            {sortedCodici.map((c) => {
-              const isOpen = expanded[c.codice] ?? false;
-              return (
-                <Fragment key={c.codice}>
-                  <tr
-                    className={`dc-rm-row-codice ${isOpen ? 'dc-rm-expanded' : ''}`}
-                    onClick={() => toggle(c.codice)}
-                  >
-                    <td>
-                      <span className="dc-rm-expand">▶</span>
-                      <span className="dc-rm-codice-badge">{c.codice}</span>
-                    </td>
-                    <td>{fmtNum(c.consegneFatte)}</td>
-                    <td>{fmtNum(c.consegneAffidate)}</td>
-                    <td className={pctClass(pctConsegne(c.consegneFatte, c.consegneAffidate))}>
-                      {fmtPct(pctConsegne(c.consegneFatte, c.consegneAffidate))}
-                    </td>
-                    <td>{fmtNum(c.ritiriFatti)}</td>
-                    <td>{fmtNum(c.ritiriAffidati)}</td>
-                    <td>{fmtNum(c.consegneFatteShop)}</td>
-                    <td>{fmtNum(c.consegneAffidateShop)}</td>
-                    <td>{fmtEur(c.fatturato)}</td>
-                  </tr>
-                  {isOpen && c.righe.map((r, i) => (
-                    <tr key={`${c.codice}-${i}`} className="dc-rm-row-det">
-                      <td>{r.data ? fmtData(r.data) : `Riga ${i + 1}`}</td>
-                      <td>{fmtNum(r.consegneFatte)}</td>
-                      <td>{fmtNum(r.consegneAffidate)}</td>
-                      <td className={pctClass(pctConsegne(r.consegneFatte, r.consegneAffidate))}>
-                        {fmtPct(pctConsegne(r.consegneFatte, r.consegneAffidate))}
+      <section className="dc2-card">
+        <div className="dc2-shead">
+          <div className="dc2-shead-l">
+            <Tile2 c={C2.P} d={P2.mese} />
+            <div className="dc2-col">
+              <h2 className="dc2-h2">Distribuzione per codice autista</h2>
+              <span className="dc2-small dc2-muted">{distribuzione.codici.length} codici · clic sulle intestazioni per ordinare, sul codice per il dettaglio giornaliero</span>
+            </div>
+          </div>
+          <div className="dc2-shead-r">
+            <span className="dc2-stot">{fmtEur(riepilogo.fatturato)}</span>
+          </div>
+        </div>
+        <div className="dc-rm-wrap">
+          <table className="dc-rm-table">
+            <thead>
+              <tr>
+                <RmThSort label="Codice" col="codice" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} left />
+                <RmThSort label="Consegne fatte" col="consegneFatte" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Affidate" col="consegneAffidate" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="% consegne" col="pctConsegne" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Ritiri fatti" col="ritiriFatti" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Affidati" col="ritiriAffidati" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Shop fatte" col="shopFatte" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Affidate" col="shopAffidate" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                <RmThSort label="Fatturato" col="fatturato" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedCodici.map((c) => {
+                const isOpen = expanded[c.codice] ?? false;
+                return (
+                  <Fragment key={c.codice}>
+                    <tr
+                      className={`dc-rm-row-codice ${isOpen ? 'dc-rm-expanded' : ''}`}
+                      onClick={() => toggle(c.codice)}
+                      aria-expanded={isOpen}
+                    >
+                      <td>
+                        <span className="dc-rm-expand" aria-hidden="true"><Svg2 d={P2.chev} size={11} sw={2.4} /></span>
+                        <span className="dc-rm-codice-badge">{c.codice}</span>
                       </td>
-                      <td>{fmtNum(r.ritiriFatti)}</td>
-                      <td>{fmtNum(r.ritiriAffidati)}</td>
-                      <td>{fmtNum(r.consegneFatteShop)}</td>
-                      <td>{fmtNum(r.consegneAffidateShop)}</td>
-                      <td>{fmtEur(r.fatturato)}</td>
+                      {cells(c)}
                     </tr>
-                  ))}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="dc-rm-note">
-        ℹ️ Questi dati provengono dal file <b>Fattura Proforma</b> importato dalla pagina Conteggi.
-        Per aggiornarli, ricarica il file dalla pagina principale.
-      </div>
+                    {isOpen && c.righe.map((r, i) => (
+                      <tr key={`${c.codice}-${i}`} className="dc-rm-row-det">
+                        <td>{r.data ? fmtData(r.data) : `Riga ${i + 1}`}</td>
+                        {cells(r)}
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
+              <tr className="dc-rm-row-totale">
+                <td>Totale</td>
+                {cells(riepilogo)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="dc2-foot dc2-muted">
+          Dati dal file Fattura Proforma importato dalla pagina Conteggi. Per aggiornarli, ricarica il file dalla pagina principale.
+        </div>
+      </section>
     </div>
   );
 }
@@ -1384,6 +1432,32 @@ export default function DettaglioConteggio() {
   const [noteConteggio, setNoteConteggio] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [addebitivSospesi, setAddebitivSospesi] = useState<AddebitoSospeso[]>([]);
+  // Solo visualizzazione: netto salvato nel DB, per confrontarlo con quello ricalcolato a video
+  const [nettoSalvato, setNettoSalvato] = useState<number | null>(null);
+
+  // Attività di Conteggi (stesse della pagina Conteggi) filtrate per questo padroncino
+  const [tasksAll, setTasksAll] = useState<TaskItem[]>([]);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  const loadTasks = useCallback(async () => {
+    try { setTasksAll(await taskApi.list('conteggi', 'conteggi')); } catch { /* pannello informativo */ }
+  }, []);
+  useEffect(() => { loadTasks(); }, [loadTasks]);
+  const handleSubmitTask = async (data: TaskModalSubmitData) => {
+    setTaskSaving(true);
+    try {
+      if (editingTask) await taskApi.update(editingTask.id, data);
+      else await taskApi.create({ entityType: 'conteggi', entityId: 'conteggi', ...data });
+      setTaskModalOpen(false); setEditingTask(null);
+      await loadTasks();
+    } catch (e: any) { alert('Errore attività: ' + (e?.message ?? e)); }
+    finally { setTaskSaving(false); }
+  };
+  const handleToggleTask = async (t: TaskItem) => {
+    setTasksAll(prev => prev.map(x => x.id === t.id ? { ...x, completata: !x.completata } : x));
+    try { await taskApi.toggle(t.id, !t.completata); } catch { loadTasks(); }
+  };
 
   const isReadonly = statoConteggio === 'CONFERMATO';
 
@@ -1407,6 +1481,7 @@ export default function DettaglioConteggio() {
       setConteggioId(cId);
       setStatoConteggio(conteggio?.stato ?? 'BOZZA');
       setNoteConteggio((conteggio as any)?.note ?? '');
+      setNettoSalvato(conteggio?.netto != null ? Number(conteggio.netto) : null);
       setChecklist(loadChecklist(id, mese));
       setDistribuzione((conteggio as any)?.distribuzioneJson ?? null);
  
@@ -2172,6 +2247,7 @@ export default function DettaglioConteggio() {
       // 4. Un'unica chiamata: cancella+ricrea in transazione + un solo evento audit
       const nettoCorrente = Math.round((totFatturato * 1.22 - totAddebitiConIva - totCompensazioni) * 100) / 100;
       await conteggiApi.replaceRighe(cId, righePayload, nettoCorrente);
+      setNettoSalvato(nettoCorrente);
 
       alert('✅ Conteggio salvato correttamente!');
       setDeletedDbIds(new Set()); // reset tracker eliminazioni dopo save OK
@@ -2270,90 +2346,44 @@ export default function DettaglioConteggio() {
   const totCassa = cassaAcconti.reduce((s, r) => s + (r.valore ?? 0), 0);
   const totCompensazioni = totAccrediti + totFineMese + totCassa;
 
-  const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
-    { key: 'riepilogo', label: 'Riepilogo', icon: '📊' },
-    { key: 'fatturato', label: 'Fatturato Distribuzione', icon: '💶' },
-    { key: 'addebiti', label: 'Addebiti da Inserire', icon: '📋' },
-    { key: 'compensazioni', label: 'Compensazioni', icon: '⚖️' },
-    { key: 'riepilogo-mese', label: 'Riepilogo Mese', icon: '📦' },
+  const TABS: Array<{ key: TabKey; label: string; tot: string; c: string; d: string }> = [
+    { key: 'riepilogo', label: 'Riepilogo', tot: '', c: C2.K, d: P2.riep },
+    { key: 'fatturato', label: 'Fatturato distribuzione', tot: eur(totFatturato * 1.22), c: C2.V, d: P2.fat },
+    { key: 'addebiti', label: 'Addebiti da inserire', tot: eur(totAddebitiConIva), c: C2.R, d: P2.add },
+    { key: 'compensazioni', label: 'Compensazioni', tot: eur(totCompensazioni), c: C2.B, d: P2.comp },
+    { key: 'riepilogo-mese', label: 'Riepilogo mese', tot: distribuzione?.codici?.length ? `${distribuzione.codici.length} codici` : '', c: C2.P, d: P2.mese },
   ];
 
-  if (loading) return <div className="dc-page dc-page-loading">⏳ Caricamento dati padroncino...</div>;
+  if (loading) return <main className="dc-page dc2-page"><section className="dc2-card dc2-empty"><span className="dc2-muted">Caricamento conteggio…</span></section></main>;
   if (error || !padroncino) return (
-    <div className="dc-page dc-page-loading">
-      ❌ {error ?? 'Padroncino non trovato'}
-      <button onClick={() => navigate(-1 as any)} style={{ marginLeft: 12 }}>← Torna</button>
-    </div>
+    <main className="dc-page dc2-page">
+      <section className="dc2-card dc2-empty">
+        <span className="dc2-empty-t">{error ?? 'Padroncino non trovato'}</span>
+        <button type="button" className="dc2-btn" onClick={() => navigate(-1 as any)}>Torna ai conteggi</button>
+      </section>
+    </main>
   );
 
-  return (
-    <div className="dc-page">
-      {/* Header */}
-      <div className="dc-header">
-        <div className="dc-header-left">
-          <button className="dc-back-btn" onClick={() => {
-            if (isDirty && !confirm('Hai modifiche non salvate.\nVuoi uscire senza salvare?')) return;
-            navigate(-1 as any);
-          }}>← Conteggi</button>
-          <div>
-            <h1>{padroncino.ragioneSociale}</h1>
-            <span className="dc-header-mese">📅 {formatMese(mese)}</span>
-            {isDirty && !isReadonly && (
-              <span className="dc-dirty-badge" title="Modifiche non salvate">● Non salvato</span>
-            )}
-          </div>
-        </div>
-        <div className="dc-header-right">
-          <div className="dc-mini-checklist">
-            {CHECKLIST_ITEMS.map((item) => (
-              <div key={item.key}
-                className={`dc-mini-check ${checklist[item.key] ? 'dc-mini-done' : ''}`}
-                title={item.label}
-                onClick={() => {
-                  const updated = { ...checklist, [item.key]: !checklist[item.key] };
-                  setChecklist(updated);
-                  saveChecklist(id!, mese, updated);
-                }}>
-                {item.icon}
-              </div>
-            ))}
-          </div>
-          <button
-            className="btn-outline btn-sm"
-            onClick={handleAggiornaRicariche}
-            disabled={aggiornaRicariche}
-            title="Ricarica i costi delle ricariche elettriche dal modulo ricariche"
-          >
-            {aggiornaRicariche ? '⏳' : '⚡'} Aggiorna Ricariche
-          </button>
-
-          {!isReadonly && (
-            <button
-              className="btn-outline btn-sm"
-              onClick={handleApriDuplica}
-              title="Duplica le righe di un altro mese come base per questo"
-            >
-              📋 Duplica da...
-            </button>
-          )}
-
-          {conteggioId && statoConteggio === 'BOZZA' && (
-            <button className="btn-outline btn-sm" onClick={handleChiudiMese}>
-              🔒 Chiudi Mese
-            </button>
-          )}
-
-          <button
-            className="btn-primary btn-sm"
-            onClick={handleSalva}
-            disabled={saving || isReadonly}
-            title={isReadonly ? 'Conteggio chiuso — non modificabile' : ''}
-          >
-            {saving ? '⏳ Salvando...' : '💾 Salva'}
-          </button>
-          <button
-            className="btn-primary btn-sm"
-            onClick={() => {
+  // ── Solo visualizzazione: stessa formula usata al salvataggio (handleSalva) ──
+  const nettoVideo = totFatturato * 1.22 - totAddebitiConIva - totCompensazioni;
+  const nettoArrot = Math.round(nettoVideo * 100) / 100;
+  const coincide = nettoSalvato != null && Math.abs(nettoSalvato - nettoArrot) < 0.005;
+  const meseLabel = formatMese(mese);
+  const nMezzi = (padroncino.mezziAssegnati ?? []).filter((m: any) => assegnazioneAttivaNelMese(m.dataInizio, m.dataFine, mese)).length;
+  const nPalmari = (padroncino.palmariAssegnati ?? []).filter((p: any) => assegnazioneAttivaNelMese(p.dataInizio, p.dataFine, mese)).length;
+  const nCodici = (padroncino.codiciAutista ?? []).filter((c: any) => assegnazioneAttivaNelMese(c.dataInizio, c.dataFine, mese)).length;
+  const iniziali = padroncino.ragioneSociale.replace(/[^A-Za-zÀ-ú0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const STATO_UI = {
+    BOZZA: { t: 'Bozza', c: '#C2410C', d: '#EA6A2A', tip: 'In lavorazione: le righe automatiche si aggiornano dal mese.' },
+    CHIUSO: { t: 'Chiuso', c: '#52525B', d: '#A1A1AA', tip: 'Mese chiuso: le righe non si aggiornano più automaticamente. Puoi ancora modificare manualmente e salvare.' },
+    CONFERMATO: { t: 'Confermato', c: '#15803D', d: '#15A06A', tip: 'Conteggio confermato: sola lettura.' },
+  }[statoConteggio];
+  const tasksPad = tasksAll.filter((t) => t.padroncino === padroncino.ragioneSociale && !t.completata);
+  const esci = () => {
+    if (isDirty && !confirm('Hai modifiche non salvate.\nVuoi uscire senza salvare?')) return;
+    navigate(-1 as any);
+  };
+  const generaPdf = () => {
               if (!padroncino) return;
               try {
               // Calcola validità DURC e DVR (giorni rimanenti)
@@ -2400,109 +2430,148 @@ export default function DettaglioConteggio() {
                 console.error('Errore PDF:', err);
                 alert('Errore generazione PDF: ' + (err?.message ?? err));
               }
-            }}
-          >
-            📄 Genera PDF
-          </button>
+  };
 
-          {/* Mostra il tasto elimina SOLO se abbiamo un ID (ovvero se il record esiste nel DB) */}
-          {conteggioId && (
-            <button
-              className="btn-danger btn-sm"
-              onClick={handleEliminaConteggio}
-              disabled={deletingConteggio}
-            >
-              {deletingConteggio ? '⏳' : '🗑️'} Elimina conteggio
+  return (
+    <main className="dc-page dc2-page">
+      {/* Header */}
+      <header className="dc2-head">
+        <div className="dc2-head-l">
+          <span aria-hidden="true" className="dc2-avatar">{iniziali || '?'}</span>
+          <div className="dc2-col" style={{ gap: 2 }}>
+            <span className="dc2-small dc2-muted">
+              <button type="button" className="dc2-link" onClick={esci}>Conteggio</button> · {meseLabel.toLowerCase()}
+            </span>
+            <div className="dc2-row" style={{ gap: 10 }}>
+              <h1 className="dc2-h1">{padroncino.ragioneSociale}</h1>
+              <span className="dc2-tag" style={{ color: STATO_UI.c }} title={STATO_UI.tip}><span aria-hidden="true" className="dc2-dot" style={{ background: STATO_UI.d }} />{STATO_UI.t}</span>
+              {isDirty && !isReadonly && (
+                <span className="dc2-tag" style={{ color: '#C2410C' }} title="Modifiche non salvate"><span aria-hidden="true" className="dc2-dot" style={{ background: '#EA6A2A' }} />Non salvato</span>
+              )}
+            </div>
+            <span className="dc2-muted">
+              {nMezzi} mezz{nMezzi === 1 ? 'o' : 'i'} · {nPalmari} palmar{nPalmari === 1 ? 'e' : 'i'} · {nCodici} codic{nCodici === 1 ? 'e' : 'i'} autista
+              {padroncino.partitaIva ? ` · P. IVA ${padroncino.partitaIva}` : ''}
+            </span>
+          </div>
+        </div>
+        <div className="dc2-row" style={{ gap: 8 }}>
+          <button type="button" className="dc2-btn" onClick={handleAggiornaRicariche} disabled={aggiornaRicariche}
+            title="Ricarica i costi delle ricariche elettriche dal modulo ricariche">
+            <Svg2 d={P2.bolt} color="#15A06A" />{aggiornaRicariche ? 'Aggiorno…' : 'Aggiorna ricariche'}
+          </button>
+          {!isReadonly && (
+            <button type="button" className="dc2-btn" onClick={handleApriDuplica} title="Duplica le righe di un altro mese come base per questo">
+              <Svg2 d={P2.copy} />Duplica
             </button>
           )}
+          <button type="button" className="dc2-btn" onClick={generaPdf}>
+            <Svg2 d={P2.doc} color="#DC4446" />PDF addebiti
+          </button>
+          {conteggioId && statoConteggio === 'BOZZA' && (
+            <button type="button" className="dc2-btn" onClick={handleChiudiMese}>
+              <Svg2 d={P2.lock} />Chiudi mese
+            </button>
+          )}
+          {conteggioId && (
+            <button type="button" className="dc2-btn dc2-btn-icon dc2-btn-danger" onClick={handleEliminaConteggio} disabled={deletingConteggio}
+              aria-label="Elimina conteggio" title="Elimina conteggio">
+              <Svg2 d={P2.trash} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="dc2-btn dc2-btn-primary"
+            onClick={handleSalva}
+            disabled={saving || isReadonly}
+            title={isReadonly ? 'Conteggio confermato — non modificabile' : ''}
+          >
+            <Svg2 d={P2.save} />{saving ? 'Salvataggio…' : 'Salva'}
+          </button>
         </div>
-      </div>
+      </header>
 
-      {statoConteggio === 'CHIUSO' && (
-        <div className="dc-readonly-banner dc-banner-chiuso">
-          🔒 Mese CHIUSO — le righe non si aggiornano più automaticamente.
-          Puoi ancora modificare manualmente e salvare.
+      {/* Saldo */}
+      <section aria-label="Saldo del conteggio" className="dc2-saldo">
+        <div className="dc2-col" style={{ gap: 4 }}>
+          <span className="dc2-saldo-eyebrow">{meseLabel} · netto da bonificare</span>
+          <span className="dc2-saldo-val">{eur(nettoVideo)}</span>
+          <span className="dc2-saldo-check" style={{ color: isDirty ? '#FCD9B6' : coincide || nettoSalvato == null ? '#B9EBD4' : '#FCD9B6' }}>
+            <Svg2 d={isDirty || (!coincide && nettoSalvato != null) ? P2.vari : P2.tick} size={13} sw={2.6} />
+            {isDirty
+              ? 'Modifiche non salvate: salva per aggiornare il netto'
+              : nettoSalvato == null
+                ? 'Ricalcolato dalle righe del conteggio'
+                : coincide
+                  ? 'Ricalcolato: coincide con il netto salvato'
+                  : `Diverso dal netto salvato (${eur(nettoSalvato)}): salva per allinearlo`}
+          </span>
         </div>
-      )}
+        <div className="dc2-row" style={{ gap: 22 }}>
+          <div className="dc2-col" style={{ gap: 2 }}>
+            <span className="dc2-saldo-l">Fattura</span>
+            <span className="dc2-saldo-n">{eur(totFatturato * 1.22)}</span>
+          </div>
+          <span aria-hidden="true" className="dc2-saldo-op">−</span>
+          <div className="dc2-col" style={{ gap: 2 }}>
+            <span className="dc2-saldo-l">Addebiti</span>
+            <span className="dc2-saldo-n">{eur(totAddebitiConIva)}</span>
+          </div>
+          <span aria-hidden="true" className="dc2-saldo-op">−</span>
+          <div className="dc2-col" style={{ gap: 2 }}>
+            <span className="dc2-saldo-l">Compensazioni</span>
+            <span className="dc2-saldo-n">{eur(totCompensazioni)}</span>
+          </div>
+          <button type="button" className="dc2-btn dc2-btn-white" onClick={generaPdf}>
+            <Svg2 d={P2.down} />Scarica riepilogo
+          </button>
+        </div>
+      </section>
+
       {statoConteggio === 'CONFERMATO' && (
-        <div className="dc-readonly-banner dc-banner-confermato">
-          ✅ Conteggio CONFERMATO — sola lettura assoluta.
+        <div className="dc2-alert dc2-alert-ok">
+          <span aria-hidden="true" className="dc2-dot" style={{ background: '#15A06A' }} />
+          <span style={{ flex: '1 1 360px' }}><span className="dc2-b">Conteggio confermato.</span> <span style={{ color: '#3F3F46' }}>È in sola lettura.</span></span>
         </div>
       )}
 
-      {/* Banner addebiti sospesi e memo */}
-      {addebitivSospesi.length > 0 && (() => {
-        const addebiti = addebitivSospesi.filter(a => (a as any).tipo !== 'MEMO');
-        const memo     = addebitivSospesi.filter(a => (a as any).tipo === 'MEMO');
+      {/* Sospesi e promemoria del padroncino per questo mese */}
+      {addebitivSospesi.map((a) => {
+        const memo = (a as any).tipo === 'MEMO';
         return (
-          <div className="dc-sospesi-banner-wrap">
-            {addebiti.length > 0 && (
-              <div className="dc-sospesi-banner dc-sospesi-banner-addebiti">
-                <div className="dc-sospesi-banner-title">
-                  💳 {addebiti.length} addebito{addebiti.length > 1 ? 'i' : ''} sospeso{addebiti.length > 1 ? 'i' : ''} da evadere
-                </div>
-                <div className="dc-sospesi-list">
-                  {addebiti.map(a => (
-                    <div key={a.id} className="dc-sospesi-item">
-                      <span className="dc-sospesi-desc">{a.descrizione}</span>
-                      {a.importo != null && (
-                        <span className="dc-sospesi-importo">
-                          {a.importo.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                        </span>
-                      )}
-                      {a.meseOrigine && (
-                        <span className="dc-sospesi-origine">da {a.meseOrigine}</span>
-                      )}
-                      <button
-                        className="dc-sospesi-evadi"
-                        title="Segna come evaso"
-                        onClick={async () => {
-                          await addebitivSospesoApi.evadi(a.id);
-                          setAddebitivSospesi(prev => prev.filter(x => x.id !== a.id));
-                        }}
-                      >
-                        ✓ Evadi
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {memo.length > 0 && (
-              <div className="dc-sospesi-banner dc-sospesi-banner-memo">
-                <div className="dc-sospesi-banner-title">
-                  📝 {memo.length} promemoria per questo mese
-                </div>
-                <div className="dc-sospesi-list">
-                  {memo.map(a => (
-                    <div key={a.id} className="dc-sospesi-item">
-                      <span className="dc-sospesi-desc">{a.descrizione}</span>
-                      {a.note && <span className="dc-sospesi-origine">{a.note}</span>}
-                      <button
-                        className="dc-sospesi-evadi"
-                        title="Segna come fatto"
-                        onClick={async () => {
-                          await addebitivSospesoApi.evadi(a.id);
-                          setAddebitivSospesi(prev => prev.filter(x => x.id !== a.id));
-                        }}
-                      >
-                        ✓ Fatto
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div key={a.id} className={`dc2-alert ${memo ? 'dc2-alert-viola' : 'dc2-alert-info'}`}>
+            <span aria-hidden="true" className="dc2-dot" style={{ background: memo ? '#7C5CF0' : '#3D63F0' }} />
+            <span style={{ flex: '1 1 360px' }}>
+              <span className="dc2-b">{memo ? 'Promemoria per questo mese.' : 'Sospeso in attesa.'}</span>{' '}
+              <span style={{ color: '#3F3F46' }}>
+                {a.descrizione}
+                {!memo && a.importo != null ? ` · ${eur(a.importo)}` : ''}
+                {!memo && a.meseOrigine ? ` · da ${a.meseOrigine}` : ''}
+                {memo && a.note ? ` · ${a.note}` : ''}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="dc2-btn dc2-btn-xs"
+              title={memo ? 'Segna come fatto' : 'Segna come evaso'}
+              onClick={async () => {
+                await addebitivSospesoApi.evadi(a.id);
+                setAddebitivSospesi(prev => prev.filter(x => x.id !== a.id));
+              }}
+            >{memo ? 'Fatto' : 'Evadi'}</button>
+            <button type="button" className="dc2-btn dc2-btn-xs" onClick={() => navigate('/addebiti-sospesi')}>Vai ai sospesi</button>
           </div>
         );
-      })()}
+      })}
 
       {/* Tabs */}
-      <div className="dc-tabs">
+      <div role="tablist" aria-label="Sezioni del conteggio" className="dc2-tabs">
         {TABS.map((t) => (
-          <button key={t.key} className={`dc-tab-btn ${activeTab === t.key ? 'dc-tab-active' : ''}`}
+          <button key={t.key} type="button" role="tab" aria-selected={activeTab === t.key} className="dc2-tab"
             onClick={() => setActiveTab(t.key)}>
-            <span>{t.icon}</span><span>{t.label}</span>
+            <span aria-hidden="true" className="dc2-tabtile" style={{ background: t.c }}><Svg2 d={t.d} size={10} sw={2.8} /></span>
+            {t.label}
+            {t.tot && <span className="dc2-tabtot">{t.tot}</span>}
           </button>
         ))}
       </div>
@@ -2513,6 +2582,14 @@ export default function DettaglioConteggio() {
           <TabRiepilogo
             padroncino={padroncino} mese={mese}
             totFatturato={totFatturato} totAddebitiConIva={totAddebitiConIva} totCompen={totCompensazioni}
+            parti={{ palmari: costoPalmariConIva, mezzi: totMezziConIva, ricariche: totRicaricheConIva, vari: totVariConIva, bollo: bolloAttivo ? COSTO_BOLLO : 0 }}
+            compParti={{ accrediti: totAccrediti, fineMese: totFineMese, cassa: totCassa }}
+            distribuzione={distribuzione}
+            tasks={tasksPad}
+            onToggleTask={handleToggleTask}
+            onNewTask={() => { setEditingTask(null); setTaskModalOpen(true); }}
+            onEditTask={(t) => { setEditingTask(t); setTaskModalOpen(true); }}
+            onApriPadroncino={() => { if (isDirty && !confirm('Hai modifiche non salvate.\nVuoi uscire senza salvare?')) return; navigate(`/padroncini/${padroncino.id}`); }}
             checklist={checklist}
             onChecklistChange={(key, val) => {
               const updated = { ...checklist, [key]: val };
@@ -2651,11 +2728,20 @@ export default function DettaglioConteggio() {
         )}
       </div>
 
+      <TaskModal
+        open={taskModalOpen}
+        onClose={() => { setTaskModalOpen(false); setEditingTask(null); }}
+        onSubmit={handleSubmitTask}
+        saving={taskSaving}
+        editingTask={editingTask}
+        defaultPadroncino={padroncino.ragioneSociale}
+      />
+
       {duplicaOpen && (
         <div className="dc-modal-overlay" onClick={() => !duplicaLoading && setDuplicaOpen(false)}>
           <div className="dc-modal" onClick={(e) => e.stopPropagation()}>
             <div className="dc-modal-header">
-              <h3>📋 Duplica conteggio</h3>
+              <h3>Duplica conteggio</h3>
               <button
                 className="dc-modal-close"
                 onClick={() => !duplicaLoading && setDuplicaOpen(false)}
@@ -2668,7 +2754,7 @@ export default function DettaglioConteggio() {
                 <br/><em>Fatturato distribuzione, Addebiti vari, Fatture fine mese</em>.
               </p>
               <p className="dc-modal-warn">
-                ⚠️ Le voci manuali attualmente presenti in {formatMese(mese)} verranno sostituite.
+                Le voci manuali attualmente presenti in {formatMese(mese)} verranno sostituite.
                 <br/>Mezzi, palmari, ricariche e acconti restano invariati (ricalcolati dal mese).
               </p>
               <label className="dc-modal-label">
@@ -2695,12 +2781,12 @@ export default function DettaglioConteggio() {
                 onClick={handleConfermaDuplica}
                 disabled={duplicaLoading || !duplicaMeseSorgente}
               >
-                {duplicaLoading ? '⏳ Duplicando...' : '📋 Duplica'}
+                {duplicaLoading ? 'Duplicazione…' : 'Duplica'}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }

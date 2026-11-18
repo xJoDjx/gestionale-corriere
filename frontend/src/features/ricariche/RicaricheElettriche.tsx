@@ -4,6 +4,9 @@ import * as XLSX from 'xlsx';
 import { api, mezziApi } from '../../lib/api';
 import { parseDecimale, parseDecimaleOr } from '../../lib/numeri';
 import './RicaricheElettriche.css';
+import '../padroncini/Padroncini2.css';
+import './Ricariche2.css';
+import { Page, PageHeader, Card, CardHead, Kpis, Button, IconButton, SegTabs, SearchBox, Select, Th, Empty, Alert, Icon, BarStrip, C, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
 
 type SortDir = 'asc' | 'desc';
 type AppView = 'dashboard' | 'detail';
@@ -44,6 +47,8 @@ interface MeseStats {
   costoInt: number;
   costoExt: number;
   mezziCount: number;
+  /** Solo per il grafico: quota delle sessioni con padroncino (addebitata ai PDA) */
+  costoPda: number;
 }
 
 interface MezzoInfo {
@@ -143,7 +148,7 @@ function formatMese(mese: string): string {
 // ─── Componente principale ────────────────────────────────────────────────────
 export default function RicaricheElettriche() {
   // ── viste ──
-  const [appView, setAppView]   = useState<AppView>('dashboard');
+  const [appView, setAppView]   = useState<AppView>('detail');
 
   const [mese, setMese]         = useState(getCurrentMonth());
   const [tab, setTab]           = useState<'riepilogo' | 'dettaglio'>('riepilogo');
@@ -257,6 +262,7 @@ export default function RicaricheElettriche() {
           costoInt:   int.reduce((a, s) => a + s.costoFinale, 0),
           costoExt:   ext.reduce((a, s) => a + s.costoFinale, 0),
           mezziCount: new Set(r.sessioni.map(s => s.targa)).size,
+          costoPda:   r.sessioni.filter(s => !!s.padroncino).reduce((a, s) => a + s.costoFinale, 0),
         };
       }
       setMesiStats(statsMap);
@@ -579,655 +585,364 @@ export default function RicaricheElettriche() {
     return { int, ext: 100 - int };
   }, [dashStats]);
 
-  // ════════════════════════════════════════════════════════════════════════════
-  //  RENDER
-  // ════════════════════════════════════════════════════════════════════════════
+  // ── Solo visualizzazione ─────────────────────────────────────────────────
+  // All'apertura mostra l'ultimo mese con dati (se il mese corrente è vuoto)
+  const [autoMese, setAutoMese] = useState(false);
+  useEffect(() => {
+    if (autoMese || mesiDesc.length === 0) return;
+    setAutoMese(true);
+    if (!mesiDisp.some((m) => m.mese === mese)) setMese(mesiDesc[0].mese);
+  }, [autoMese, mesiDesc, mesiDisp, mese]);
+  const costoPda = useMemo(() => sessioni.filter((x) => !!x.padroncino).reduce((a, x) => a + x.costoFinale, 0), [sessioni]);
+  const nInt = sessioni.filter((x) => x.tipoRicarica === 'INTERNA').length;
+  const nExt = sessioni.length - nInt;
+  const idxMese = mesiAsc.findIndex((m) => m.mese === mese);
+  const prevStats = idxMese > 0 ? mesiStats[mesiAsc[idxMese - 1].mese] : null;
+  const deltaTot = prevStats && prevStats.costoTot ? ((stats.costoTot - prevStats.costoTot) / prevStats.costoTot) * 100 : null;
+  const MESI3 = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+  const trend = mesiAsc.slice(-8).map((m) => {
+    const st = mesiStats[m.mese];
+    return {
+      label: MESI3[parseInt(m.mese.slice(5), 10) - 1], mese: m.mese,
+      total: st?.costoTot ?? 0, part: st?.costoPda ?? 0,
+      valueLabel: st ? `${fmtNum2(st.costoTot / 1000, 1)}k` : '',
+      tip: st ? `${formatMese(m.mese)} · totale ${fmtEur2(st.costoTot)} · addebitato ${fmtEur2(st.costoPda)}` : formatMese(m.mese),
+    };
+  });
+  const mediaMensile = trend.length ? trend.reduce((a, t) => a + t.total, 0) / trend.length : 0;
+  const CAT: Record<string, [string, string]> = { DISTRIBUZIONE: ['Distribuzione', C.teal], FLOTTA: ['Flotta', C.blue], AUTO_AZIENDALE: ['Aziendale', C.purple] };
+  const catOf = (c?: string | null): [string, string] => {
+    const u = (c ?? '').toUpperCase();
+    return u.includes('FLOTTA') ? CAT.FLOTTA : u.includes('AUTO') ? CAT.AUTO_AZIENDALE : u ? CAT.DISTRIBUZIONE : ['Senza categoria', '#A1A1AA'];
+  };
+  const nCat = (k: string) => riepilogo.filter((r) => (r.categoria ?? '').toUpperCase() === k).length;
+  const meseOpts = Array.from(new Set([...mesiDesc.map((m) => m.mese), mese])).sort().reverse();
+  const kwh = (n: number) => fmtNum2(n, 2);
+  const sortObj = (o: { col: string; dir: SortDir }) => ({ key: o.col, dir: o.dir });
+
   return (
-    <div className="ric-page">
+    <Page>
+      <PageHeader
+        eyebrow="Costi"
+        title="Ricariche elettriche"
+        sub="Sessioni JuiceBox e rete pubblica, maggiorazione e addebito ai padroncini"
+        actions={<>
+          <Select label="Mese" value={appView === 'dashboard' ? 'STORICO' : mese}
+            onChange={(v) => { if (v === 'STORICO') setAppView('dashboard'); else apriMese(v); }}
+            options={[...meseOpts.map((m) => ({ value: m, label: formatMese(m) })), { value: 'STORICO', label: 'Tutti i mesi (storico)' }]} />
+          {appView === 'detail' && <>
+            <Button icon="download" onClick={exportReport} disabled={!hasDati}>Esporta</Button>
+            {hasDati && <Button icon="trash" variant="danger" onClick={eliminaMese}>Elimina mese</Button>}
+            <Button icon="upload" variant="primary" onClick={() => setShowImport((v) => !v)}>{hasDati ? 'Sostituisci file del mese' : 'Importa file del mese'}</Button>
+          </>}
+        </>}
+      />
 
-      {/* ══════════════ DASHBOARD VIEW ══════════════ */}
-      {appView === 'dashboard' && (
-        <>
-          {/* ── Header ── */}
-          <div className="ric-header">
-            <div>
-              <h1>⚡ Ricariche Elettriche</h1>
-              <span className="ric-sub">Gestione e storico ricariche mensili</span>
-            </div>
-            <div className="ric-header-actions">
-              <button className="btn-primary" onClick={() => { setAppView('detail'); setShowImport(true); }}>
-                📂 Importa CSV
-              </button>
-            </div>
-          </div>
-
-          {/* ── Aggregated KPI row ── */}
-          {dashStats && (
-            <div className="ric-dash-kpi-row">
-              <div className="ric-kpi-card ric-kpi-blue">
-                <span className="ric-kpi-label">Mesi Archiviati</span>
-                <span className="ric-kpi-val">{mesiDisp.length}</span>
-                <span className="ric-kpi-sub">dati caricati</span>
-              </div>
-              <div className="ric-kpi-card ric-kpi-teal">
-                <span className="ric-kpi-label">Sessioni Totali</span>
-                <span className="ric-kpi-val">{dashStats.totSessioni.toLocaleString('it-IT')}</span>
-                <span className="ric-kpi-sub">tutti i mesi</span>
-              </div>
-              <div className="ric-kpi-card ric-kpi-green">
-                <span className="ric-kpi-label">Energia Totale</span>
-                <span className="ric-kpi-val">{fmtK(dashStats.totKwh)}</span>
-                <span className="ric-kpi-sub">kWh distribuiti</span>
-              </div>
-              <div className="ric-kpi-card ric-kpi-purple">
-                <span className="ric-kpi-label">Costo Totale</span>
-                <span className="ric-kpi-val">€ {fmtE(dashStats.totCosto)}</span>
-                <span className="ric-kpi-sub">tutti i mesi</span>
-              </div>
-              <div className="ric-kpi-card ric-kpi-amber">
-                <span className="ric-kpi-label">Media Mensile</span>
-                <span className="ric-kpi-val">€ {fmtE(dashStats.totCosto / mesiDisp.length)}</span>
-                <span className="ric-kpi-sub">per mese</span>
-              </div>
-            </div>
-          )}
-          {loadingStats && !dashStats && (
-            <div className="ric-loading"><div className="ric-spinner" /><span>Caricamento statistiche…</span></div>
-          )}
-
-          {/* ── Empty state ── */}
-          {mesiDisp.length === 0 && !loadingStats && (
-            <div className="ric-empty-state">
-              <span className="ric-empty-icon">⚡</span>
-              <div className="ric-empty-title">Nessun dato ancora</div>
-              <div className="ric-empty-hint">
-                <button className="btn-primary" onClick={() => { setAppView('detail'); setShowImport(true); }}>
-                  📂 Importa il primo CSV
-                </button>
-              </div>
+      {appView === 'dashboard' ? (<>
+        <Kpis items={[
+          { label: 'Sessioni', value: dashStats ? fmtNum2(dashStats.totSessioni) : '—', sub: `${mesiDisp.length} mesi caricati`, color: C.teal, icon: 'ric' },
+          { label: 'Energia', value: dashStats ? `${fmtNum2(dashStats.totKwh, 1)} kWh` : '—', sub: 'Tutti i mesi', color: C.blue, icon: 'goccia' },
+          { label: 'Ricariche interne', value: dashStats ? fmtEur2(dashStats.totInt) : '—', sub: `${splitPct.int}% del totale`, color: C.green, icon: 'ok' },
+          { label: 'Totale storico', value: dashStats ? fmtEur2(dashStats.totCosto) : '—', sub: `Esterne ${dashStats ? fmtEur2(dashStats.totExt) : '—'}`, color: C.orange, icon: 'euro' },
+        ]} />
+        <Card>
+          <CardHead bar title="Mesi caricati" sub={loadingStats ? 'Calcolo in corso…' : 'Clic su un mese per aprirlo'} />
+          {mesiDesc.length === 0 ? <Empty>Nessun mese caricato. Scegli un mese e importa il file delle sessioni.</Empty> : (
+            <div className="ds-tablewrap">
+              <table className="ds-table">
+                <thead><tr><Th>Mese</Th><Th right>Sessioni</Th><Th right>kWh</Th><Th right>Interne</Th><Th right>Esterne</Th><Th right>Addebitato ai PDA</Th><Th right>Totale</Th><Th right>Δ mese prima</Th><Th right>Mezzi</Th></tr></thead>
+                <tbody>
+                  {mesiDesc.map((m) => {
+                    const st = mesiStats[m.mese];
+                    const i = mesiAsc.findIndex((x) => x.mese === m.mese);
+                    const pv = i > 0 ? mesiStats[mesiAsc[i - 1].mese] : null;
+                    const d = st && pv && pv.costoTot ? ((st.costoTot - pv.costoTot) / pv.costoTot) * 100 : null;
+                    return (
+                      <tr key={m.mese} className="is-clickable" onClick={() => apriMese(m.mese)}>
+                        <td style={{ fontWeight: 600 }}>{formatMese(m.mese)}</td>
+                        <td className="r">{fmtNum2(m.count)}</td>
+                        <td className="r">{st ? fmtNum2(st.kwhTot, 1) : '—'}</td>
+                        <td className="r">{st ? fmtEur2(st.costoInt) : '—'}</td>
+                        <td className="r">{st ? fmtEur2(st.costoExt) : '—'}</td>
+                        <td className="r">{st ? fmtEur2(st.costoPda) : '—'}</td>
+                        <td className="r" style={{ fontWeight: 600 }}>{st ? fmtEur2(st.costoTot) : '—'}</td>
+                        <td className="r" style={{ color: d == null ? '#6B6B73' : d > 0 ? '#B91C1C' : '#15803D', fontWeight: 600 }}>{d == null ? '—' : `${d >= 0 ? '+' : '−'}${fmtNum2(Math.abs(d), 1)}%`}</td>
+                        <td className="r">{st?.mezziCount ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
+        </Card>
+      </>) : (<>
+        {hasDati && (
+          <Kpis items={[
+            { label: 'Sessioni', value: stats.tot, sub: `${nInt} interne · ${nExt} su rete pubblica`, color: C.teal, icon: 'ric',
+              seg: [{ w: stats.tot ? (nInt / stats.tot) * 100 : 0, color: C.teal }, { w: stats.tot ? (nExt / stats.tot) * 100 : 0, color: C.orange }] },
+            { label: 'Energia', value: `${fmtNum2(stats.kwhTot, 1)} kWh`, sub: `Esterne ${fmtNum2(stats.kwhExt, 1)} kWh`, color: C.blue, icon: 'goccia' },
+            { label: 'Costo senza maggiorazione', value: fmtEur2(stats.costoBaseTot), sub: `Interne ${fmtEur2(stats.costoBaseInt)} · esterne ${fmtEur2(stats.costoBaseExt)}`, color: '#71717A', icon: 'euro' },
+            { label: 'Totale del mese', value: fmtEur2(stats.costoTot), color: C.green, icon: 'cont',
+              sub: `Addebitato ai PDA ${fmtEur2(costoPda)}${deltaTot != null ? ` · ${deltaTot >= 0 ? '+' : '−'}${fmtNum2(Math.abs(deltaTot), 1)}% vs ${formatMese(mesiAsc[idxMese - 1].mese).split(' ')[0].toLowerCase()}` : ''}` },
+          ]} />
+        )}
 
-          {/* ── Month list + sidebar ── */}
-          {mesiDisp.length > 0 && (
-            <div className="ric-dash-grid">
+        <div className="ds-g4">
+          <Card pad className="ds-s2">
+            <CardHead title="Andamento" sub={trend.length ? `Media mensile ${fmtEur2(mediaMensile)} · ${formatMese(trend[0].mese).split(' ')[0].toLowerCase()}–${formatMese(trend[trend.length - 1].mese).split(' ')[0].toLowerCase()}` : 'Nessun mese caricato'} />
+            {trend.length > 0 && (
+              <BarStrip data={trend} palette="green" legend={['Totale', 'Addebitato ai PDA']}
+                selected={Math.max(0, trend.findIndex((t) => t.mese === mese))}
+                onSelect={(i) => apriMese(trend[i].mese)}
+                ariaLabel="Ricariche per mese: totale e quota addebitata ai padroncini" />
+            )}
+          </Card>
+          <Card pad className="ds-s2">
+            <CardHead title="Tariffe del mese"
+              sub={`Fattura e parametri di calcolo${costoInternoKwh ? ` · costo interno ricavato € ${fmtE4(costoInternoKwh)} al kWh` : ''}`}
+              actions={<Button size="sm" icon="check" onClick={handleAggiornaTariffe} disabled={saving || !costoInternoKwh || !hasDati}
+                title="Salva le tariffe e ricalcola le sessioni del mese">{saving ? 'Salvataggio…' : 'Salva tariffe'}</Button>} />
+            <div className="ric2-grid">
+              <label className="ds-field"><span>Importo fattura (€)</span>
+                <input className="ds-input" type="text" inputMode="decimal" placeholder="1.250,00" value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} /></label>
+              <label className="ds-field"><span>kWh fatturati</span>
+                <input className="ds-input" type="text" inputMode="decimal" placeholder="2850" value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} /></label>
+              <label className="ds-field"><span>Costo kWh esterno (€)</span>
+                <input className="ds-input" type="text" inputMode="decimal" placeholder="0,840" value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} /></label>
+              <label className="ds-field"><span>% maggiorazione predefinita</span>
+                <input className="ds-input" type="text" inputMode="decimal" value={magDefault} onChange={(e) => setMagDefault(e.target.value)} title="Usata all'importazione per i mezzi senza maggiorazione propria" /></label>
+              <div className="ds-field"><span>Costo kWh interno</span>
+                <span className="ric2-ro">{costoInternoKwh ? `€ ${fmtE4(costoInternoKwh)}` : 'Inserisci fattura e kWh'}</span></div>
+              {tariffe && <div className="ds-field"><span>Salvato a sistema</span>
+                <span className="ric2-ro" style={{ fontWeight: 500 }}>{tariffe.costoInternoKwh != null ? `int. € ${fmtE4(tariffe.costoInternoKwh)}` : '—'}{tariffe.costoEsternoKwh != null ? ` · est. € ${fmtE4(tariffe.costoEsternoKwh)}` : ''}</span></div>}
+            </div>
+          </Card>
+        </div>
 
-              {/* Storico mensile */}
-              <div className="ric-dash-panel">
-                <div className="ric-dash-panel-hd">
-                  <span>📅 Storico Mensile</span>
-                  <span className="ric-dash-panel-sub">{mesiDisp.length} mesi · clicca per aprire</span>
+        {showImport && (
+          <Card pad>
+            <CardHead title={`Importa sessioni di ${meseLabel.toLowerCase()}`} sub="File CSV esportato da JuiceBox"
+              actions={<IconButton icon="close" label="Chiudi" onClick={() => { setShowImport(false); annullaImport(); }} />} />
+            {righeAnteprima.length === 0 ? (
+              <div className={`ric2-drop${dragOver ? ' is-over' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileRef.current?.click()}
+                role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') fileRef.current?.click(); }}>
+                <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={onFileChange} />
+                <Icon name="upload" size={20} />
+                <span style={{ fontWeight: 600 }}>{hasDati ? `Sostituisci i dati di ${meseLabel.toLowerCase()}` : `Carica il CSV di ${meseLabel.toLowerCase()}`}</span>
+                <span className="ds-cardsub">Trascina il file o clicca per sceglierlo</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Alert tone="info" title={`${nomeFile}: ${righeAnteprima.length} sessioni rilevate.`}>Controlla le tariffe e conferma l'importazione.</Alert>
+                <div className="ric2-grid">
+                  <label className="ds-field"><span>Importo fattura (€)</span>
+                    <input className="ds-input" type="text" inputMode="decimal" placeholder="1.250,00" value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} /></label>
+                  <label className="ds-field"><span>kWh fatturati</span>
+                    <input className="ds-input" type="text" inputMode="decimal" placeholder="2850" value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} /></label>
+                  <div className="ds-field"><span>Costo kWh interno</span><span className="ric2-ro">{costoInternoKwh ? `€ ${fmtE4(costoInternoKwh)} calcolato` : 'Inserisci fattura e kWh'}</span></div>
+                  <label className="ds-field"><span>Costo kWh esterno (€)</span>
+                    <input className="ds-input" type="text" inputMode="decimal" placeholder="0,840" value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} /></label>
+                  <label className="ds-field"><span>% predefinita (se non impostata sul mezzo)</span>
+                    <input className="ds-input" type="text" inputMode="decimal" value={magDefault} onChange={(e) => setMagDefault(e.target.value)} /></label>
                 </div>
-                <div className="ric-month-col-hd">
-                  <span>MESE</span>
-                  <span>DISTRIBUZIONE kWh</span>
-                  <span style={{ textAlign: 'center' }}>TREND</span>
-                  <span style={{ textAlign: 'right' }}>ADDEBITATO PDA</span>
-                  <span></span>
+                <div className="ds-actions" style={{ justifyContent: 'flex-end' }}>
+                  <Button onClick={annullaImport} disabled={saving}>Cambia file</Button>
+                  <Button variant="primary" icon="check" onClick={handleConfermaImport} disabled={saving || !costoInternoKwh}>{saving ? 'Salvataggio…' : 'Conferma importazione'}</Button>
                 </div>
-                {mesiDesc.map((m) => {
-                  const st = mesiStats[m.mese];
-                  const idx = mesiAsc.findIndex(x => x.mese === m.mese);
-                  const prev = idx > 0 ? mesiStats[mesiAsc[idx - 1].mese] : null;
-                  const trend = st && prev && prev.costoTot > 0
-                    ? ((st.costoTot - prev.costoTot) / prev.costoTot * 100)
-                    : null;
-                  const intPct = st && st.kwhTot > 0 ? Math.round(st.kwhInt / st.kwhTot * 100) : 0;
-                  const extPct = 100 - intPct;
-
-                  return (
-                    <div key={m.mese} className="ric-month-row" onClick={() => apriMese(m.mese)}>
-                      <div>
-                        <div className="ric-month-name">{formatMese(m.mese)}</div>
-                        <div className="ric-month-sub-label">
-                          {m.count} sessioni{st ? ` · ${st.mezziCount} mezzi` : ''}
-                        </div>
-                      </div>
-                      <div>
-                        {st ? (
-                          <>
-                            <div className="ric-kwh-bar-wrap">
-                              <div className="ric-kwh-bar-int" style={{ width: `${intPct}%` }}></div>
-                              <div className="ric-kwh-bar-ext" style={{ width: `${extPct}%` }}></div>
-                            </div>
-                            <div className="ric-kwh-bar-labels">
-                              <span className="ric-kwh-int-label">⚡ {intPct}%</span>
-                              <span className="ric-kwh-ext-label">🔌 {extPct}%</span>
-                              <span className="ric-kwh-total-label">{fmtK(st.kwhTot)} kWh</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="ric-loading" style={{ padding: '4px 0', justifyContent: 'flex-start' }}>
-                            <div className="ric-spinner" style={{ width: 14, height: 14 }} />
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        {trend !== null ? (
-                          <span className={`ric-trend-badge ${trend > 0 ? 'ric-trend-up' : 'ric-trend-down'}`}>
-                            {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="ric-trend-badge ric-trend-neutral">1° mese</span>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        {st ? (
-                          <>
-                            <span className="ric-month-cost">€ {fmtE(st.costoTot)}</span>
-                            <span className="ric-month-cost-sub">totale</span>
-                          </>
-                        ) : <span className="ric-month-cost-sub">—</span>}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="ric-apri-btn">Apri →</span>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
+            )}
+          </Card>
+        )}
 
-              {/* Sidebar */}
-              <div className="ric-dash-sidebar">
+        {loading ? <Card pad><Empty>Caricamento…</Empty></Card>
+          : error ? <Alert tone="ko" title="Errore di caricamento">{error}</Alert>
+          : !hasDati ? (
+            <Card pad><Empty>Nessuna sessione per {meseLabel.toLowerCase()}. Usa "Importa file del mese" per caricare il CSV.</Empty></Card>
+          ) : (
+          <Card>
+            <div className="pl2-toolbar">
+              <div className="ds-actions" style={{ gap: 14 }}>
+                <SegTabs<'riepilogo' | 'dettaglio'> pill value={tab} onChange={setTab} label="Vista"
+                  items={[{ value: 'riepilogo', label: 'Riepilogo per targa' }, { value: 'dettaglio', label: 'Dettaglio sessioni' }]} />
+                {tab === 'riepilogo' ? (
+                  <SegTabs<typeof filtroCategoriaRiep> value={filtroCategoriaRiep} onChange={setFiltroCategoriaRiep} label="Categoria"
+                    items={[
+                      { value: 'TUTTI', label: 'Tutte', count: riepilogo.length },
+                      { value: 'DISTRIBUZIONE', label: 'Distribuzione', count: nCat('DISTRIBUZIONE') },
+                      { value: 'FLOTTA', label: 'Flotta', count: nCat('FLOTTA') },
+                      { value: 'AUTO_AZIENDALE', label: 'Aziendali', count: nCat('AUTO_AZIENDALE') },
+                    ]} />
+                ) : (
+                  <SegTabs<typeof filtroTipo> value={filtroTipo} onChange={setFiltroTipo} label="Tipo"
+                    items={[
+                      { value: 'TUTTI', label: 'Tutte', count: sessioni.length },
+                      { value: 'INTERNA', label: 'Interne', count: nInt },
+                      { value: 'ESTERNA', label: 'Esterne', count: nExt },
+                    ]} />
+                )}
+              </div>
+              {tab === 'riepilogo'
+                ? <SearchBox value={searchRiep} onChange={setSearchRiep} placeholder="Cerca targa, padroncino…" width={260} />
+                : <SearchBox value={search} onChange={setSearch} placeholder="Cerca targa, padroncino, stazione…" width={280} />}
+            </div>
 
-                {/* Top veicoli (dal mese corrente caricato, se disponibile) */}
-                {topVeicoli.length > 0 && (
-                  <div className="ric-sidebar-panel">
-                    <div className="ric-dash-panel-hd">
-                      <span>🏆 Top Veicoli</span>
-                      <span className="ric-dash-panel-sub">costo · {meseLabel}</span>
-                    </div>
-                    {topVeicoli.map((v) => {
-                      const cat = catLabel(v.categoria);
+            {tab === 'riepilogo' ? (
+              <div className="ds-tablewrap">
+                <table className="ds-table ric2-table" style={{ minWidth: 1080 }}>
+                  <thead><tr>
+                    <Th k="targa" sort={sortObj(sortRiep)} onSort={toggleRiep}>Targa</Th>
+                    <Th k="categoria" sort={sortObj(sortRiep)} onSort={toggleRiep}>Cat.</Th>
+                    <Th k="padroncino" sort={sortObj(sortRiep)} onSort={toggleRiep}>Padroncino</Th>
+                    <Th k="kwhInt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>kWh int.</Th>
+                    <Th k="costoBaseInt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Base int.</Th>
+                    <Th k="costoInt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Costo int.</Th>
+                    <Th k="kwhExt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>kWh est.</Th>
+                    <Th k="costoBaseExt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Base est.</Th>
+                    <Th k="costoExt" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Costo est.</Th>
+                    <Th k="maggiorazione" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Magg. %</Th>
+                    <Th k="costoTot" sort={sortObj(sortRiep)} onSort={toggleRiep} right>Totale</Th>
+                  </tr></thead>
+                  <tbody>
+                    {sortedRiepilogo.map((r) => {
+                      const esp = espansoTarga === r.targa;
+                      const [cl, cc] = catOf(r.categoria);
+                      const mag = r.sessioni[0]?.maggiorazione ?? 0;
                       return (
-                        <div key={v.targa} className="ric-top-vehicle">
-                          <span className="ric-top-vehicle-targa">{v.targa}</span>
-                          <div className="ric-top-vehicle-info">
-                            <span className="ric-top-vehicle-name">{v.padroncino ?? '—'}</span>
-                            <span className="ric-top-vehicle-cat">{cat.label}</span>
-                          </div>
-                          <span className="ric-top-vehicle-cost">€ {fmtE(v.costoTot)}</span>
-                        </div>
+                        <Fragment key={r.targa}>
+                          <tr className={`is-clickable${esp ? ' is-open' : ''}`} onClick={() => setEspansoTarga(esp ? null : r.targa)} aria-expanded={esp}>
+                            <td className="ds-mono" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}><span className="ric2-caret">{esp ? '▾' : '▸'}</span>{r.targa}</td>
+                            <td><span className="ric2-cat"><i style={{ background: cc }} />{cl}</span></td>
+                            <td className="ric2-ell" style={{ color: r.padroncino ? undefined : '#71717A', maxWidth: 170 }} title={r.padroncino ?? ''}>{r.padroncino ?? 'Non assegnato'}</td>
+                            <td className="r">{kwh(r.kwhInt)}</td>
+                            <td className="r" style={{ color: '#6B6B73' }}>{fmtEur2(r.costoBaseInt)}</td>
+                            <td className="r">{fmtEur2(r.costoInt)}</td>
+                            <td className="r">{kwh(r.kwhExt)}</td>
+                            <td className="r" style={{ color: '#6B6B73' }}>{fmtEur2(r.costoBaseExt)}</td>
+                            <td className="r">{fmtEur2(r.costoExt)}</td>
+                            <td className="r" onClick={(e) => e.stopPropagation()}>
+                              {editMagTarga === r.targa ? (
+                                <input className="ds-input ric2-mag" autoFocus type="text" inputMode="decimal" disabled={savingMag}
+                                  value={editMagVal} onChange={(e) => setEditMagVal(e.target.value)}
+                                  onBlur={() => {
+                                    const v = parseDecimale(editMagVal);
+                                    if (!isNaN(v) && r.sessioni.length > 0 && v !== r.sessioni[0].maggiorazione) salvaMaggiorazione(r.targa, v);
+                                    else setEditMagTarga(null);
+                                  }}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditMagTarga(null); }} />
+                              ) : (
+                                <button type="button" className="ric2-magbtn" title="Clic per modificare la maggiorazione"
+                                  onClick={() => { const cur = r.sessioni.length > 0 ? r.sessioni[0].maggiorazione : 0; setEditMagVal(String(cur)); setEditMagTarga(r.targa); }}>
+                                  {fmtNum2(mag, mag % 1 ? 1 : 0)}%<Icon name="edit" size={11} />
+                                </button>
+                              )}
+                            </td>
+                            <td className="r" style={{ fontWeight: 600 }}>{fmtEur2(r.costoTot)}</td>
+                          </tr>
+                          {esp && (
+                            <tr className="ric2-subrow">
+                              <td colSpan={11}>
+                                <table className="ric2-sub">
+                                  <thead><tr><th>Tipo</th><th>Stazione</th><th>Inizio</th><th>Durata</th><th className="r">kWh</th><th className="r">€/kWh</th><th className="r">Costo base</th><th className="r">Magg.</th><th className="r">Costo finale</th></tr></thead>
+                                  <tbody>
+                                    {[...r.sessioni].sort((x, y) => (x.inizioSessione ?? '').localeCompare(y.inizioSessione ?? '')).map((x, i) => {
+                                      const est = x.tipoRicarica === 'ESTERNA';
+                                      return (
+                                        <tr key={x.id ?? i}>
+                                          <td><span className="ric2-cat" style={{ color: est ? '#C2410C' : '#0F766E', fontWeight: 500 }}><i style={{ background: est ? C.orange : C.teal }} />{est ? 'Esterna' : 'Interna'}</span></td>
+                                          <td className="ric2-ell" title={x.stazione ?? ''}>{x.stazione ?? '—'}</td>
+                                          <td>{x.inizioSessione ?? '—'}</td>
+                                          <td style={{ color: '#52525B' }}>{x.durata ?? '—'}</td>
+                                          <td className="r">{fmtNum2(x.kwh, 3)}</td>
+                                          <td className="r" style={{ color: '#6B6B73' }}>{fmtE4(x.costoUnitario)}</td>
+                                          <td className="r">{fmtEur2(x.costoBase)}</td>
+                                          <td className="r" style={{ color: '#52525B' }}>{fmtNum2(x.maggiorazione, 0)}%</td>
+                                          <td className="r" style={{ fontWeight: 600 }}>{fmtEur2(x.costoFinale)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                                <div className="ric2-subfoot">
+                                  <span>{r.sessioni.length} session{r.sessioni.length === 1 ? 'e' : 'i'} di {meseLabel.toLowerCase()}</span>
+                                  <Button size="sm" onClick={() => { setTab('dettaglio'); setSearch(r.targa); }}>Tutte le sessioni della targa</Button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
-                  </div>
-                )}
-
-                {/* Ripartizione int/ext */}
-                {dashStats && (
-                  <div className="ric-sidebar-panel">
-                    <div className="ric-dash-panel-hd">
-                      <span>📊 Ripartizione Costi</span>
-                      <span className="ric-dash-panel-sub">tutti i mesi</span>
-                    </div>
-                    <div className="ric-split-body">
-                      <div className="ric-split-bar-wrap">
-                        <div className="ric-split-bar-int" style={{ flex: splitPct.int }}></div>
-                        <div className="ric-split-bar-ext" style={{ flex: splitPct.ext }}></div>
-                      </div>
-                      <div className="ric-split-row">
-                        <div className="ric-split-legend">
-                          <div className="ric-split-dot" style={{ background: '#2563eb' }}></div>
-                          <span className="ric-split-legend-label">⚡ Interne (JuiceBox)</span>
-                        </div>
-                        <span className="ric-split-pct-blue">{splitPct.int}%</span>
-                      </div>
-                      <div className="ric-split-row">
-                        <div className="ric-split-legend">
-                          <div className="ric-split-dot" style={{ background: '#d97706' }}></div>
-                          <span className="ric-split-legend-label">🔌 Esterne (rete pubbl.)</span>
-                        </div>
-                        <span className="ric-split-pct-amber">{splitPct.ext}%</span>
-                      </div>
-                      <div className="ric-split-totals">
-                        <div className="ric-split-total-row">
-                          <span className="ric-split-total-label">Costo interno tot.</span>
-                          <span className="ric-split-total-val-blue">€ {fmtE(dashStats.totInt)}</span>
-                        </div>
-                        <div className="ric-split-total-row">
-                          <span className="ric-split-total-label">Costo esterno tot.</span>
-                          <span className="ric-split-total-val-amber">€ {fmtE(dashStats.totExt)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="is-total">
+                      <td colSpan={3}>Totale · {sortedRiepilogo.length} targhe</td>
+                      <td className="r">{kwh(sortedRiepilogo.reduce((a, r) => a + r.kwhInt, 0))}</td>
+                      <td className="r">{fmtEur2(sortedRiepilogo.reduce((a, r) => a + r.costoBaseInt, 0))}</td>
+                      <td className="r">{fmtEur2(sortedRiepilogo.reduce((a, r) => a + r.costoInt, 0))}</td>
+                      <td className="r">{kwh(sortedRiepilogo.reduce((a, r) => a + r.kwhExt, 0))}</td>
+                      <td className="r">{fmtEur2(sortedRiepilogo.reduce((a, r) => a + r.costoBaseExt, 0))}</td>
+                      <td className="r">{fmtEur2(sortedRiepilogo.reduce((a, r) => a + r.costoExt, 0))}</td>
+                      <td />
+                      <td className="r">{fmtEur2(sortedRiepilogo.reduce((a, r) => a + r.costoTot, 0))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ══════════════ DETAIL VIEW ══════════════ */}
-      {appView === 'detail' && (
-        <>
-          {/* ── Header ── */}
-          <div className="ric-header">
-            <div className="ric-header-left">
-              <button className="ric-back-btn btn-outline btn-sm" onClick={() => setAppView('dashboard')}>
-                ← Storico
-              </button>
-              <div>
-                <h1>⚡ {meseLabel}</h1>
-                <span className="ric-sub">Dettaglio ricariche · {mezziCount} mezzi coinvolti</span>
-              </div>
-            </div>
-            <div className="ric-header-actions">
-              <div className="ric-mese-wrap">
-                <label>Mese</label>
-                <input type="month" className="ric-mese-input" value={mese} onChange={(e) => setMese(e.target.value)} />
-              </div>
-              {hasDati && <button className="btn-outline btn-sm ric-del-mese" onClick={eliminaMese}>🗑 Elimina</button>}
-              {hasDati && (
-                <button className="btn-outline btn-sm ric-export-btn" onClick={exportReport}>
-                  📊 Esporta Report
-                </button>
-              )}
-              <button className="btn-primary" onClick={() => setShowImport((v) => !v)}>
-                {showImport ? '✕ Chiudi' : '📂 Importa CSV'}
-              </button>
-            </div>
-          </div>
-
-          {/* ── Pannello modifica tariffe ── */}
-          {hasDati && !showImport && (
-            <div className="ric-tariffe-edit-panel">
-              <div className="ric-panel-title">📝 Modifica tariffe mese</div>
-              <div className="ric-edit-grid">
-                <div className="ric-config-field">
-                  <label>Importo fattura (€)</label>
-                  <input className="ric-input" type="text" inputMode="decimal" placeholder="1.250,00"
-                    value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
-                </div>
-                <div className="ric-config-field">
-                  <label>kWh fatturati</label>
-                  <input className="ric-input" type="text" inputMode="decimal" placeholder="2850"
-                    value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
-                </div>
-                <div className="ric-config-field">
-                  <label>€/kWh esterno</label>
-                  <input className="ric-input" type="text" inputMode="decimal" placeholder="0,840"
-                    value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
-                </div>
-                <div className="ric-config-field" style={{ justifyContent: 'flex-end' }}>
-                  {costoInternoKwh && (
-                    <div style={{ fontSize: 12, color: '#16a34a', marginBottom: 4 }}>
-                      Interno calcolato: <strong>{fmtE4(costoInternoKwh)} €/kWh</strong>
-                    </div>
-                  )}
-                  <button className="btn-primary" onClick={handleAggiornaTariffe} disabled={saving || !costoInternoKwh}>
-                    {saving ? '⏳ Salvataggio...' : '🔄 Aggiorna e Ricalcola'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Pannello import ── */}
-          {showImport && (
-            <div className="ric-import-panel">
-              <div className="ric-import-title">📂 Importa sessioni {mese}</div>
-              {righeAnteprima.length === 0 ? (
-                <div
-                  className={`ric-upload-zone ${dragOver ? 'ric-upload-drag' : ''}`}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={onDrop}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <input ref={fileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={onFileChange} />
-                  <div className="ric-upload-prompt">
-                    <span className="ric-upload-icon">📂</span>
-                    <div>
-                      <div className="ric-upload-title">{hasDati ? `Sostituisci dati ${mese}` : `Carica CSV ${mese}`}</div>
-                      <div className="ric-upload-hint">Trascina il file CSV o clicca per selezionare</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="ric-import-config">
-                  <div className="ric-import-info">
-                    📄 File: <strong>{nomeFile}</strong> — <strong>{righeAnteprima.length}</strong> sessioni rilevate.
-                    Imposta le tariffe e conferma l'importazione.
-                  </div>
-                  <div className="ric-config-grid3">
-                    <div className="ric-config-section">
-                      <div className="ric-config-sub">⚡ Ricariche Interne (JuiceBox)</div>
-                      <div className="ric-config-row">
-                        <div className="ric-config-field">
-                          <label>Importo fattura (€)</label>
-                          <input className="ric-input" type="text" inputMode="decimal" placeholder="1.250,00"
-                            value={fatturaImporto} onChange={(e) => setFatturaImporto(e.target.value)} />
-                        </div>
-                        <div className="ric-config-field">
-                          <label>kWh fatturati</label>
-                          <input className="ric-input" type="text" inputMode="decimal" placeholder="2850"
-                            value={fatturaKwh} onChange={(e) => setFatturaKwh(e.target.value)} />
-                        </div>
-                      </div>
-                      <div className={`ric-kwh-result ${costoInternoKwh ? 'ric-kwh-ok' : 'ric-kwh-empty'}`}>
-                        {costoInternoKwh
-                          ? <><span className="ric-kwh-val">{fmtE4(costoInternoKwh)}</span><span className="ric-kwh-unit">€/kWh calcolato</span></>
-                          : <span className="ric-kwh-placeholder">→ inserisci fattura e kWh</span>}
-                      </div>
-                    </div>
-                    <div className="ric-config-section">
-                      <div className="ric-config-sub">🔌 Ricariche Esterne</div>
-                      <div className="ric-config-field">
-                        <label>Costo kWh esterno (€)</label>
-                        <input className="ric-input" type="text" inputMode="decimal" placeholder="0,840"
-                          value={costoEsterno} onChange={(e) => setCostoEsterno(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="ric-config-section">
-                      <div className="ric-config-sub">📊 Maggiorazione e Conferma</div>
-                      <div className="ric-config-field">
-                        <label>% default (se non impostata sul mezzo)</label>
-                        <div className="ric-input-suffix-wrap">
-                          <input className="ric-input" type="text" inputMode="decimal"
-                            value={magDefault} onChange={(e) => setMagDefault(e.target.value)} />
-                          <span className="ric-input-suffix">%</span>
-                        </div>
-                      </div>
-                      <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <button className="btn-primary" onClick={handleConfermaImport} disabled={saving || !costoInternoKwh}>
-                          {saving ? '⏳ Salvataggio...' : '🚀 Conferma Import'}
-                        </button>
-                        <button className="btn-outline" onClick={annullaImport} disabled={saving}>↩ Cambia file</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Loading / Empty / Error ── */}
-          {loading && <div className="ric-loading"><div className="ric-spinner" /><span>Caricamento {mese}…</span></div>}
-          {!loading && error && <div className="ric-error">⚠️ {error}</div>}
-          {!loading && !hasDati && !error && (
-            <div className="ric-empty-state">
-              <span className="ric-empty-icon">⚡</span>
-              <div className="ric-empty-title">Nessun dato per {mese}</div>
-              <div className="ric-empty-hint">Clicca "Importa CSV" per caricare le sessioni</div>
-            </div>
-          )}
-
-          {/* ── Dati presenti ── */}
-          {!loading && hasDati && (
-            <>
-              {/* ── 6-card KPI row ── */}
-              <div className="ric-detail-kpi-row">
-                <div className="ric-kpi-card ric-kpi-blue">
-                  <span className="ric-kpi-label">Sessioni</span>
-                  <span className="ric-kpi-val">{stats.tot}</span>
-                  <span className="ric-kpi-sub">{mezziCount} mezzi</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-green">
-                  <span className="ric-kpi-label">kWh Interne</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">{fmtK(stats.kwhInt)}</span>
-                  <span className="ric-kpi-sub">JuiceBox</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-amber">
-                  <span className="ric-kpi-label">kWh Esterne</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">{fmtK(stats.kwhExt)}</span>
-                  <span className="ric-kpi-sub">rete pubblica</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-green">
-                  <span className="ric-kpi-label">Costo Interne</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">€ {fmtE(stats.costoBaseInt)}</span>
-                  <span className="ric-kpi-sub">senza magg.</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-amber">
-                  <span className="ric-kpi-label">Costo Esterne</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">€ {fmtE(stats.costoBaseExt)}</span>
-                  <span className="ric-kpi-sub">senza magg.</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-purple">
-                  <span className="ric-kpi-label">Totale Mese</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">€ {fmtE(stats.costoTot)}</span>
-                  <span className="ric-kpi-sub">da addebitare</span>
-                </div>
-                <div className="ric-kpi-card ric-kpi-teal">
-                  <span className="ric-kpi-label">Margine</span>
-                  <span className="ric-kpi-val ric-kpi-val-md">€ {fmtE(stats.margine)}</span>
-                  <span className="ric-kpi-sub">{fmtE(stats.marginePct)}% su addebitato</span>
-                </div>
-              </div>
-
-              {/* ── Tariffe snapshot ── */}
-              {tariffe && (
-                <div className="ric-tariffe-bar">
-                  {tariffe.costoInternoKwh && (
-                    <span className="ric-tariffa-chip ric-tariffa-int">
-                      ⚡ Interno: <strong>{fmtE4(tariffe.costoInternoKwh)} €/kWh</strong>
-                      {tariffe.fatturaImporto && <em> · fatt. {fmtE(tariffe.fatturaImporto)} € / {fmtK(tariffe.fatturaKwh ?? 0)} kWh</em>}
-                    </span>
-                  )}
-                  {tariffe.costoEsternoKwh && (
-                    <span className="ric-tariffa-chip ric-tariffa-ext">🔌 Esterno: <strong>{fmtE4(tariffe.costoEsternoKwh)} €/kWh</strong></span>
-                  )}
-                </div>
-              )}
-
-              {/* ── Tabs ── */}
-              <div className="ric-tabs">
-                <button className={`ric-tab ${tab === 'riepilogo' ? 'ric-tab-active' : ''}`} onClick={() => setTab('riepilogo')}>
-                  🚚 Riepilogo per targa ({riepilogo.length})
-                </button>
-                <button className={`ric-tab ${tab === 'dettaglio' ? 'ric-tab-active' : ''}`} onClick={() => setTab('dettaglio')}>
-                  📋 Dettaglio sessioni ({sessioni.length})
-                </button>
-              </div>
-
-              {/* ── TAB RIEPILOGO ── */}
-              {tab === 'riepilogo' && (
-                <>
-                  <div className="ric-filters">
-                    <div className="ric-search-wrap">
-                      <span>🔍</span>
-                      <input className="ric-search" placeholder="Cerca targa, padroncino…"
-                        value={searchRiep} onChange={(e) => setSearchRiep(e.target.value)} />
-                    </div>
-                    <div className="ric-tipo-filters">
-                      {(['TUTTI', 'DISTRIBUZIONE', 'AUTO_AZIENDALE', 'FLOTTA'] as const).map((c) => (
-                        <button key={c}
-                          className={`ric-tipo-btn ${filtroCategoriaRiep === c ? 'ric-tipo-active' : ''}`}
-                          onClick={() => setFiltroCategoriaRiep(c)}>
-                          {c === 'TUTTI' ? 'Tutte' : catLabel(c).label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                <div className="ric-table-wrap">
-                  <table className="ric-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 32 }}></th>
-                        <th className="ric-th-sort" onClick={() => toggleRiep('targa')}>TARGA<span className="ric-sort-icon">{sortIcon('targa', sortRiep)}</span></th>
-                        <th className="ric-th-sort" onClick={() => toggleRiep('categoria')}>CAT.<span className="ric-sort-icon">{sortIcon('categoria', sortRiep)}</span></th>
-                        <th className="ric-th-sort" onClick={() => toggleRiep('padroncino')}>PADRONCINO<span className="ric-sort-icon">{sortIcon('padroncino', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-green" style={{ textAlign: 'right' }} onClick={() => toggleRiep('kwhInt')}>kWh Int.<span className="ric-sort-icon">{sortIcon('kwhInt', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-green" style={{ textAlign: 'right' }} onClick={() => toggleRiep('costoBaseInt')}>Costo Int. Orig.<span className="ric-sort-icon">{sortIcon('costoBaseInt', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-green" style={{ textAlign: 'right' }} onClick={() => toggleRiep('costoInt')}>Costo Int.<span className="ric-sort-icon">{sortIcon('costoInt', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-amber" style={{ textAlign: 'right' }} onClick={() => toggleRiep('kwhExt')}>kWh Ext.<span className="ric-sort-icon">{sortIcon('kwhExt', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-amber" style={{ textAlign: 'right' }} onClick={() => toggleRiep('costoBaseExt')}>Costo Ext. Orig.<span className="ric-sort-icon">{sortIcon('costoBaseExt', sortRiep)}</span></th>
-                        <th className="ric-th-sort ric-th-amber" style={{ textAlign: 'right' }} onClick={() => toggleRiep('costoExt')}>Costo Ext.<span className="ric-sort-icon">{sortIcon('costoExt', sortRiep)}</span></th>
-                        <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleRiep('maggiorazione')}>MAG.%<span className="ric-sort-icon">{sortIcon('maggiorazione', sortRiep)}</span></th>
-                        <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleRiep('costoTot')}>TOTALE<span className="ric-sort-icon">{sortIcon('costoTot', sortRiep)}</span></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedRiepilogo.map((r) => {
-                        const cat = catLabel(r.categoria);
-                        const esp = espansoTarga === r.targa;
-                        return (
-                          <Fragment key={r.targa}>
-                            <tr className={`ric-row ric-row-riepilogo ${esp ? 'ric-row-expanded' : ''}`}
-                              onClick={() => setEspansoTarga(esp ? null : r.targa)}>
-                              <td className="ric-expand-btn">{esp ? '▲' : '▼'}</td>
-                              <td><span className="ric-targa">{r.targa}</span></td>
-                              <td>{cat.label !== '—' ? <span className={`ric-cat-badge ${cat.cls}`}>{cat.label}</span> : <span className="ric-na">—</span>}</td>
-                              <td>{r.padroncino ? <span className="ric-padroncino">{r.padroncino}</span> : <span className="ric-na">—</span>}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-green">{r.kwhInt > 0 ? fmtK(r.kwhInt) : '—'}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-green">{r.costoBaseInt > 0 ? fmtE(r.costoBaseInt) + ' €' : '—'}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-green">{r.costoInt > 0 ? <span className="ric-badge-int-sm">{fmtE(r.costoInt)} €</span> : '—'}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-amber">{r.kwhExt > 0 ? fmtK(r.kwhExt) : '—'}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-amber">{r.costoBaseExt > 0 ? fmtE(r.costoBaseExt) + ' €' : '—'}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num ric-td-amber">{r.costoExt > 0 ? <span className="ric-badge-ext-sm">{fmtE(r.costoExt)} €</span> : '—'}</td>
-                              <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                                {editMagTarga === r.targa ? (
-                                  <input className="ric-mag-input" type="text" inputMode="decimal" autoFocus disabled={savingMag}
-                                    value={editMagVal} onChange={(e) => setEditMagVal(e.target.value)}
-                                    onBlur={() => {
-                                      const v = parseDecimale(editMagVal);
-                                      if (!isNaN(v) && r.sessioni.length > 0 && v !== r.sessioni[0].maggiorazione) salvaMaggiorazione(r.targa, v);
-                                      else setEditMagTarga(null);
-                                    }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditMagTarga(null); }} />
-                                ) : (
-                                  <span className="ric-mag-badge ric-mag-editable" title="Clicca per modificare la % maggiorazione"
-                                    onClick={() => { const cur = r.sessioni.length > 0 ? r.sessioni[0].maggiorazione : 0; setEditMagVal(String(cur)); setEditMagTarga(r.targa); }}>
-                                    {r.sessioni.length > 0 ? `${r.sessioni[0].maggiorazione}%` : '—'}
-                                  </span>
-                                )}
-                              </td>
-                              <td style={{ textAlign: 'right' }}><strong className="ric-costo">{fmtE(r.costoTot)} €</strong></td>
-                            </tr>
-                            {esp && (
-                              <tr className="ric-detail-row">
-                                <td colSpan={12}>
-                                  <table className="ric-sub-table">
-                                    <thead>
-                                      <tr>
-                                        <th>TIPO</th><th>STAZIONE</th><th>INIZIO</th><th>DURATA</th>
-                                        <th style={{ textAlign: 'right' }}>kWh</th>
-                                        <th style={{ textAlign: 'right' }}>€/kWh</th>
-                                        <th style={{ textAlign: 'right' }}>COST. BASE</th>
-                                        <th style={{ textAlign: 'right' }}>MAG.%</th>
-                                        <th style={{ textAlign: 'right' }}>COSTO FINALE</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {r.sessioni.map((s, idx) => (
-                                        <tr key={s.id || idx} className="ric-sub-row">
-                                          <td><span className={`ric-tipo-badge ${s.tipoRicarica === 'INTERNA' ? 'ric-badge-int' : 'ric-badge-ext'}`}>{s.tipoRicarica === 'INTERNA' ? '⚡ INT' : '🔌 EXT'}</span></td>
-                                          <td className="ric-stazione" title={s.stazione ?? ''}>{s.stazione?.split(' - ').slice(1).join(' - ') || s.stazione}</td>
-                                          <td className="ric-data">{s.inizioSessione}</td>
-                                          <td className="ric-durata">{s.durata}</td>
-                                          <td style={{ textAlign: 'right' }} className="ric-num">{fmtK(s.kwh)}</td>
-                                          <td style={{ textAlign: 'right' }} className="ric-num">{s.costoUnitario > 0 ? fmtE4(s.costoUnitario) : '—'}</td>
-                                          <td style={{ textAlign: 'right' }} className="ric-num">{s.costoBase > 0 ? fmtE(s.costoBase) : '—'}</td>
-                                          <td style={{ textAlign: 'right' }}><span className="ric-mag-badge">{s.maggiorazione}%</span></td>
-                                          <td style={{ textAlign: 'right' }}><span className="ric-costo">{fmtE(s.costoFinale)} €</span></td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="ric-foot">
-                        <td colSpan={4}><strong>TOTALE ({sortedRiepilogo.length} mezzi)</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtK(sortedRiepilogo.reduce((a, r) => a + r.kwhInt, 0))}</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtE(sortedRiepilogo.reduce((a, r) => a + r.costoBaseInt, 0))} €</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtE(sortedRiepilogo.reduce((a, r) => a + r.costoInt, 0))} €</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtK(sortedRiepilogo.reduce((a, r) => a + r.kwhExt, 0))}</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtE(sortedRiepilogo.reduce((a, r) => a + r.costoBaseExt, 0))} €</strong></td>
-                        <td style={{ textAlign: 'right' }}><strong>{fmtE(sortedRiepilogo.reduce((a, r) => a + r.costoExt, 0))} €</strong></td>
-                        <td></td>
-                        <td style={{ textAlign: 'right' }}><strong className="ric-costo">{fmtE(sortedRiepilogo.reduce((a, r) => a + r.costoTot, 0))} €</strong></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                </>
-              )}
-
-              {/* ── TAB DETTAGLIO ── */}
-              {tab === 'dettaglio' && (
-                <>
-                  <div className="ric-filters">
-                    <div className="ric-search-wrap">
-                      <span>🔍</span>
-                      <input className="ric-search" placeholder="Cerca targa, padroncino, stazione…"
-                        value={search} onChange={(e) => setSearch(e.target.value)} />
-                    </div>
-                    <div className="ric-tipo-filters">
-                      {(['TUTTI', 'INTERNA', 'ESTERNA'] as const).map((t) => (
-                        <button key={t}
-                          className={`ric-tipo-btn ${filtroTipo === t ? 'ric-tipo-active' : ''}`}
-                          onClick={() => setFiltroTipo(t)}>
-                          {t === 'TUTTI' ? 'Tutti' : t === 'INTERNA' ? '⚡ Interne' : '🔌 Esterne'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="ric-table-wrap">
-                    <table className="ric-table">
-                      <thead>
-                        <tr>
-                          <th className="ric-th-sort" onClick={() => toggleDett('tipoRicarica')}>TIPO<span className="ric-sort-icon">{sortIcon('tipoRicarica', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('targa')}>TARGA<span className="ric-sort-icon">{sortIcon('targa', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('categoriaMezzo')}>CAT.<span className="ric-sort-icon">{sortIcon('categoriaMezzo', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('padroncino')}>PADRONCINO<span className="ric-sort-icon">{sortIcon('padroncino', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('stazione')}>STAZIONE<span className="ric-sort-icon">{sortIcon('stazione', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('inizioSessione')}>INIZIO<span className="ric-sort-icon">{sortIcon('inizioSessione', sortDett)}</span></th>
-                          <th className="ric-th-sort" onClick={() => toggleDett('durata')}>DURATA<span className="ric-sort-icon">{sortIcon('durata', sortDett)}</span></th>
-                          <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleDett('kwh')}>kWh<span className="ric-sort-icon">{sortIcon('kwh', sortDett)}</span></th>
-                          <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleDett('costoUnitario')}>€/kWh<span className="ric-sort-icon">{sortIcon('costoUnitario', sortDett)}</span></th>
-                          <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleDett('costoBase')}>COST. BASE<span className="ric-sort-icon">{sortIcon('costoBase', sortDett)}</span></th>
-                          <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleDett('maggiorazione')}>MAG.%<span className="ric-sort-icon">{sortIcon('maggiorazione', sortDett)}</span></th>
-                          <th className="ric-th-sort" style={{ textAlign: 'right' }} onClick={() => toggleDett('costoFinale')}>COSTO FINALE<span className="ric-sort-icon">{sortIcon('costoFinale', sortDett)}</span></th>
+            ) : (
+              <div className="ds-tablewrap">
+                <table className="ds-table ric2-table" style={{ minWidth: 1240 }}>
+                  <thead><tr>
+                    <Th k="inizioSessione" sort={sortObj(sortDett)} onSort={toggleDett}>Inizio</Th>
+                    <Th k="targa" sort={sortObj(sortDett)} onSort={toggleDett}>Targa</Th>
+                    <Th k="categoriaMezzo" sort={sortObj(sortDett)} onSort={toggleDett}>Cat.</Th>
+                    <Th k="padroncino" sort={sortObj(sortDett)} onSort={toggleDett}>Padroncino</Th>
+                    <Th k="stazione" sort={sortObj(sortDett)} onSort={toggleDett}>Stazione</Th>
+                    <Th k="tipoRicarica" sort={sortObj(sortDett)} onSort={toggleDett}>Tipo</Th>
+                    <Th k="durata" sort={sortObj(sortDett)} onSort={toggleDett}>Durata</Th>
+                    <Th k="kwh" sort={sortObj(sortDett)} onSort={toggleDett} right>kWh</Th>
+                    <Th k="costoUnitario" sort={sortObj(sortDett)} onSort={toggleDett} right>€/kWh</Th>
+                    <Th k="costoBase" sort={sortObj(sortDett)} onSort={toggleDett} right>Costo base</Th>
+                    <Th k="maggiorazione" sort={sortObj(sortDett)} onSort={toggleDett} right>Magg.</Th>
+                    <Th k="costoFinale" sort={sortObj(sortDett)} onSort={toggleDett} right>Costo finale</Th>
+                  </tr></thead>
+                  <tbody>
+                    {sortedSessFiltr.map((x, i) => {
+                      const [cl, cc] = catOf(x.categoriaMezzo ?? mezziMap.get(x.targa)?.categoria);
+                      const est = x.tipoRicarica === 'ESTERNA';
+                      return (
+                        <tr key={x.id ?? i}>
+                          <td style={{ color: '#3F3F46', whiteSpace: 'nowrap' }}>{x.inizioSessione ?? '—'}</td>
+                          <td className="ds-mono" style={{ fontWeight: 600 }}>{x.targa}</td>
+                          <td><span className="ric2-cat"><i style={{ background: cc }} />{cl}</span></td>
+                          <td className="ric2-ell" style={{ color: x.padroncino ? undefined : '#71717A' }}>{x.padroncino ?? 'Non assegnato'}</td>
+                          <td className="ric2-ell" style={{ color: '#3F3F46' }} title={x.stazione ?? ''}>{x.stazione ?? '—'}</td>
+                          <td><span className="ric2-cat"><i style={{ background: est ? C.orange : C.teal }} />{est ? 'Esterna' : 'Interna'}</span></td>
+                          <td style={{ color: '#52525B' }}>{x.durata ?? '—'}</td>
+                          <td className="r">{fmtNum2(x.kwh, 2)}</td>
+                          <td className="r" style={{ color: '#6B6B73' }}>{fmtE4(x.costoUnitario)}</td>
+                          <td className="r">{fmtEur2(x.costoBase)}</td>
+                          <td className="r" style={{ color: '#52525B' }}>{fmtNum2(x.maggiorazione, 0)}%</td>
+                          <td className="r" style={{ fontWeight: 600 }}>{fmtEur2(x.costoFinale)}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {sessFiltr.length === 0 && (
-                          <tr><td colSpan={12} className="ric-empty">Nessuna sessione trovata</td></tr>
-                        )}
-                        {sortedSessFiltr.map((s, i) => {
-                          const cat = catLabel(s.categoriaMezzo);
-                          return (
-                            <tr key={s.id ?? i} className={`ric-row ${s.tipoRicarica === 'INTERNA' ? 'ric-row-int' : 'ric-row-ext'}`}>
-                              <td><span className={`ric-tipo-badge ${s.tipoRicarica === 'INTERNA' ? 'ric-badge-int' : 'ric-badge-ext'}`}>{s.tipoRicarica === 'INTERNA' ? '⚡ INT' : '🔌 EXT'}</span></td>
-                              <td><span className="ric-targa">{s.targa}</span></td>
-                              <td>{cat.label !== '—' ? <span className={`ric-cat-badge ${cat.cls}`}>{cat.label}</span> : <span className="ric-na">—</span>}</td>
-                              <td>{(() => { const nome = s.padroncino ?? mezziMap.get(s.targa)?.padroncino ?? mezziMap.get(s.targa)?.utilizzatore ?? null; return nome ? <span className="ric-padroncino">{nome}</span> : <span className="ric-na">—</span>; })()}</td>
-                              <td className="ric-stazione" title={s.stazione ?? ''}>{s.stazione?.split(' - ').slice(1).join(' - ') || s.stazione}</td>
-                              <td className="ric-data">{s.inizioSessione}</td>
-                              <td className="ric-durata">{s.durata}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num">{fmtK(s.kwh)}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num">{s.costoUnitario > 0 ? fmtE4(s.costoUnitario) : <span className="ric-na">—</span>}</td>
-                              <td style={{ textAlign: 'right' }} className="ric-num">{s.costoBase > 0 ? fmtE(s.costoBase) : <span className="ric-na">—</span>}</td>
-                              <td style={{ textAlign: 'right' }}><span className="ric-mag-badge">{s.maggiorazione}%</span></td>
-                              <td style={{ textAlign: 'right' }}><span className="ric-costo">{fmtE(s.costoFinale)} €</span></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      {sortedSessFiltr.length > 0 && (
-                        <tfoot>
-                          <tr className="ric-foot">
-                            <td colSpan={7}><strong>TOTALE ({sortedSessFiltr.length} sessioni)</strong></td>
-                            <td style={{ textAlign: 'right' }}><strong>{fmtK(sortedSessFiltr.reduce((a, r) => a + r.kwh, 0))}</strong></td>
-                            <td colSpan={3}></td>
-                            <td style={{ textAlign: 'right' }}><strong className="ric-costo">{fmtE(sortedSessFiltr.reduce((a, r) => a + r.costoFinale, 0))} €</strong></td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </div>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="pl2-foot">
+              {tab === 'riepilogo'
+                ? `Mostrate ${sortedRiepilogo.length} di ${riepilogo.length} targhe · la % di maggiorazione si modifica con un clic e ricalcola le sessioni della targa`
+                : `Mostrate ${sortedSessFiltr.length} di ${sessioni.length} sessioni di ${meseLabel.toLowerCase()}`}
+            </div>
+          </Card>
+        )}
+      </>)}
+    </Page>
   );
 }

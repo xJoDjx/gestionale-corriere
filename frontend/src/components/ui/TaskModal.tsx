@@ -28,9 +28,11 @@ export interface TaskModalProps {
   refOptions?: string[];
   /** Se valorizzato, il modal si apre in modalità modifica precompilata */
   editingTask?: TaskItem | null;
+  /** Padroncino proposto quando si crea una nuova attività da una riga. */
+  defaultPadroncino?: string;
 }
 
-export default function TaskModal({ open, onClose, onSubmit, saving, fieldKey, fieldLabel, refOptions, editingTask }: TaskModalProps) {
+export default function TaskModal({ open, onClose, onSubmit, saving, fieldKey, fieldLabel, refOptions, editingTask, defaultPadroncino }: TaskModalProps) {
   const [testo, setTesto] = useState('');
   const [refValue, setRefValue] = useState('');
   const [padroncino, setPadroncino] = useState('');
@@ -40,8 +42,8 @@ export default function TaskModal({ open, onClose, onSubmit, saving, fieldKey, f
     if (!open) return;
     setTesto(editingTask?.testo ?? '');
     setRefValue((fieldKey ? (editingTask?.[fieldKey] as string | null) : null) ?? '');
-    setPadroncino(editingTask?.padroncino ?? '');
-  }, [open, editingTask, fieldKey]);
+    setPadroncino(editingTask?.padroncino ?? defaultPadroncino ?? '');
+  }, [open, editingTask, fieldKey, defaultPadroncino]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +66,7 @@ export default function TaskModal({ open, onClose, onSubmit, saving, fieldKey, f
     <div className="taskm-overlay">
       <div className="taskm-modal" onClick={e => e.stopPropagation()}>
         <div className="taskm-header">
-          <h3>✅ {editingTask ? 'Modifica attività' : 'Nuova attività'}</h3>
+          <h3>{editingTask ? 'Modifica attività' : 'Nuova attività'}</h3>
           <button className="taskm-close" onClick={onClose}>✕</button>
         </div>
         <div className="taskm-body">

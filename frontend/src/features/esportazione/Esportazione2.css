@@ -1,0 +1,15 @@
+.esp2-card{padding:18px;display:flex;flex-direction:column;gap:14px}
+.esp2-top{display:flex;align-items:flex-start;gap:12px}
+.esp2-ic{flex:0 0 36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff}
+.esp2-tt{flex:1 1 auto;display:flex;flex-direction:column;gap:2px}
+.esp2-tt h2{margin:0;font-size:15px;font-weight:600}
+.esp2-tt span{color:#6B6B73}
+.esp2-n{font-family:'Inter Tight',sans-serif;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.esp2-cols{display:flex;flex-wrap:wrap;gap:5px}
+.esp2-cols span{padding:2px 8px;border-radius:6px;background:#F4F4F5;font-size:11.5px;color:#3F3F46}
+.esp2-foot{display:flex;align-items:center;gap:8px;margin-top:auto}
+.esp2-foot .ds-select{flex:1 1 auto}
+.esp2-foot .ds-select select{flex:1 1 auto}
+.esp2-f{flex:1 1 auto;font-size:12px;color:#6B6B73}
+.esp2-btn{display:flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border-radius:8px;border:0;background:#0B0B0C;color:#fff;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.esp2-btn:disabled{opacity:.6;cursor:default}

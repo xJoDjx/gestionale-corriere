@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import './variables.css';
 
 *, *::before, *::after {
@@ -15,9 +15,11 @@ html {
 
 body {
   font-family: var(--font-sans);
+  font-size: 13px;
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.45;
+  font-feature-settings: 'cv11', 'ss01';
 }
 
 a {
@@ -283,3 +285,30 @@ input, select, textarea {
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-sm { padding: 5px 12px !important; font-size: 12px !important; }
+
+/* ─────────────────────────────────────────────
+   RESTYLING: allineamento dei componenti esistenti al nuovo design
+   (pulsanti, indicatori, tabelle e finestre usati dalle pagine)
+   ───────────────────────────────────────────── */
+.btn-primary { background: var(--ink); color: #FFFFFF; border: 0; border-radius: 8px; font-weight: 600; min-height: 36px; padding: 0 14px; }
+.btn-primary:hover:not(:disabled) { background: #26262B; }
+.btn-outline { background: #FFFFFF; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 8px; font-weight: 500; min-height: 36px; padding: 0 12px; }
+.btn-outline:hover:not(:disabled) { background: #FAFAFB; border-color: var(--border-hover); color: var(--ink); }
+.btn-danger { background: #FFFFFF; color: var(--st-ko); border: 1px solid #F5C2C2; border-radius: 8px; min-height: 36px; padding: 0 12px; }
+.btn-danger:hover:not(:disabled) { background: #FEF6F6; color: var(--st-ko); }
+.gc-btn--primary { background: var(--ink); }
+.gc-btn--primary:hover { background: #26262B; }
+.gc-card { box-shadow: none; border-color: var(--border); border-radius: 12px; }
+.gc-kpi { background: #FFFFFF !important; border: 1px solid var(--border); box-shadow: none; border-radius: 12px; }
+.gc-kpi__value { font-family: var(--font-display); letter-spacing: -0.02em; color: var(--ink); }
+.gc-table thead th { background: var(--head-bg); color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12px; border-color: var(--line-soft); }
+.gc-table tbody tr:nth-child(even) td { background: transparent; }
+.gc-table tbody tr:hover td { background: #FAFAFB; }
+.gc-badge { border-radius: 999px; font-weight: 500; }
+.modal-overlay { background: rgba(11, 11, 12, 0.32); backdrop-filter: none; }
+.modal-panel { border-radius: 14px; box-shadow: 0 24px 60px rgba(11, 11, 12, 0.18); }
+.modal-title { font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.modal-close { background: transparent; border: 0; border-radius: 8px; }
+.modal-close:hover { background: #F4F4F5; color: var(--ink); border: 0; }
+.form-label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+input[type="checkbox"] { accent-color: var(--primary); }

@@ -1,66 +1,66 @@
 /* ============================================
    GESTIONALE CORRIERE - DESIGN SYSTEM
-   Light theme default (matches Lovable mockup).
+   Tema unico chiaro (restyling 2026, stile del mockup).
    ============================================ */
 
 /* ─── LIGHT THEME (default) ───────────────── */
-:root,
-[data-theme="light"] {
-  --bg-primary: #f7f8fa;
+:root {
+  --bg-primary: #F6F6F7;
   --bg-secondary: #ffffff;
-  --bg-tertiary: #f0f1f4;
+  --bg-tertiary: #F4F4F5;
   --bg-elevated: #ffffff;
-  --bg-hover: #f1f3f6;
+  --bg-hover: #F4F4F5;
   --bg-card: #ffffff;
 
   --card-bg: #ffffff;
-  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.04);
-  --card-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --card-shadow: none;
+  --card-shadow-hover: 0 4px 14px rgba(11, 11, 12, 0.06);
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  --text-primary: #0B0B0C;
+  --text-secondary: #52525B;
+  --text-muted: #6B6B73;
 
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-muted: rgba(37, 99, 235, 0.10);
+  --primary: #3D63F0;
+  --primary-hover: #2F52D6;
+  --primary-muted: #EEF2FE;
 
-  --accent-orange: #f97316;
-  --accent-orange-bg: rgba(249, 115, 22, 0.12);
+  --accent-orange: #EA6A2A;
+  --accent-orange-bg: #FFF4ED;
 
-  --success: #16a34a;
-  --success-bg: rgba(22, 163, 74, 0.12);
-  --warning: #d97706;
-  --warning-bg: rgba(217, 119, 6, 0.14);
-  --danger: #dc2626;
-  --danger-bg: rgba(220, 38, 38, 0.12);
-  --info: #2563eb;
-  --info-bg: rgba(37, 99, 235, 0.12);
+  --success: #15A06A;
+  --success-bg: #E8F6EF;
+  --warning: #EA6A2A;
+  --warning-bg: #FFF4ED;
+  --danger: #DC4446;
+  --danger-bg: #FDECEC;
+  --info: #3D63F0;
+  --info-bg: #EEF2FE;
 
   --badge-green: #15803d;
-  --badge-green-bg: #dcfce7;
+  --badge-green-bg: #E8F6EF;
   --badge-orange: #c2410c;
-  --badge-orange-bg: #ffedd5;
+  --badge-orange-bg: #FFF4ED;
   --badge-red: #b91c1c;
-  --badge-red-bg: #fee2e2;
+  --badge-red-bg: #FDECEC;
   --badge-yellow: #a16207;
   --badge-yellow-bg: #fef3c7;
   --badge-blue: #1d4ed8;
-  --badge-blue-bg: #dbeafe;
-  --badge-purple: #7c3aed;
-  --badge-purple-bg: #ede9fe;
-  --badge-gray: #475569;
-  --badge-gray-bg: #e2e8f0;
+  --badge-blue-bg: #EEF2FE;
+  --badge-purple: #6D28D9;
+  --badge-purple-bg: #F2EEFE;
+  --badge-gray: #52525B;
+  --badge-gray-bg: #F1F1F3;
 
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --border-hover: #cbd5e1;
+  --border: #EAEAEC;
+  --border-strong: #E4E4E7;
+  --border-hover: #D4D4D8;
 
-  --table-row-alt: #f3f5f8;
-  --table-row-hover: #f1f5f9;
+  --table-row-alt: #FFFFFF;
+  --table-row-hover: #FAFAFB;
 
-  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -74,79 +74,29 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  --sidebar-width: 220px;
-  --sidebar-bg: #121821;
-  --sidebar-border: #e5e7eb;
-  --sidebar-item: #98a4b3;
-  --sidebar-item-hover-bg: #f1f5f9;
-  --sidebar-item-active-bg: #2563eb;
-  --sidebar-item-active-fg: #ffffff;
-}
+  --sidebar-width: 248px;
+  --sidebar-bg: #FFFFFF;
+  --sidebar-border: #EAEAEC;
+  --sidebar-item: #0B0B0C;
+  --sidebar-item-hover-bg: #F4F4F5;
+  --sidebar-item-active-bg: #F1F1F3;
+  --sidebar-item-active-fg: #0B0B0C;
 
-/* ─── DARK THEME ───────────────────────────── */
-[data-theme="dark"] {
-  --bg-primary: #0f1117;
-  --bg-secondary: #1a1d27;
-  --bg-tertiary: #242837;
-  --bg-elevated: #2a2e3d;
-  --bg-hover: #323750;
-  --bg-card: #1a1d27;
-
-  --card-bg: #1a1d27;
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
-
-  --text-primary: #e8eaf0;
-  --text-secondary: #9ca3b4;
-  --text-muted: #6b7280;
-
-  --primary: #6366f1;
-  --primary-hover: #818cf8;
-  --primary-muted: rgba(99, 102, 241, 0.15);
-
-  --accent-orange: #f97316;
-  --accent-orange-bg: rgba(249, 115, 22, 0.2);
-
-  --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.12);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.12);
-  --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.12);
-  --info: #3b82f6;
-  --info-bg: rgba(59, 130, 246, 0.12);
-
-  --badge-green: #4ade80;
-  --badge-green-bg: rgba(34, 197, 94, 0.18);
-  --badge-orange: #fb923c;
-  --badge-orange-bg: rgba(249, 115, 22, 0.18);
-  --badge-red: #f87171;
-  --badge-red-bg: rgba(239, 68, 68, 0.18);
-  --badge-yellow: #fbbf24;
-  --badge-yellow-bg: rgba(245, 158, 11, 0.18);
-  --badge-blue: #60a5fa;
-  --badge-blue-bg: rgba(59, 130, 246, 0.18);
-  --badge-purple: #c084fc;
-  --badge-purple-bg: rgba(168, 85, 247, 0.18);
-  --badge-gray: #9ca3af;
-  --badge-gray-bg: rgba(107, 114, 128, 0.18);
-
-  --border: #2a2e3d;
-  --border-strong: #3d4259;
-  --border-hover: #3d4259;
-
-  --table-row-alt: #1e2230;
-  --table-row-hover: #242a3a;
-
-  --sidebar-bg: #141722;
-  --sidebar-border: #2a2e3d;
-  --sidebar-item: #9ca3b4;
-  --sidebar-item-hover-bg: #242837;
-  --sidebar-item-active-bg: #6366f1;
-  --sidebar-item-active-fg: #ffffff;
-}
-
-/* ─── Transizione tema fluida ────────────── */
-*, *::before, *::after {
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.05s ease;
+  /* Colori categoria (riquadri con icona bianca) */
+  --c-blue: #3D63F0;
+  --c-green: #15A06A;
+  --c-orange: #EA6A2A;
+  --c-purple: #7C5CF0;
+  --c-red: #DC4446;
+  --c-teal: #0E9494;
+  --c-yellow: #D49400;
+  /* Stato: testo e pallino */
+  --st-ok: #15803D;   --st-ok-dot: #15A06A;
+  --st-ko: #B91C1C;   --st-ko-dot: #E5484D;
+  --st-warn: #C2410C; --st-warn-dot: #EA6A2A;
+  --st-na: #52525B;   --st-na-dot: #A1A1AA;
+  --st-info: #1D4ED8; --st-info-dot: #3D63F0;
+  --line-soft: #F0F0F2;
+  --head-bg: #FBFBFB;
+  --ink: #0B0B0C;
 }

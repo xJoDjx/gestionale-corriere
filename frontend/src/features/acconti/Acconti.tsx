@@ -3,6 +3,9 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { api } from '../../lib/api';
 import './Acconti.css';
+import '../padroncini/Padroncini2.css';
+import './Acconti2.css';
+import { Page, PageHeader, Card, CardHead, Kpis, Button, IconButton, SegTabs, SearchBox, Select, Th, Dot, Empty, Alert, C, useSort, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
 
 interface Acconto {
   id: string;
@@ -379,317 +382,227 @@ export default function Acconti() {
     }
   };
 
-  if (loading) return (
-    <div className="acc-page">
-      <div className="acc-loading"><div className="acc-spinner" /><span>Caricamento acconti...</span></div>
-    </div>
-  );
+  // ── Solo visualizzazione: viste, ordinamento, confronto e andamento ──
+  const [vista, setVista] = useState<'TUTTI' | 'ACCONTI' | 'RESTITUZIONI' | 'DESC'>('TUTTI');
+  const righeVista = useMemo(() => filtered.filter((a) =>
+    vista === 'TUTTI' || (vista === 'ACCONTI' && a.tipo === 'ACCONTO') || (vista === 'RESTITUZIONI' && a.tipo === 'RESTITUZIONE') || (vista === 'DESC' && !!a.descrizione)
+  ), [filtered, vista]);
+  type SK = 'data' | 'codice' | 'padroncino' | 'descrizione' | 'tipo' | 'importo' | 'mese';
+  const { sorted, sort, toggle } = useSort<Acconto, SK>(righeVista, (a, k) => {
+    switch (k) {
+      case 'data': return a.data;
+      case 'codice': return a.codice;
+      case 'padroncino': return a.ragioneSociale;
+      case 'descrizione': return a.descrizione ?? '';
+      case 'tipo': return a.tipo;
+      case 'importo': return a.tipo === 'RESTITUZIONE' ? -a.importo : a.importo;
+      case 'mese': return a.mese ?? '';
+    }
+  }, { key: 'data', dir: 'desc' });
+  const [tuttiMesi, setTuttiMesi] = useState<Acconto[]>([]);
+  useEffect(() => {
+    api.get<any[]>('/acconti').then((r) => setTuttiMesi(r.map(normalizeAcconto))).catch(() => setTuttiMesi([]));
+  }, [acconti]);
+  const totMese = (m: string) => tuttiMesi.filter((a) => (a.mese ?? a.data.slice(0, 7)) === m).reduce((s, a) => s + (a.tipo === 'RESTITUZIONE' ? -a.importo : a.importo), 0);
+  const mesePrec = (m: string) => { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const prev = mese ? totMese(mesePrec(mese)) : 0;
+  const delta = mese && prev ? ((stats.totaleAcconti - prev) / Math.abs(prev)) * 100 : null;
+  const anno = (mese || getCurrentMonth()).slice(0, 4);
+  const andamento = Array.from({ length: 12 }, (_, i) => `${anno}-${String(i + 1).padStart(2, '0')}`)
+    .map((m) => ({ m, v: totMese(m) }))
+    .filter((x, i, arr) => arr.slice(0, i + 1).some((y) => y.v !== 0) && arr.slice(i).some((y) => y.v !== 0));
+  const maxAnd = Math.max(1, ...andamento.map((x) => x.v));
+  const mesiOpzioni = Array.from({ length: 18 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+  const nCodici = new Set(filtered.map((a) => a.codice)).size;
+  const PADCOL = [C.green, C.blue, C.orange, C.purple, C.teal, C.red, '#18181B'];
+  const perPad = [...stats.byPadroncino].sort((x, y) => y.totale - x.totale);
+  const totPad = perPad.reduce((s, p) => s + Math.abs(p.totale), 0) || 1;
+  const nomeMese = mese ? formatMeseLabel(mese) : 'Tutti i mesi';
+  const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 
-  if (error) return (
-    <div className="acc-page">
-      <div className="acc-error">⚠️ {error} <button className="btn-primary btn-sm" onClick={load}>Riprova</button></div>
-    </div>
-  );
+  if (loading) return <Page><Card pad><Empty>Caricamento acconti…</Empty></Card></Page>;
+  if (error) return <Page><Alert tone="ko" title="Errore di caricamento" actions={<Button size="sm" onClick={load}>Riprova</Button>}>{error}</Alert></Page>;
 
   return (
-    <div className="acc-page">
-      {/* Header */}
-      <div className="acc-header">
-        <div>
-          <h1>💰 Acconti Autisti</h1>
-          <span className="acc-sub">Gestione acconti e restituzioni per codice autista</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={importFileRef}
-            type="file"
-            accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleImportFile(f);
-            }}
-          />
-          <button
-            className="btn-outline"
-            onClick={handleImportClick}
-            disabled={importing}
-            title="Importa acconti da file Excel (col A data, col B codice, col D importo, col E descrizione)"
-          >
-            {importing ? '⏳ Importando...' : '📂 Import Excel'}
-          </button>
-          <button
-            className="btn-outline"
-            onClick={handleExport}
-            disabled={filtered.length === 0}
-            title={mese ? `Esporta report acconti di ${formatMeseLabel(mese)}` : 'Esporta tutti gli acconti'}
-          >
-            📊 Esporta Report
-          </button>
-          <button className="btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>+ Nuovo Acconto</button>
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Operativo"
+        title="Acconti autisti"
+        sub="Acconti e restituzioni per codice autista, addebitati nel conteggio del mese"
+        actions={<>
+          <Select label="Mese" value={mese} onChange={setMese}
+            options={[...mesiOpzioni.map((m) => ({ value: m, label: formatMeseLabel(m) })), { value: '', label: 'Tutti i mesi' }]} />
+          <input ref={importFileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
+          <Button icon="upload" onClick={handleImportClick} disabled={importing}
+            title="Importa acconti da file Excel (col A data, col B codice, col D importo, col E descrizione)">
+            {importing ? 'Importazione…' : 'Importa Excel'}
+          </Button>
+          <Button icon="download" onClick={handleExport} disabled={filtered.length === 0}
+            title={mese ? `Esporta report acconti di ${formatMeseLabel(mese)}` : 'Esporta tutti gli acconti'}>Esporta Excel</Button>
+          <Button icon="plus" variant="primary" onClick={() => { resetForm(); setShowForm(true); }}>Nuovo acconto</Button>
+        </>}
+      />
 
-      {/* Stats */}
-      <div className="acc-stats">
-        <div className="acc-stat">
-          <span className="acc-stat-label">MOVIMENTI NEL PERIODO</span>
-          <span className="acc-stat-value">{stats.count}</span>
-        </div>
-        <div className="acc-stat acc-stat-primary">
-          <span className="acc-stat-label">TOTALE ACCONTI</span>
-          <span className="acc-stat-value">+{eur(stats.totaleAcconti)} €</span>
-        </div>
-        {stats.totaleRestituzioni > 0 && (
-          <div className="acc-stat acc-stat-red">
-            <span className="acc-stat-label">RESTITUZIONI</span>
-            <span className="acc-stat-value acc-neg">−{eur(stats.totaleRestituzioni)} €</span>
-          </div>
-        )}
-        <div className="acc-stat acc-stat-primary">
-          <span className="acc-stat-label">NETTO</span>
-          <span className="acc-stat-value">{stats.netto >= 0 ? '+' : '−'}{eur(stats.netto)} €</span>
-        </div>
-      </div>
+      <Kpis items={[
+        { label: 'Totale acconti', value: fmtEur2(stats.totaleAcconti), color: C.orange, icon: 'acconti',
+          sub: delta == null ? (mese ? 'Nessun confronto col mese prima' : 'Tutti i mesi') : `${delta >= 0 ? '+' : '−'}${fmtNum2(Math.abs(delta), 0)}% su ${formatMeseLabel(mesePrec(mese)).split(' ')[0].toLowerCase()} (${fmtEur2(prev)})`,
+          subColor: delta != null && delta > 0 ? '#B91C1C' : undefined },
+        { label: 'Restituzioni', value: fmtEur2(stats.totaleRestituzioni), sub: stats.totaleRestituzioni ? 'Restituite agli autisti' : 'Nessuna nel periodo', color: C.green, icon: 'swap' },
+        { label: 'Netto', value: fmtEur2(stats.netto), sub: 'Da addebitare nei conteggi', color: C.blue, icon: 'euro' },
+        { label: 'Movimenti nel periodo', value: stats.count, sub: `Su ${nCodici} codic${nCodici === 1 ? 'e' : 'i'} autista`, color: C.purple, icon: 'menu' },
+      ]} />
 
-      {/* Filtri */}
-      <div className="acc-filters">
-        <div className="acc-search">
-          <span>🔍</span>
-          <input
-            placeholder="Cerca autista, codice, padroncino…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="acc-filter-group">
-          <label className="acc-filter-label">MESE</label>
-          <input
-            type="month"
-            className="acc-month-input"
-            value={mese}
-            onChange={(e) => setMese(e.target.value)}
-          />
-        </div>
-        {mese && (
-          <button className="btn-outline" onClick={() => setMese('')}>Tutti i mesi</button>
-        )}
-      </div>
-
-      {/* Form Nuovo Acconto */}
       {showForm && (
-        <div className="acc-form-panel">
-          <div className="acc-form-header">
-            <h3>
-              {editingId
-                ? (form.tipo === 'RESTITUZIONE' ? '↩️ Modifica Restituzione' : '✏️ Modifica Acconto')
-                : (form.tipo === 'RESTITUZIONE' ? '↩️ Restituzione' : '💰 Nuovo Acconto')}
-            </h3>
-            <button className="acc-form-close" onClick={() => { setShowForm(false); resetForm(); }}>✕</button>
-          </div>
-          <div className="acc-form-grid">
-            {/* Tipo */}
-            <div className="acc-form-field acc-form-span2">
-              <label className="acc-form-label">Tipo operazione</label>
-              <div className="acc-tipo-toggle">
-                <button
-                  className={`acc-tipo-btn ${form.tipo === 'ACCONTO' ? 'acc-tipo-active' : ''}`}
-                  onClick={() => setF('tipo', 'ACCONTO')}
-                >
-                  💰 Acconto
-                </button>
-                <button
-                  className={`acc-tipo-btn acc-tipo-red ${form.tipo === 'RESTITUZIONE' ? 'acc-tipo-active-red' : ''}`}
-                  onClick={() => setF('tipo', 'RESTITUZIONE')}
-                >
-                  ↩️ Restituzione
-                </button>
-              </div>
+        <Card pad className="acc2-form">
+          <CardHead
+            title={editingId ? (form.tipo === 'RESTITUZIONE' ? 'Modifica restituzione' : 'Modifica acconto') : (form.tipo === 'RESTITUZIONE' ? 'Nuova restituzione' : 'Nuovo acconto')}
+            actions={<IconButton icon="close" label="Chiudi" onClick={() => { setShowForm(false); resetForm(); }} />}
+          />
+          <div className="acc2-grid">
+            <div className="ds-field acc2-span2">
+              <span>Tipo operazione</span>
+              <SegTabs<'ACCONTO' | 'RESTITUZIONE'> value={form.tipo} onChange={(v) => setF('tipo', v)} label="Tipo operazione"
+                items={[{ value: 'ACCONTO', label: 'Acconto' }, { value: 'RESTITUZIONE', label: 'Restituzione' }]} />
             </div>
-
-            {/* Codice autista con lookup */}
-            <div className="acc-form-field">
-              <label className="acc-form-label">Codice Autista <span className="req">*</span></label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  className={`acc-form-input ${errors.codiceAutista ? 'input-error' : ''}`}
-                  placeholder="es. AUT001"
-                  value={form.codiceAutista}
-                  onChange={(e) => handleCodiceChange(e.target.value)}
-                  style={{ textTransform: 'uppercase' }}
-                />
-                {verificando && (
-                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-secondary)' }}>🔍</span>
-                )}
-              </div>
-              {errors.codiceAutista && <span className="field-error">{errors.codiceAutista}</span>}
-              {/* Feedback lookup */}
+            <label className="ds-field">
+              <span>Codice autista *</span>
+              <input className={`ds-input${errors.codiceAutista ? ' is-err' : ''}`} placeholder="es. 5001" value={form.codiceAutista}
+                onChange={(e) => handleCodiceChange(e.target.value)} style={{ textTransform: 'uppercase' }} />
+              {errors.codiceAutista && <em className="acc2-err">{errors.codiceAutista}</em>}
+              {verificando && <em className="acc2-hint">Verifica in corso…</em>}
               {verifica && !verificando && (
-                <div className={`acc-verifica ${verifica.found ? 'acc-verifica-ok' : 'acc-verifica-err'}`}>
-                  {verifica.found ? (
-                    <>
-                      <span>✅ {verifica.nome} {verifica.cognome}</span>
-                      <span style={{ marginLeft: 8, opacity: 0.75 }}>
-                        → {verifica.padroncino?.ragioneSociale ?? 'N/A (nessun padroncino assegnato)'}
-                      </span>
-                    </>
-                  ) : (
-                    <span>❌ Codice non trovato nel sistema</span>
-                  )}
-                </div>
+                verifica.found
+                  ? <em className="acc2-ok">{[verifica.nome, verifica.cognome].filter(Boolean).join(' ') || 'Codice trovato'} · {verifica.padroncino?.ragioneSociale ?? 'nessun padroncino assegnato'}</em>
+                  : <em className="acc2-err">Codice non trovato nel sistema</em>
               )}
-            </div>
-
-            <div className="acc-form-field">
-              <label className="acc-form-label">Importo (€) <span className="req">*</span></label>
-              <input
-                className={`acc-form-input ${errors.importo ? 'input-error' : ''}`}
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="200,00"
-                value={form.importo}
-                onChange={(e) => setF('importo', e.target.value)}
-              />
-              {errors.importo && <span className="field-error">{errors.importo}</span>}
-            </div>
-
-            <div className="acc-form-field">
-              <label className="acc-form-label">Data <span className="req">*</span></label>
-              <input
-                className={`acc-form-input ${errors.data ? 'input-error' : ''}`}
-                type="date"
-                value={form.data}
-                onChange={(e) => setF('data', e.target.value)}
-              />
-              {errors.data && <span className="field-error">{errors.data}</span>}
-            </div>
-
-            <div className="acc-form-field">
-              <label className="acc-form-label">Mese di competenza</label>
-              <input
-                className="acc-form-input"
-                type="month"
-                value={form.mese}
-                onChange={(e) => setF('mese', e.target.value)}
-              />
-            </div>
-
-            <div className="acc-form-field acc-form-span2">
-              <label className="acc-form-label">Descrizione</label>
-              <input
-                className="acc-form-input"
-                placeholder={form.tipo === 'RESTITUZIONE' ? 'Motivo restituzione…' : 'Acconto inizio mese…'}
-                value={form.descrizione}
-                onChange={(e) => setF('descrizione', e.target.value)}
-              />
-            </div>
+            </label>
+            <label className="ds-field">
+              <span>Importo (€) *</span>
+              <input className={`ds-input${errors.importo ? ' is-err' : ''}`} type="number" step="0.01" min="0.01" placeholder="200,00"
+                value={form.importo} onChange={(e) => setF('importo', e.target.value)} />
+              {errors.importo && <em className="acc2-err">{errors.importo}</em>}
+            </label>
+            <label className="ds-field">
+              <span>Data *</span>
+              <input className={`ds-input${errors.data ? ' is-err' : ''}`} type="date" value={form.data} onChange={(e) => setF('data', e.target.value)} />
+              {errors.data && <em className="acc2-err">{errors.data}</em>}
+            </label>
+            <label className="ds-field">
+              <span>Mese di competenza</span>
+              <input className="ds-input" type="month" value={form.mese} onChange={(e) => setF('mese', e.target.value)} />
+            </label>
+            <label className="ds-field acc2-span2">
+              <span>Descrizione</span>
+              <input className="ds-input" placeholder={form.tipo === 'RESTITUZIONE' ? 'Motivo restituzione…' : 'Acconto inizio mese…'}
+                value={form.descrizione} onChange={(e) => setF('descrizione', e.target.value)} />
+            </label>
           </div>
-          <div className="acc-form-actions">
-            <button className="btn-outline" onClick={() => { setShowForm(false); resetForm(); }}>Annulla</button>
-            <button className="btn-primary" onClick={handleSave} disabled={saving}>
-              {saving
-                ? 'Salvataggio…'
-                : editingId
-                ? '💾 Salva Modifiche'
-                : form.tipo === 'RESTITUZIONE'
-                ? '↩️ Registra Restituzione'
-                : '💾 Salva Acconto'}
-            </button>
+          <div className="ds-actions" style={{ justifyContent: 'flex-end' }}>
+            <Button onClick={() => { setShowForm(false); resetForm(); }}>Annulla</Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvataggio…' : editingId ? 'Salva modifiche' : form.tipo === 'RESTITUZIONE' ? 'Registra restituzione' : 'Salva acconto'}
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Tabella */}
-      <div className="acc-table-wrap">
-        {filtered.length === 0 ? (
-          <div className="acc-empty">
-            <span>💰</span>
-            <p>Nessun acconto trovato per il periodo selezionato</p>
+      <div className="ds-g4">
+        <Card className="ds-s3">
+          <div className="pl2-toolbar">
+            <SegTabs<typeof vista> value={vista} onChange={setVista} label="Vista"
+              items={[
+                { value: 'TUTTI', label: 'Tutti', count: filtered.length },
+                { value: 'ACCONTI', label: 'Acconti', count: filtered.filter((a) => a.tipo === 'ACCONTO').length },
+                { value: 'RESTITUZIONI', label: 'Restituzioni', count: filtered.filter((a) => a.tipo === 'RESTITUZIONE').length },
+                { value: 'DESC', label: 'Con descrizione', count: filtered.filter((a) => !!a.descrizione).length },
+              ]} />
+            <SearchBox value={search} onChange={setSearch} placeholder="Cerca autista, codice, padroncino…" width={280} />
           </div>
-        ) : (
-          <table className="acc-table">
-            <thead>
-              <tr>
-                <th>TIPO</th>
-                <th>CODICE</th>
-                <th>AUTISTA</th>
-                <th>PADRONCINO</th>
-                <th>DESCRIZIONE</th>
-                <th>DATA</th>
-                <th>MESE</th>
-                <th>ADDEBITATO IN</th>
-                <th style={{ textAlign: 'right' }}>IMPORTO</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a) => (
-                <tr key={a.id} className={`acc-row ${a.tipo === 'RESTITUZIONE' ? 'acc-row-restituzione' : ''}`}>
-                  <td>
-                    <span className={`acc-tipo-badge ${a.tipo === 'RESTITUZIONE' ? 'acc-tipo-badge-red' : 'acc-tipo-badge-green'}`}>
-                      {a.tipo === 'RESTITUZIONE' ? '↩️' : '💰'}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="acc-codice">{a.codice}</span>
-                  </td>
-                  <td className="acc-autista">{a.nomeAutista}</td>
-                  <td>
-                    <span className={`acc-padroncino ${a.ragioneSociale === 'N/A' ? 'acc-na' : ''}`}>
-                      {a.ragioneSociale}
-                    </span>
-                  </td>
-                  <td className="acc-desc">
-                    {a.descrizione
-                      ? a.descrizione.replace('[RESTITUZIONE] ', '')
-                      : '—'}
-                  </td>
-                  <td className="acc-data">{fmt(a.data)}</td>
-                  <td>
-                    {a.mese && <span className="acc-mese-badge">{a.mese}</span>}
-                  </td>
-                  <td>
-                    {a.addebitatoIn ? (
-                      <span className="acc-addebitato-badge">
-                        Addebitato a <strong>{a.addebitatoIn.ragioneSociale}</strong> nei conteggi di {formatMeseLabel(a.addebitatoIn.mese)}
-                      </span>
-                    ) : (
-                      <span className="acc-na">—</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <span className={a.tipo === 'RESTITUZIONE' ? 'acc-importo-neg' : 'acc-importo'}>
-                      {a.tipo === 'RESTITUZIONE' ? '−' : '+'}{eur(a.importo)} €
-                    </span>
-                  </td>
-                  <td>
-                    <div className="acc-actions">
-                      <button
-                        className="acc-edit-btn"
-                        onClick={() => handleEdit(a)}
-                        title="Modifica acconto"
-                      >✏️</button>
-                      <button className="acc-del-btn" onClick={() => handleDelete(a.id)} title="Elimina">✕</button>
-                    </div>
-                  </td>
-                </tr>
+          {sorted.length === 0 ? <Empty>Nessun acconto trovato per il periodo selezionato</Empty> : (
+            <div className="ds-tablewrap">
+              <table className="ds-table acc2-table" style={{ minWidth: 900 }}>
+                <thead><tr>
+                  <Th k="data" sort={sort} onSort={toggle}>Data</Th>
+                  <Th k="codice" sort={sort} onSort={toggle}>Codice</Th>
+                  <Th k="padroncino" sort={sort} onSort={toggle}>Padroncino</Th>
+                  <Th k="descrizione" sort={sort} onSort={toggle}>Descrizione</Th>
+                  <Th k="tipo" sort={sort} onSort={toggle}>Tipo</Th>
+                  <Th k="importo" sort={sort} onSort={toggle} right>Importo</Th>
+                  <Th k="mese" sort={sort} onSort={toggle}>Mese · addebitato in</Th>
+                  <Th />
+                </tr></thead>
+                <tbody>
+                  {sorted.map((a) => {
+                    const desc = a.descrizione ? a.descrizione.replace('[RESTITUZIONE] ', '') : '';
+                    const rest = a.tipo === 'RESTITUZIONE';
+                    return (
+                      <tr key={a.id}>
+                        <td style={{ color: '#3F3F46' }}>{fmt(a.data)}</td>
+                        <td>
+                          <span className="ds-mono" style={{ fontWeight: 600 }}>{a.codice}</span>
+                          {a.nomeAutista && a.nomeAutista !== 'N/D' && <span className="acc2-sub">{a.nomeAutista}</span>}
+                        </td>
+                        <td className="acc2-ell" style={{ color: a.ragioneSociale === 'N/A' ? '#6B6B73' : undefined }}>{a.ragioneSociale}</td>
+                        <td className="acc2-ell" style={{ color: desc ? undefined : '#71717A' }} title={desc}>{desc || 'Senza descrizione'}</td>
+                        <td><Dot tone={rest ? 'ok' : 'warn'}>{rest ? 'Restituzione' : 'Acconto'}</Dot></td>
+                        <td className="r" style={{ fontWeight: 600, color: rest ? '#15803D' : undefined }}>{rest ? '−' : ''}{fmtEur2(a.importo)}</td>
+                        <td className="acc2-ell" title={a.addebitatoIn ? `Addebitato a ${a.addebitatoIn.ragioneSociale} nei conteggi di ${formatMeseLabel(a.addebitatoIn.mese)}` : ''}>
+                          {a.mese ? formatMeseLabel(a.mese).slice(0, 3) : '—'}
+                          <span style={{ color: a.addebitatoIn ? undefined : '#6B6B73' }}> · {a.addebitatoIn ? `conteggio ${formatMeseLabel(a.addebitatoIn.mese).slice(0, 3).toLowerCase()}${a.addebitatoIn.ragioneSociale !== a.ragioneSociale ? ` (${a.addebitatoIn.ragioneSociale})` : ''}` : 'non addebitato'}</span>
+                        </td>
+                        <td className="r" style={{ whiteSpace: 'nowrap' }}>
+                          <IconButton icon="edit" label="Modifica acconto" onClick={() => handleEdit(a)} />
+                          <IconButton icon="trash" label="Elimina acconto" danger onClick={() => handleDelete(a.id)} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="is-total">
+                    <td colSpan={5}>Totale · {righeVista.length} moviment{righeVista.length === 1 ? 'o' : 'i'} · netto</td>
+                    <td className="r" style={{ fontWeight: 600 }}>{fmtEur2(righeVista.reduce((s, a) => s + (a.tipo === 'RESTITUZIONE' ? -a.importo : a.importo), 0))}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          <div className="pl2-foot">Mostrati {sorted.length} di {filtered.length} movimenti{mese ? ` di ${nomeMese.toLowerCase()}` : ''} · il mese è quello di competenza, non la data del movimento</div>
+        </Card>
+
+        <div className="acc2-side">
+          <Card pad>
+            <CardHead title="Per padroncino" sub={`${nomeMese}, da addebitare nei conteggi`} />
+            {perPad.length === 0 ? <Empty>Nessun movimento</Empty> : <>
+              <div aria-hidden="true" className="acc2-seg">
+                {perPad.map((p, i) => <span key={p.nome} style={{ width: `${(Math.abs(p.totale) / totPad) * 100}%`, background: PADCOL[i % PADCOL.length] }} />)}
+              </div>
+              {perPad.map((p, i) => (
+                <div key={p.nome} className="acc2-padrow">
+                  <span aria-hidden="true" style={{ background: PADCOL[i % PADCOL.length] }} />
+                  <span className="acc2-ell" style={{ flex: '1 1 auto', maxWidth: 'none' }}>{p.nome}</span>
+                  <span style={{ fontWeight: 600 }}>{fmtEur2(p.totale)}</span>
+                </div>
               ))}
-            </tbody>
-            <tfoot>
-              <tr className="acc-foot">
-                <td colSpan={8}><strong>TOTALE ({filtered.length} movimenti) — Netto</strong></td>
-                <td style={{ textAlign: 'right' }}>
-                  <strong className={stats.netto >= 0 ? 'acc-importo' : 'acc-importo-neg'}>
-                    {stats.netto >= 0 ? '+' : '−'}{eur(stats.netto)} €
-                  </strong>
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        )}
+            </>}
+          </Card>
+          <Card pad style={{ flex: '1 1 auto' }}>
+            <CardHead title="Andamento" sub={`Netto acconti per mese, ${anno}`} />
+            {andamento.length === 0 ? <Empty>Nessun dato</Empty> : (
+              <div role="img" aria-label={`Acconti per mese nel ${anno}`} className="acc2-chart">
+                {andamento.map((x) => (
+                  <div key={x.m} className="acc2-chart-col" title={`${formatMeseLabel(x.m)}: ${fmtEur2(x.v)}`}>
+                    <div style={{ height: `${Math.max(4, (x.v / maxAnd) * 100)}%`, background: x.m === mese ? C.orange : '#F6C7A8' }} />
+                    <span>{MESI_BREVI[parseInt(x.m.slice(5), 10) - 1]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
-    </div>
+    </Page>
   );
 }

@@ -6,6 +6,8 @@ import type { AddebitoSospeso, CreateAddebitoSospesoDto, TipoAddebitoSospeso } f
 import { padronciniApi } from '../../lib/api';
 import type { Padroncino } from '../../lib/api';
 import './AddebitivSospesi.css';
+import '../padroncini/Padroncini2.css';
+import { Page, PageHeader, Card, Kpis, Button, IconButton, SegTabs, Select, Th, Dot, Empty, C, useSort, fmtEur as fmtEur2 } from '../../components/ds';
 
 const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
                  'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
@@ -119,14 +121,14 @@ function Modal({ padroncini, initial, defaultTipo = 'ADDEBITO', onSave, onClose 
                 className={`as-tipo-btn ${form.tipo === 'ADDEBITO' ? 'as-tipo-active' : ''}`}
                 onClick={() => setForm(f => ({ ...f, tipo: 'ADDEBITO' }))}
               >
-                💳 Addebito
+                Addebito
               </button>
               <button
                 type="button"
                 className={`as-tipo-btn ${form.tipo === 'MEMO' ? 'as-tipo-active' : ''}`}
                 onClick={() => setForm(f => ({ ...f, tipo: 'MEMO' }))}
               >
-                📝 Memo / Promemoria
+                Memo / promemoria
               </button>
             </div>
           )}
@@ -223,7 +225,7 @@ export default function AddebitivSospesiPage() {
   const [loading, setLoading] = useState(true);
   const [filtroMese, setFiltroMese] = useState('');
   const [filtroPda, setFiltroPda] = useState('');
-  const [filtroStato, setFiltroStato] = useState<'TUTTI' | 'PENDENTE' | 'EVASO'>('TUTTI');
+  const [filtroStato, setFiltroStato] = useState<'TUTTI' | 'PENDENTE' | 'EVASO'>('PENDENTE');
   const [filtroTipo, setFiltroTipo] = useState<'TUTTI' | 'ADDEBITO' | 'MEMO'>('TUTTI');
   const [showModal, setShowModal] = useState(false);
   const [defaultTipo, setDefaultTipo] = useState<TipoAddebitoSospeso>('ADDEBITO');
@@ -310,174 +312,134 @@ export default function AddebitivSospesiPage() {
     navigate(`/conteggi?mese=${item.meseTarget}&padroncinoId=${item.padroncinoId}`);
   }
 
+  // ── Solo visualizzazione ──
+  type Vista = 'PENDENTI' | 'EVASI' | 'TUTTI' | 'ADDEBITI' | 'MEMO';
+  const vista: Vista = filtroTipo === 'ADDEBITO' ? 'ADDEBITI' : filtroTipo === 'MEMO' ? 'MEMO' : filtroStato === 'PENDENTE' ? 'PENDENTI' : filtroStato === 'EVASO' ? 'EVASI' : 'TUTTI';
+  const setVista = (v: Vista) => {
+    setFiltroStato(v === 'PENDENTI' ? 'PENDENTE' : v === 'EVASI' ? 'EVASO' : 'TUTTI');
+    setFiltroTipo(v === 'ADDEBITI' ? 'ADDEBITO' : v === 'MEMO' ? 'MEMO' : 'TUTTI');
+  };
+  type SK = 'padroncino' | 'tipo' | 'descrizione' | 'importo' | 'da' | 'target' | 'stato';
+  const { sorted, sort, toggle } = useSort<AddebitoSospeso, SK>(filtered, (it, k) => {
+    switch (k) {
+      case 'padroncino': return it.padroncino?.ragioneSociale ?? '';
+      case 'tipo': return it.tipo;
+      case 'descrizione': return it.descrizione;
+      case 'importo': return it.tipo === 'MEMO' ? null : (it.importo ?? null);
+      case 'da': return it.meseOrigine ?? '';
+      case 'target': return it.meseTarget;
+      case 'stato': return it.stato === 'PENDENTE' ? 0 : 1;
+    }
+  }, { key: 'target', dir: 'desc' });
+  const pend = items.filter((i) => i.stato === 'PENDENTE');
+  const addPend = pend.filter((i) => i.tipo === 'ADDEBITO');
+  const memoPend = pend.filter((i) => i.tipo === 'MEMO');
+  const totAddPend = addPend.reduce((s, i) => s + (Number(i.importo) || 0), 0);
+  const nomi = (xs: AddebitoSospeso[]) => {
+    const n = Array.from(new Set(xs.map((x) => (x.padroncino?.ragioneSociale ?? '').replace(/\s+(S\.?R\.?L\.?S?\.?|SRLS|SRL|SAS)$/i, '').trim()).filter(Boolean)));
+    return n.length <= 2 ? n.join(' e ') : `${n.slice(0, 2).join(', ')} e altri ${n.length - 2}`;
+  };
+  const mesiTarget = Array.from(new Set(pend.map((i) => i.meseTarget)));
+  const evasiAdd = items.filter((i) => i.stato === 'EVASO' && i.tipo === 'ADDEBITO').length;
+  const mesiOpz = Array.from(new Set(items.map((i) => i.meseTarget))).sort().reverse();
+  const AVC = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
+  const padIdx = new Map(padroncini.map((p, i) => [p.id, i]));
+  const iniz = (n: string) => n.replace(/[^A-Za-zÀ-ú0-9& ]/g, ' ').split(/\s+/).filter((w) => w && w !== '&').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const breve = (m?: string | null) => m ? formatMese(m).slice(0, 3) + ' ' + m.slice(0, 4) : '—';
+
   return (
-    <div className="as-page">
-      {/* Header */}
-      <div className="as-header">
-        <div>
-          <h1>Sospesi &amp; Memo</h1>
-          <span className="as-sub">Addebiti rinviati e promemoria da riportare nei conteggi futuri</span>
-        </div>
-        <div className="as-header-actions">
-          <button className="as-btn as-btn-memo" onClick={() => openNew('MEMO')}>
-            📝 Nuovo memo
-          </button>
-          <button className="as-btn as-btn-primary" onClick={() => openNew('ADDEBITO')}>
-            💳 Nuovo addebito
-          </button>
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Operativo"
+        title="Sospesi e memo"
+        sub="Addebiti da inserire e promemoria legati al conteggio di un mese"
+        actions={<>
+          <Button icon="edit" onClick={() => openNew('MEMO')}>Nuovo memo</Button>
+          <Button icon="plus" variant="primary" onClick={() => openNew('ADDEBITO')}>Nuovo addebito</Button>
+        </>}
+      />
 
-      {/* Stats */}
-      <div className="as-stats">
-        <div className="as-stat as-stat-warn">
-          <span className="as-stat-val">{nAddebiti}</span>
-          <span className="as-stat-lbl">Addebiti pendenti</span>
-        </div>
-        <div className="as-stat as-stat-memo">
-          <span className="as-stat-val">{nMemo}</span>
-          <span className="as-stat-lbl">Memo pendenti</span>
-        </div>
-        <div className="as-stat as-stat-ok">
-          <span className="as-stat-val">{evasi}</span>
-          <span className="as-stat-lbl">Evasi</span>
-        </div>
-        <div className="as-stat">
-          <span className="as-stat-val">{items.length}</span>
-          <span className="as-stat-lbl">Totali</span>
-        </div>
-      </div>
+      <Kpis items={[
+        { label: 'Pendenti', value: pendenti, color: C.orange, icon: 'clock', subColor: pendenti ? '#C2410C' : undefined,
+          sub: pendenti === 0 ? 'Niente in sospeso' : mesiTarget.length === 1 ? `Tutti per il conteggio di ${formatMese(mesiTarget[0]).split(' ')[0].toLowerCase()}` : `Su ${mesiTarget.length} mesi diversi` },
+        { label: 'Addebiti pendenti', value: fmtEur2(totAddPend), sub: addPend.length ? `${nAddebiti} addebit${nAddebiti === 1 ? 'o' : 'i'} · ${nomi(addPend)}` : 'Nessun addebito in sospeso', color: C.red, icon: 'cont' },
+        { label: 'Memo pendenti', value: nMemo, sub: memoPend.length ? nomi(memoPend) : 'Nessun memo aperto', color: C.blue, icon: 'note' },
+        { label: 'Evasi', value: evasi, sub: `${evasiAdd} addebiti e ${evasi - evasiAdd} memo · ${items.length} totali`, color: C.green, icon: 'ok' },
+      ]} />
 
-      {/* Filtri */}
-      <div className="as-filters">
-        <input
-          type="month"
-          value={filtroMese}
-          onChange={e => setFiltroMese(e.target.value)}
-          title="Filtra per mese target"
-        />
-        <select value={filtroPda} onChange={e => setFiltroPda(e.target.value)}>
-          <option value="">Tutti i PDA</option>
-          {padroncini.map(p => (
-            <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
-          ))}
-        </select>
-        <div className="as-tab-group">
-          {(['TUTTI', 'PENDENTE', 'EVASO'] as const).map(s => (
-            <button
-              key={s}
-              className={`as-tab ${filtroStato === s ? 'as-tab-active' : ''}`}
-              onClick={() => setFiltroStato(s)}
-            >
-              {s === 'TUTTI' ? 'Tutti' : s === 'PENDENTE' ? 'Pendenti' : 'Evasi'}
-            </button>
-          ))}
-        </div>
-        <div className="as-tab-group">
-          {(['TUTTI', 'ADDEBITO', 'MEMO'] as const).map(t => (
-            <button
-              key={t}
-              className={`as-tab ${filtroTipo === t ? 'as-tab-active' : ''}`}
-              onClick={() => setFiltroTipo(t)}
-            >
-              {t === 'TUTTI' ? 'Tutti i tipi' : t === 'ADDEBITO' ? '💳 Addebiti' : '📝 Memo'}
-            </button>
-          ))}
-        </div>
-        {(filtroMese || filtroPda || filtroStato !== 'TUTTI' || filtroTipo !== 'TUTTI') && (
-          <button className="as-btn as-btn-ghost as-btn-sm"
-            onClick={() => { setFiltroMese(''); setFiltroPda(''); setFiltroStato('TUTTI'); setFiltroTipo('TUTTI'); }}>
-            Azzera filtri
-          </button>
-        )}
-      </div>
-
-      {/* Tabella */}
-      <div className="as-table-wrap">
-        {loading ? (
-          <div className="as-empty">Caricamento…</div>
-        ) : filtered.length === 0 ? (
-          <div className="as-empty">
-            {items.length === 0
-              ? 'Nessun elemento. Usa i pulsanti in alto per creare un addebito o un memo.'
-              : 'Nessun risultato con i filtri selezionati.'}
+      <Card>
+        <div className="pl2-toolbar">
+          <SegTabs<Vista> value={vista} onChange={setVista} label="Vista"
+            items={[
+              { value: 'PENDENTI', label: 'Pendenti', count: pendenti },
+              { value: 'EVASI', label: 'Evasi', count: evasi },
+              { value: 'TUTTI', label: 'Tutti', count: items.length },
+              { value: 'ADDEBITI', label: 'Solo addebiti', count: items.filter((i) => i.tipo === 'ADDEBITO').length },
+              { value: 'MEMO', label: 'Solo memo', count: items.filter((i) => i.tipo === 'MEMO').length },
+            ]} />
+          <div className="ds-actions">
+            <Select size="sm" label="Padroncino" value={filtroPda} onChange={setFiltroPda}
+              options={[{ value: '', label: 'Tutti i PDA' }, ...padroncini.map((p) => ({ value: p.id, label: p.ragioneSociale }))]} />
+            <Select size="sm" label="Mese target" value={filtroMese} onChange={setFiltroMese}
+              options={[{ value: '', label: 'Tutti' }, ...mesiOpz.map((m) => ({ value: m, label: formatMese(m) }))]} />
           </div>
+        </div>
+        {loading ? <Empty>Caricamento…</Empty> : sorted.length === 0 ? (
+          <Empty>{items.length === 0 ? 'Nessun elemento. Usa i pulsanti in alto per creare un addebito o un memo.' : 'Nessun risultato con i filtri selezionati.'}</Empty>
         ) : (
-          <table className="as-table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Stato</th>
-                <th>Padroncino</th>
-                <th>Descrizione</th>
-                <th>Importo</th>
-                <th>Da (mese)</th>
-                <th>Target</th>
-                <th style={{ textAlign: 'right' }}>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(item => {
-                const isMemo = item.tipo === 'MEMO';
-                return (
-                  <tr key={item.id} style={{ opacity: item.stato === 'EVASO' ? 0.6 : 1 }}>
-                    <td>
-                      <span className={`as-tipo-badge ${isMemo ? 'as-tipo-memo' : 'as-tipo-addebito'}`}>
-                        {isMemo ? '📝 Memo' : '💳 Addebito'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`as-badge ${item.stato === 'PENDENTE' ? 'as-badge-warn' : 'as-badge-ok'}`}>
-                        {item.stato === 'PENDENTE' ? '⏳ Pendente' : '✓ Evaso'}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {item.padroncino?.ragioneSociale ?? '—'}
-                    </td>
-                    <td>
-                      <div className="as-cell-desc">{item.descrizione}</div>
-                      {item.note && <div className="as-cell-note">📝 {item.note}</div>}
-                    </td>
-                    <td className="as-cell-importo">
-                      {isMemo ? <span className="as-na">—</span> : (eur(item.importo) ?? '—')}
-                    </td>
-                    <td>{item.meseOrigine ? formatMese(item.meseOrigine) : '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{formatMese(item.meseTarget)}</td>
-                    <td>
-                      <div className="as-actions">
-                        {item.stato === 'PENDENTE' && (
-                          <>
-                            <button className="as-action as-action-conteggio" title="Vai al conteggio del mese target"
-                              onClick={() => goToConteggio(item)}>
-                              📋 Conteggio
-                            </button>
-                            <button className="as-action as-action-evadi" onClick={() => handleEvadi(item.id)}>
-                              ✓ Evadi
-                            </button>
-                            <button className="as-action" title="Modifica"
-                              onClick={() => { setEditing(item); setShowModal(true); }}>
-                              ✏️
-                            </button>
-                          </>
+          <div className="ds-tablewrap">
+            <table className="ds-table as2-table" style={{ minWidth: 960 }}>
+              <thead><tr>
+                <Th k="padroncino" sort={sort} onSort={toggle}>Padroncino</Th>
+                <Th k="tipo" sort={sort} onSort={toggle}>Tipo</Th>
+                <Th k="descrizione" sort={sort} onSort={toggle}>Descrizione</Th>
+                <Th k="importo" sort={sort} onSort={toggle} right>Importo</Th>
+                <Th k="da" sort={sort} onSort={toggle}>Da (mese)</Th>
+                <Th k="target" sort={sort} onSort={toggle}>Target</Th>
+                <Th k="stato" sort={sort} onSort={toggle}>Stato</Th>
+                <Th />
+              </tr></thead>
+              <tbody>
+                {sorted.map((item) => {
+                  const isMemo = item.tipo === 'MEMO';
+                  const pendente = item.stato === 'PENDENTE';
+                  const nome = item.padroncino?.ragioneSociale ?? '—';
+                  return (
+                    <tr key={item.id} style={{ color: pendente ? undefined : '#52525B' }}>
+                      <td>
+                        <div className="pl2-who">
+                          <span aria-hidden="true" className="pl2-av" style={{ flexBasis: 24, height: 24, fontSize: 10, background: AVC[(padIdx.get(item.padroncinoId) ?? 0) % AVC.length] }}>{iniz(nome)}</span>
+                          <span className="pl2-name" style={{ fontWeight: 400, fontSize: 12.5 }}>{nome}</span>
+                        </div>
+                      </td>
+                      <td><Dot tone={isMemo ? 'info' : 'ko'}>{isMemo ? 'Memo' : 'Addebito'}</Dot></td>
+                      <td style={{ maxWidth: 360 }}>
+                        <span className="as2-desc" title={item.descrizione}>{item.descrizione}</span>
+                        {item.note && <span className="as2-note" title={item.note}>{item.note}</span>}
+                      </td>
+                      <td className="r" style={{ fontWeight: 600, color: isMemo || item.importo == null ? '#6B6B73' : undefined }}>{isMemo || item.importo == null ? '—' : fmtEur2(item.importo)}</td>
+                      <td style={{ color: '#3F3F46' }}>{breve(item.meseOrigine)}</td>
+                      <td style={{ fontWeight: 500 }}>{breve(item.meseTarget)}</td>
+                      <td><Dot tone={pendente ? 'warn' : 'ok'}>{pendente ? 'Pendente' : 'Evaso'}</Dot></td>
+                      <td className="r" style={{ whiteSpace: 'nowrap' }}>
+                        {pendente ? (<>
+                          <IconButton icon="link" label="Vai al conteggio del mese target" onClick={() => goToConteggio(item)} />
+                          <IconButton icon="tick" label="Segna come evaso" onClick={() => handleEvadi(item.id)} />
+                          <IconButton icon="edit" label="Modifica" onClick={() => { setEditing(item); setShowModal(true); }} />
+                        </>) : (
+                          <IconButton icon="restore" label="Riapri come pendente" onClick={() => handleRiapri(item.id)} />
                         )}
-                        {item.stato === 'EVASO' && (
-                          <button className="as-action as-action-riapri" onClick={() => handleRiapri(item.id)}>
-                            ↩ Riapri
-                          </button>
-                        )}
-                        <button className="as-action as-action-del" title="Elimina"
-                          onClick={() => handleDelete(item.id, item.descrizione)}>
-                          🗑
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        <IconButton icon="trash" label="Elimina" danger onClick={() => handleDelete(item.id, item.descrizione)} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+        <div className="pl2-foot">Mostrati {sorted.length} di {items.length} · alla chiusura del conteggio il sospeso passa a "Evaso"</div>
+      </Card>
 
       {/* Modale */}
       {showModal && (
@@ -492,6 +454,6 @@ export default function AddebitivSospesiPage() {
 
       {/* Toast */}
       {toastMsg && <div className="as-toast">{toastMsg}</div>}
-    </div>
+    </Page>
   );
 }

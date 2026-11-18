@@ -1,0 +1,44 @@
+/* Storico note / modifiche / cose da fare: stile del gestionale */
+.st-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 18px 0; }
+.st-body { display: flex; flex-direction: column; }
+.st-count { padding: 12px 18px; font-size: 12px; color: #6B6B73; }
+.st-table { font-size: 13px; }
+.st-table td { vertical-align: top; }
+.st-row { cursor: pointer; }
+.st-row-done .st-task-text { color: #A1A1AA; text-decoration: line-through; }
+.st-date { white-space: nowrap; color: #52525B; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.st-code { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; }
+.st-code-sub { font-size: 12px; color: #6B6B73; margin-top: 2px; }
+.st-text { white-space: pre-wrap; word-break: break-word; }
+.st-user { font-size: 12.5px; color: #52525B; }
+.st-table mark { background: #FEF3C7; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+.st-azione { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.st-azione::before { content: ''; width: 7px; height: 7px; border-radius: 999px; background: #A1A1AA; }
+.st-azione-CREATE::before { background: #15A06A; }
+.st-azione-UPDATE::before { background: #3D63F0; }
+.st-azione-DELETE::before { background: #E5484D; }
+.st-azione-ASSEGNA::before { background: #7C5CF0; }
+.st-azione-CHIUDI_ASSEGNAZIONE::before { background: #EA6A2A; }
+.st-azione-RESTORE::before { background: #0E9494; }
+
+.st-more { display: block; width: 100%; padding: 12px; background: none; border: 0; border-top: 1px solid #F1F1F3; color: #3D63F0; font: inherit; font-weight: 500; cursor: pointer; }
+.st-more:hover { background: #FAFAFB; }
+.st-pager { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 12px; font-size: 12.5px; color: #52525B; border-top: 1px solid #F1F1F3; }
+.st-pager button { min-height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #E4E4E7; background: #fff; font: inherit; font-size: 13px; color: #0B0B0C; cursor: pointer; }
+.st-pager button:disabled { color: #A1A1AA; cursor: default; }
+
+.st-task-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.st-chips { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: #F1F1F3; }
+.st-chip { border: 0; border-radius: 6px; min-height: 28px; padding: 0 12px; background: transparent; font: inherit; font-size: 13px; color: #0B0B0C; cursor: pointer; }
+.st-chip-active { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.st-task-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 3px; }
+.st-link { background: none; border: 0; color: #3D63F0; font: inherit; font-size: 12px; cursor: pointer; padding: 0 4px; }
+.st-link:hover { text-decoration: underline; }
+.st-remove { background: none; border: 0; color: #A1A1AA; cursor: pointer; opacity: 0; font: inherit; }
+.st-row:hover .st-remove { opacity: 1; }
+.st-remove:hover { color: #B91C1C; }
+.st-table .task-checkbox { width: 15px; height: 15px; accent-color: #3D63F0; }
+@media (max-width: 760px) {
+  .st-table th:nth-child(n+4), .st-table td:nth-child(n+4) { display: none; }
+}

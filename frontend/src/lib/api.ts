@@ -77,6 +77,8 @@ export interface Mezzo {
   canoneNoleggio: number | null;
   kmAttuali: number | null;
   kmAttualiAl: string | null;
+  /** data/ora di inserimento del mezzo nel gestionale */
+  createdAt?: string;
   kmLimite: number | null;
   scadenzaAssicurazione: string | null;
   costoAssicurazione?: number | null;
@@ -873,6 +875,22 @@ export interface Documento {
   scadenza?: string | null;
   note?: string | null;
   createdAt: string;
+}
+
+/**
+ * Scarica un file protetto (con token) come Blob, per l'anteprima documenti.
+ * `path` è relativo ad API_BASE (es. "/documenti/<id>/download").
+ */
+export async function fetchFileBlob(path: string): Promise<Blob> {
+  const token = getAuthToken();
+  const r = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (r.status === 401) {
+    localStorage.removeItem('token'); localStorage.removeItem('auth-storage');
+    window.location.href = '/login';
+    throw new Error('Sessione scaduta');
+  }
+  if (!r.ok) throw new Error(`Errore caricamento file (${r.status} ${r.statusText})`);
+  return r.blob();
 }
 
 export const documentiApi = {

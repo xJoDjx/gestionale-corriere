@@ -5,9 +5,11 @@
 // serve nessuna modifica al backend. Aggiunge solo una dashboard storica che
 // interroga in parallelo gli ultimi mesi con GET /conta-doppi/margini?mese=X
 // (l'endpoint già gestisce con grazia un mese senza dati).
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import * as XLSX from 'xlsx';
 import './Margini.css';
+import './Margini2.css';
+import { Page, PageHeader, Card, CardHead, Kpis, Button, IconButton, SearchBox, Select, Empty, Alert, Icon, Th, C, fmtEur } from '../../components/ds';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -73,7 +75,7 @@ function ultimiMesi(n: number): string[] {
   }
   return out;
 }
-const eur = (n: number | null | undefined) => n == null ? '—' : n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+const eur = (n: number | null | undefined) => n == null ? '—' : fmtEur(n);
 const pctStr = (n: number | null) => n == null ? '—' : `${n.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 const pctStr2 = (n: number | null) => n == null ? '—' : `${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
@@ -87,10 +89,10 @@ async function fetchMargini(mese: string): Promise<MarginiResult | null> {
 
 // ════════════════════════════════════════════════════════════════════════════
 export default function Margini() {
-  const [view, setView] = useState<'dashboard' | 'detail'>('dashboard');
   const [mese, setMese] = useState(meseCorrente());
+  const [autoMese, setAutoMese] = useState(false);
 
-  // Dashboard state
+  // Storico: ultimi 6 mesi interrogati in parallelo (stesso endpoint)
   const [mesiStats, setMesiStats] = useState<Record<string, MarginiResult>>({});
   const [loadingStats, setLoadingStats] = useState(true);
   const mesiWindow = ultimiMesi(6); // finestra scorrevole di 6 mesi, più recente per primo
@@ -111,10 +113,30 @@ export default function Margini() {
     return d && (d.statisticaImportata || d.fatturatoImportato || d.righe.length > 0);
   });
 
-  const apriMese = (m: string) => { setMese(m); setView('detail'); };
-  const onNuovaImportazione = () => { setMese(meseCorrente()); setView('detail'); };
+  // All'apertura mostra l'ultimo mese con dati se quello corrente è vuoto
+  useEffect(() => {
+    if (autoMese || loadingStats) return;
+    setAutoMese(true);
+    if (!mesiConDati.includes(mese) && mesiConDati.length) setMese(mesiConDati[0]);
+  }, [autoMese, loadingStats, mesiConDati, mese]);
 
-  // ── Aggregati dashboard ──
+  const mesiOpts = [
+    { value: STORICO, label: 'Storico 6 mesi' },
+    ...Array.from(new Set([...ultimiMesi(12), mese === STORICO ? meseCorrente() : mese])).sort().reverse()
+      .map((m) => ({ value: m, label: `${meseLabelItaliano(m)}${mesiConDati.includes(m) ? '' : ' · vuoto'}` })),
+  ];
+  const selectMese = <Select label="Mese" value={mese} onChange={(m) => { setMese(m); if (m === STORICO) caricaSommari(); }} options={mesiOpts} />;
+
+  if (mese === STORICO) return <MarginiStorico mesiStats={mesiStats} mesiConDati={mesiConDati} loading={loadingStats} selectMese={selectMese} onApri={setMese} />;
+  return <MarginiDetail mese={mese} selectMese={selectMese} />;
+}
+
+const STORICO = 'STORICO';
+
+function MarginiStorico({ mesiStats, mesiConDati, loading, selectMese, onApri }: {
+  mesiStats: Record<string, MarginiResult>; mesiConDati: string[]; loading: boolean; selectMese: ReactNode; onApri: (m: string) => void;
+}) {
+  // ── Aggregati storico (formule invariate) ──
   const totFatturato = mesiConDati.reduce((a, m) => a + (mesiStats[m].totaleFatturato || 0), 0);
   const totCompetenze = mesiConDati.reduce((a, m) => a + (mesiStats[m].totaleCompetenzeAttive || 0), 0);
   const totUtile = mesiConDati.reduce((a, m) => a + (mesiStats[m].totaleDifferenza || 0), 0);
@@ -122,116 +144,51 @@ export default function Margini() {
   const fatPct = totFatturato + totCompetenze !== 0 ? Math.round(totFatturato / (totFatturato + totCompetenze) * 100) : 0;
   const compPct = 100 - fatPct;
 
-  const ultimoMese = mesiConDati[0];
-  const codiciDaControllare = ultimoMese
-    ? [...mesiStats[ultimoMese].righe]
-      .filter(r => r.percentuale != null && r.percentuale < SOGLIA_MARGINE_MIN)
-      .sort((a, b) => (a.percentuale ?? 0) - (b.percentuale ?? 0))
-      .slice(0, 6)
-    : [];
-
   return (
-    <div className="mg-page">
-      {view === 'dashboard' && (
-        <>
-          <div className="mg-header">
-            <div>
-              <h1>📊 Statistiche COD</h1>
-              <span className="mg-sub">Fatturato vs Competenze Attive e % Non Consegnate — storico mensile</span>
-            </div>
-            <div className="mg-header-actions">
-              <button className="mg-btn-primary" onClick={onNuovaImportazione}>📂 Nuova Importazione</button>
-            </div>
-          </div>
-
-          <div className="mg-kpi-row">
-            <div className="mg-kpi mg-kpi-blue"><span className="mg-kpi-label">Mesi Analizzati</span><span className="mg-kpi-val">{mesiConDati.length}</span><span className="mg-kpi-sub">dati caricati</span></div>
-            <div className="mg-kpi mg-kpi-teal"><span className="mg-kpi-label">Tot. Fatturato (+Extra)</span><span className="mg-kpi-val mg-kpi-val-md">{eur(totFatturato)}</span><span className="mg-kpi-sub">tutti i mesi</span></div>
-            <div className="mg-kpi mg-kpi-blue"><span className="mg-kpi-label">Tot. Competenze Attive</span><span className="mg-kpi-val mg-kpi-val-md">{eur(totCompetenze)}</span><span className="mg-kpi-sub">tutti i mesi</span></div>
-            <div className="mg-kpi mg-kpi-purple"><span className="mg-kpi-label">Tot. Utile</span><span className="mg-kpi-val mg-kpi-val-md">{eur(totUtile)}</span><span className="mg-kpi-sub">competenze − fatturato</span></div>
-            <div className="mg-kpi mg-kpi-amber"><span className="mg-kpi-label">Margine Medio</span><span className="mg-kpi-val">{pctStr(margineMedio)}</span><span className="mg-kpi-sub">su tutti i codici</span></div>
-          </div>
-
-          {loadingStats && <div className="mg-loading"><div className="mg-spinner" /><span>Caricamento storico…</span></div>}
-
-          {!loadingStats && mesiConDati.length === 0 && (
-            <div className="mg-empty-state">
-              <span className="mg-empty-icon">💶</span>
-              <div className="mg-empty-title">Nessun dato ancora</div>
-              <button className="mg-btn-primary" onClick={onNuovaImportazione}>📂 Importa il primo mese</button>
-            </div>
-          )}
-
-          {!loadingStats && mesiConDati.length > 0 && (
-            <div className="mg-dash-grid">
-              <div className="mg-panel">
-                <div className="mg-panel-hd"><span>📅 Storico Mensile</span><span className="mg-panel-sub">{mesiConDati.length} mesi · clicca per aprire</span></div>
-                <div className="mg-month-col-hd">
-                  <span>MESE</span><span>FATTURATO vs COMPETENZE</span>
-                  <span style={{ textAlign: 'center' }}>MARGINE</span>
-                  <span style={{ textAlign: 'right' }}>UTILE</span><span />
-                </div>
+    <Page>
+      <PageHeader eyebrow="Analisi" title="Margini e statistiche COD" sub={`Storico degli ultimi 6 mesi · ${mesiConDati.length} mesi con dati`} actions={selectMese} />
+      <Kpis items={[
+        { label: 'Fatturato (+ extra)', value: eur(totFatturato), color: C.teal, icon: 'trend', sub: 'Tutti i mesi' },
+        { label: 'Competenze attive', value: eur(totCompetenze), color: C.blue, icon: 'euro', sub: `Fatturato ${fatPct}% · competenze ${compPct}%` },
+        { label: 'Utile totale', value: eur(totUtile), color: C.purple, icon: 'marg', sub: `Margine medio ${pctStr(margineMedio)}`, seg: [{ w: Math.max(0, Math.min(100, margineMedio)), color: C.purple }, { w: 100 - Math.max(0, Math.min(100, margineMedio)), color: '#E4E4E7' }] },
+        { label: 'Mesi analizzati', value: String(mesiConDati.length), color: C.gray, icon: 'cal', sub: 'Dati caricati' },
+      ]} />
+      <Card>
+        <div style={{ padding: '14px 18px 10px' }}><CardHead title="Storico mensile" sub="Clic su un mese per aprirlo" /></div>
+        {loading ? <Empty>Caricamento storico…</Empty> : mesiConDati.length === 0 ? <Empty>Nessun dato ancora: scegli un mese e importa i file.</Empty> : (
+          <div className="ds-tablewrap">
+            <table className="ds-table">
+              <thead><tr><th>Mese</th><th>Codici</th><th>Fatturato vs competenze</th><th className="r">Fatturato</th><th className="r">Competenze</th><th className="r">Margine</th><th className="r">Utile</th></tr></thead>
+              <tbody>
                 {mesiConDati.map(m => {
                   const d = mesiStats[m];
                   const marg = d.totaleCompetenzeAttive !== 0 ? (d.totaleDifferenza / d.totaleCompetenzeAttive * 100) : 0;
                   const fp = (d.totaleFatturato + d.totaleCompetenzeAttive) !== 0 ? Math.round(d.totaleFatturato / (d.totaleFatturato + d.totaleCompetenzeAttive) * 100) : 0;
-                  const cp = 100 - fp;
                   const missing = !d.statisticaImportata || !d.fatturatoImportato;
                   return (
-                    <div key={m} className="mg-month-row" onClick={() => apriMese(m)}>
-                      <div>
-                        <div className="mg-month-name">{meseLabelItaliano(m)}</div>
-                        <div className="mg-month-sub">{d.righe.length} codici{missing ? ' · import incompleto' : ''}</div>
-                      </div>
-                      <div>
-                        <div className="mg-bar-wrap"><div className="mg-bar-fat" style={{ flex: fp || 0.01 }} /><div className="mg-bar-comp" style={{ flex: cp || 0.01 }} /></div>
-                        <div className="mg-bar-labels"><span className="mg-fat-label">Fatt. {eur(d.totaleFatturato)}</span><span className="mg-comp-label">Comp. {eur(d.totaleCompetenzeAttive)}</span></div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}><span className={`mg-margine-badge ${marg < SOGLIA_MARGINE_MIN ? 'mg-margine-danger' : 'mg-margine-ok'}`}>{pctStr(marg)}</span></div>
-                      <div style={{ textAlign: 'right' }}><span className="mg-utile-val">{eur(d.totaleDifferenza)}</span><span className="mg-utile-sub">totale</span></div>
-                      <div style={{ textAlign: 'right' }}><span className="mg-apri-btn">Apri →</span></div>
-                    </div>
+                    <tr key={m} className="is-clickable" onClick={() => onApri(m)}>
+                      <td style={{ fontWeight: 600 }}>{meseLabelItaliano(m)}</td>
+                      <td>{d.righe.length}{missing && <span className="mg2-miss"> · import incompleto</span>}</td>
+                      <td><span className="mg2-split"><i style={{ flexGrow: fp || 0.01, background: C.teal }} /><i style={{ flexGrow: (100 - fp) || 0.01, background: C.blue }} /></span></td>
+                      <td className="r">{eur(d.totaleFatturato)}</td>
+                      <td className="r">{eur(d.totaleCompetenzeAttive)}</td>
+                      <td className="r" style={{ fontWeight: 600, color: marg < SOGLIA_MARGINE_MIN ? '#B91C1C' : '#15803D' }}>{pctStr(marg)}</td>
+                      <td className="r" style={{ fontWeight: 600 }}>{eur(d.totaleDifferenza)}</td>
+                    </tr>
                   );
                 })}
-              </div>
-
-              <div className="mg-sidebar">
-                <div className="mg-panel">
-                  <div className="mg-panel-hd"><span>⚠️ Da Controllare</span><span className="mg-panel-sub">{ultimoMese ? meseLabelItaliano(ultimoMese) : ''}</span></div>
-                  {codiciDaControllare.map(r => (
-                    <div key={r.codice} className="mg-check-row">
-                      <code className="mg-check-code">{r.codice}</code>
-                      <span className="mg-check-name">{r.autista}</span>
-                      <span className="mg-check-pct">{pctStr(r.percentuale)}</span>
-                    </div>
-                  ))}
-                  {codiciDaControllare.length === 0 && <div className="mg-empty-hint">✅ Nessun codice sotto soglia</div>}
-                </div>
-
-                <div className="mg-panel">
-                  <div className="mg-panel-hd" style={{ display: 'block' }}><span>📊 Fatturato vs Competenze</span><span className="mg-panel-sub" style={{ display: 'block' }}>tutti i mesi</span></div>
-                  <div className="mg-split-body">
-                    <div className="mg-split-bar-wrap"><div className="mg-split-bar-fat" style={{ flex: fatPct || 0.01 }} /><div className="mg-split-bar-comp" style={{ flex: compPct || 0.01 }} /></div>
-                    <div className="mg-split-row"><span className="mg-split-legend"><span className="mg-split-dot" style={{ background: '#0d9488' }} />Fatturato (+Extra)</span><span className="mg-split-pct-fat">{fatPct}%</span></div>
-                    <div className="mg-split-row"><span className="mg-split-legend"><span className="mg-split-dot" style={{ background: '#2563eb' }} />Competenze Attive</span><span className="mg-split-pct-comp">{compPct}%</span></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {view === 'detail' && (
-        <MarginiDetail mese={mese} onBack={() => { setView('dashboard'); caricaSommari(); }} onMeseChange={setMese} />
-      )}
-    </div>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </Page>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // Vista di dettaglio — logica identica alla vecchia TabMargini, restyled.
-function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: () => void; onMeseChange: (m: string) => void }) {
+function MarginiDetail({ mese, selectMese }: { mese: string; selectMese: ReactNode }) {
   const [dati, setDati] = useState<MarginiResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [importingStat, setImportingStat] = useState(false);
@@ -241,9 +198,8 @@ function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: (
   const [errore, setErrore] = useState<string | null>(null);
   const [soloProblemi, setSoloProblemi] = useState(false);
   const [ricerca, setRicerca] = useState('');
-  const [sortField, setSortField] = useState<SortFieldMargini>('codice');
+  const [sortField, setSortField] = useState<SortFieldMargini>('percentuale');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [showImport, setShowImport] = useState(false);
   const [showAggiungi, setShowAggiungi] = useState(false);
   const inputStatRef = useRef<HTMLInputElement>(null);
   const inputFattRef = useRef<HTMLInputElement>(null);
@@ -432,7 +388,6 @@ function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: (
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortField(field); setSortDir('asc'); }
   };
-  const sortIcon = (field: SortFieldMargini) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
 
   const testoRicerca = ricerca.trim().toLowerCase();
   const righeVisibili = (dati?.righe ?? [])
@@ -462,31 +417,33 @@ function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: (
   const mezziCount = dati?.righe.length ?? 0;
   const sottoSoglia = dati?.righe.filter(r => r.percentuale != null && r.percentuale < SOGLIA_MARGINE_MIN).length ?? 0;
 
+  const dataImp = (d: string | null) => d ? new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const FILES = [
+    { n: 'Statistica Margini Dist.', ok: !!dati?.statisticaImportata, at: dati?.statisticaAggiornataAl ?? null, h: 'Autista, Competenze Attive', busy: importingStat, ref: inputStatRef, on: handleFileStatistica },
+    { n: 'Fattura Proforma', ok: !!dati?.fatturatoImportato, at: dati?.fatturatoAggiornatoAl ?? null, h: 'Autista, Importo Totale', busy: importingFatt, ref: inputFattRef, on: handleFileFattura },
+    { n: 'Statistica Consegne', ok: !!dati?.statisticaConsegneImportata, at: dati?.statisticaConsegneAggiornataAl ?? null, h: 'A (codice), AC-AE esito', busy: importingConsegne, ref: inputConsegneRef, on: handleFileConsegne },
+  ];
+  const daControllare = (dati?.righe ?? []).filter(r => r.percentuale != null && r.percentuale < SOGLIA_MARGINE_MIN)
+    .sort((x, y) => (x.percentuale ?? 0) - (y.percentuale ?? 0));
+  const incompleti = (dati?.righe ?? []).filter(r => (r.fatturato == null && r.extra == null) || r.competenzeAttive == null);
+  const margMedio = dati && dati.totaleCompetenzeAttive !== 0 ? dati.totaleDifferenza / dati.totaleCompetenzeAttive * 100 : null;
+  const azzerabile = !!(dati && (dati.statisticaImportata || dati.fatturatoImportato || dati.statisticaConsegneImportata || dati.righe.length > 0));
+  const sortState = { key: sortField, dir: sortDir };
+
   return (
-    <>
-      <div className="mg-header">
-        <div className="mg-header-left">
-          <button className="mg-btn-outline mg-btn-sm" onClick={onBack}>← Storico</button>
-          <div>
-            <h1>📊 {meseLabelItaliano(mese)}</h1>
-            <span className="mg-sub">{mezziCount} codici analizzati</span>
-          </div>
-        </div>
-        <div className="mg-header-actions">
-          <div className="mg-mese-wrap">
-            <label>Mese</label>
-            <input type="month" className="mg-mese-input" value={mese} onChange={(e) => onMeseChange(e.target.value)} />
-          </div>
-          <button className="mg-btn-outline mg-btn-sm mg-export-btn" onClick={esporta} disabled={!hasDati}>📥 Esporta Excel</button>
-          <button className="mg-btn-outline mg-btn-sm" onClick={() => setShowAggiungi(true)}>➕ Aggiungi codice</button>
-          <button className="mg-btn-outline mg-btn-sm mg-btn-danger" onClick={azzeraMese}
-            disabled={azzerando || loading || !(dati && (dati.statisticaImportata || dati.fatturatoImportato || dati.statisticaConsegneImportata || dati.righe.length > 0))}
-            title={`Elimina tutte le statistiche COD di ${meseLabelItaliano(mese)}`}>
-            {azzerando ? 'Azzeramento…' : '🗑️ Azzera mese'}
-          </button>
-          <button className="mg-btn-primary" onClick={() => setShowImport(v => !v)}>{showImport ? '✕ Chiudi' : '📂 Importa file'}</button>
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        eyebrow="Analisi"
+        title="Margini e statistiche COD"
+        sub={`${meseLabelItaliano(mese)} · ${mezziCount} codici analizzati, ${dati?.esclusi.length ? `${dati.esclusi.length} esclusi` : 'nessuno escluso'}`}
+        actions={<>
+          {selectMese}
+          <Button icon="plus" onClick={() => setShowAggiungi(true)}>Aggiungi codice</Button>
+          <Button icon="download" onClick={esporta} disabled={!hasDati}>Esporta Excel</Button>
+          <Button icon="trash" variant="danger" onClick={azzeraMese} disabled={azzerando || loading || !azzerabile}
+            title={`Elimina tutte le statistiche COD di ${meseLabelItaliano(mese)}`}>{azzerando ? 'Azzeramento…' : 'Azzera mese'}</Button>
+        </>}
+      />
 
       {showAggiungi && (
         <AggiungiCodiceModal
@@ -495,106 +452,104 @@ function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: (
         />
       )}
 
-      {showImport && (
-        <div className="mg-import-panel">
-          <div className="mg-drop-zone" onClick={() => inputStatRef.current?.click()}>
-            <input ref={inputStatRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleFileStatistica(e.target.files?.[0])} />
-            <div className="mg-drop-icon">📂</div>
-            <div className="mg-drop-title">{importingStat ? 'Importazione in corso…' : <>Carica <strong>Statistica Margini Dist.</strong></>}</div>
-            <div className="mg-drop-hint">Colonne richieste: <strong>Autista</strong>, <strong>Competenze Attive</strong></div>
-            {dati?.statisticaImportata && dati.statisticaAggiornataAl && (
-              <div className="mg-drop-info">Importata il {new Date(dati.statisticaAggiornataAl).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-            )}
+      <section aria-label="File importati" className="ds-g3">
+        {FILES.map((f) => (
+          <div key={f.n} className="ds-card mg2-file">
+            <input ref={f.ref} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => f.on(e.target.files?.[0])} />
+            <span className={`mg2-fileic${f.ok ? '' : ' is-off'}`}><Icon name={f.ok ? 'doc' : 'upload'} size={15} /></span>
+            <div className="mg2-filet">
+              <strong>{f.n}</strong>
+              <span>{f.busy ? 'Importazione in corso…' : f.ok ? `${f.at ? dataImp(f.at) : 'Importato'} · colonne ${f.h}` : `Non importato · colonne ${f.h}`}</span>
+            </div>
+            <Button size="sm" icon="upload" onClick={() => f.ref.current?.click()} disabled={f.busy}>{f.ok ? 'Reimporta' : 'Importa'}</Button>
           </div>
-          <div className="mg-drop-zone" onClick={() => inputFattRef.current?.click()}>
-            <input ref={inputFattRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleFileFattura(e.target.files?.[0])} />
-            <div className="mg-drop-icon">📂</div>
-            <div className="mg-drop-title">{importingFatt ? 'Importazione in corso…' : <>Carica <strong>Fattura Proforma</strong></>}</div>
-            <div className="mg-drop-hint">Colonne richieste: <strong>Autista</strong>, <strong>Importo Totale</strong></div>
-            {dati?.fatturatoImportato && dati.fatturatoAggiornatoAl && (
-              <div className="mg-drop-info">Importata il {new Date(dati.fatturatoAggiornatoAl).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+        ))}
+      </section>
+
+      {errore && <Alert tone="ko" title="Attenzione" actions={<IconButton icon="close" label="Chiudi" onClick={() => setErrore(null)} />}>{errore}</Alert>}
+      {loading && <Card pad><Empty>Caricamento margini…</Empty></Card>}
+
+      {!loading && dati && hasDati && (<>
+        <Kpis items={[
+          { label: 'Fatturato (+ extra)', value: eur(dati.totaleFatturato), color: C.teal, icon: 'trend',
+            sub: `Fattura proforma · fatturato PDA da conteggi ${eur(dati.totaleFatturatoPda)}` },
+          { label: 'Competenze attive', value: eur(dati.totaleCompetenzeAttive), color: C.blue, icon: 'euro',
+            sub: dati.totaleCompetenzeAttive !== 0 ? `Da Statistica Margini Dist. · fatturato ${(dati.totaleFatturato / dati.totaleCompetenzeAttive * 100).toFixed(1)}%` : 'Da Statistica Margini Dist.' },
+          { label: 'Utile totale', value: eur(dati.totaleDifferenza), color: C.purple, icon: 'marg',
+            sub: margMedio != null ? `Margine medio ${pctStr(margMedio)}` : '—',
+            seg: margMedio != null ? [{ w: Math.max(0, Math.min(100, margMedio)), color: C.purple }, { w: 100 - Math.max(0, Math.min(100, margMedio)), color: '#E4E4E7' }] : undefined },
+          { label: 'Da controllare', value: String(sottoSoglia), color: C.red, icon: 'warn', subColor: '#B91C1C',
+            sub: `Margine sotto il ${SOGLIA_MARGINE_MIN}%${incompleti.length ? ` · ${incompleti.length} con dati mancanti` : ''}` },
+        ]} />
+
+        <div className="ds-g4">
+          <Card pad className="ds-s3">
+            <CardHead title="Da controllare" sub={`Margine sotto il ${SOGLIA_MARGINE_MIN}%, dal più basso`} />
+            {daControllare.length === 0 ? <Empty>Nessun codice sotto soglia</Empty> : (
+              <div className="ds-g2 mg2-check">
+                {daControllare.map((r) => {
+                  const p = r.percentuale ?? 0;
+                  const col = p < 0 ? '#B91C1C' : p < 15 ? '#C2410C' : '#A16207';
+                  return (
+                    <div key={r.codice} className="mg2-ck" title={`${r.autista}${r.padroncino ? ` · ${r.padroncino}` : ''}`}>
+                      <span className="mg2-code">{r.codice}</span>
+                      <span className="mg2-ckn"><span>{r.autista}</span><i style={{ width: `${Math.max(4, Math.min(100, (p / SOGLIA_MARGINE_MIN) * 100))}%`, background: col }} /></span>
+                      <span style={{ color: col }}>{pctStr(r.percentuale)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </div>
-          <div className="mg-drop-zone" onClick={() => inputConsegneRef.current?.click()}>
-            <input ref={inputConsegneRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={(e) => handleFileConsegne(e.target.files?.[0])} />
-            <div className="mg-drop-icon">📦</div>
-            <div className="mg-drop-title">{importingConsegne ? 'Importazione in corso…' : <>Carica <strong>Statistica Consegne</strong></>}</div>
-            <div className="mg-drop-hint">Colonna A: codice tra le prime parentesi · Colonne AC-AE: Esito / Non Consegnate / %</div>
-            {dati?.statisticaConsegneImportata && dati.statisticaConsegneAggiornataAl && (
-              <div className="mg-drop-info">Importata il {new Date(dati.statisticaConsegneAggiornataAl).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-            )}
-          </div>
+          </Card>
+          <Card pad>
+            <CardHead title="Dati incompleti" sub="Senza fatturato né competenze attive" />
+            {incompleti.length === 0 ? <Empty>Tutti i codici hanno i dati</Empty> : (<>
+              <div className="mg2-chips">{incompleti.map((r) => <span key={r.codice} title={r.autista}>{r.codice}</span>)}</div>
+              {dati.codiciSoloStatistica.length > 0 && <span className="ds-cardsub">{dati.codiciSoloStatistica.length} senza fatturato/extra · {dati.codiciSoloFatturato.length} senza competenze attive</span>}
+              <span className="ds-cardsub">Si completano con Aggiungi codice o si escludono dal mese.</span>
+            </>)}
+          </Card>
         </div>
-      )}
 
-      {errore && <div className="mg-error">⚠️ {errore}<button className="mg-error-close" onClick={() => setErrore(null)}>✕</button></div>}
-      {loading && <div className="mg-loading"><div className="mg-spinner" /><span>Caricamento margini…</span></div>}
-
-      {!loading && dati && (
-        <>
-          <div className="mg-kpi-row mg-kpi-row-6">
-            <div className="mg-kpi mg-kpi-teal"><span className="mg-kpi-label">Fatturato (+Extra)</span><span className="mg-kpi-val mg-kpi-val-md">{eur(dati.totaleFatturato)}</span><span className="mg-kpi-sub">{dati.totaleCompetenzeAttive !== 0 ? `${(dati.totaleFatturato / dati.totaleCompetenzeAttive * 100).toFixed(1)}% delle competenze` : '—'}</span></div>
-            <div className="mg-kpi mg-kpi-blue"><span className="mg-kpi-label">Competenze Attive</span><span className="mg-kpi-val mg-kpi-val-md">{eur(dati.totaleCompetenzeAttive)}</span><span className="mg-kpi-sub">da conteggi</span></div>
-            <div className="mg-kpi mg-kpi-purple"><span className="mg-kpi-label">Utile Totale</span><span className="mg-kpi-val mg-kpi-val-md">{eur(dati.totaleDifferenza)}</span><span className="mg-kpi-sub">{dati.totaleCompetenzeAttive !== 0 ? `${(dati.totaleDifferenza / dati.totaleCompetenzeAttive * 100).toFixed(1)}% margine medio` : '—'}</span></div>
-            <div className="mg-kpi mg-kpi-gray"><span className="mg-kpi-label">Codici Analizzati</span><span className="mg-kpi-val">{mezziCount}</span><span className="mg-kpi-sub">{dati.esclusi.length > 0 ? `${dati.esclusi.length} esclusi` : 'nessuno escluso'}</span></div>
-            <div className="mg-kpi mg-kpi-red"><span className="mg-kpi-label">Da Controllare</span><span className="mg-kpi-val">{sottoSoglia}</span><span className="mg-kpi-sub">margine &lt; {SOGLIA_MARGINE_MIN}%</span></div>
+        <Card>
+          <div className="mg2-head">
+            <CardHead title="Margini per codice" sub="Differenza = competenze attive − (fatturato + extra); % sulle competenze" />
+            <div className="mg2-tools">
+              <SearchBox value={ricerca} onChange={setRicerca} placeholder="Cerca codice, autista, padroncino…" width={260} />
+              <button type="button" aria-pressed={soloProblemi} className={`mg2-solo${soloProblemi ? ' is-on' : ''}`} onClick={() => setSoloProblemi(v => !v)}>
+                <Icon name="filter" size={13} />Solo sotto il {SOGLIA_MARGINE_MIN}% o incompleti
+              </button>
+            </div>
           </div>
-
-          {!showImport && (
-            <div className="mg-status-chips">
-              <span className={`mg-chip ${dati.statisticaImportata ? 'mg-chip-ok' : 'mg-chip-warn'}`}>{dati.statisticaImportata ? '✅ Statistica Margini Dist. importata' : '⚠️ Statistica Margini Dist. non importata'}</span>
-              <span className={`mg-chip ${dati.fatturatoImportato ? 'mg-chip-ok' : 'mg-chip-warn'}`}>{dati.fatturatoImportato ? '✅ Fattura Proforma importata' : '⚠️ Fattura Proforma non importata'}</span>
-              <span className={`mg-chip ${dati.statisticaConsegneImportata ? 'mg-chip-ok' : 'mg-chip-warn'}`}>{dati.statisticaConsegneImportata ? '✅ Statistica Consegne importata' : '⚠️ Statistica Consegne non importata'}</span>
+          {dati.esclusi.length > 0 && (
+            <div className="mg2-escl">
+              <span>{dati.esclusi.length} esclusi dal calcolo di questo mese:</span>
+              {dati.esclusi.map((e) => (
+                <button key={e.codice} type="button" title="Ripristina" onClick={() => ripristina(e.codice)}>
+                  <b>{e.codice}</b><span>{e.autista}</span><em>↺</em>
+                </button>
+              ))}
             </div>
           )}
-
-          {(dati.codiciSoloStatistica.length > 0 || dati.codiciSoloFatturato.length > 0) && (
-            <div className="mg-warn-box">
-              {dati.codiciSoloStatistica.length > 0 && <div>⚠️ <strong>{dati.codiciSoloStatistica.length} codici</strong> senza Fatturato/Extra — {dati.codiciSoloStatistica.slice(0, 10).join(', ')}{dati.codiciSoloStatistica.length > 10 ? '…' : ''}</div>}
-              {dati.codiciSoloFatturato.length > 0 && <div>⚠️ <strong>{dati.codiciSoloFatturato.length} codici</strong> senza Competenze Attive — {dati.codiciSoloFatturato.slice(0, 10).join(', ')}{dati.codiciSoloFatturato.length > 10 ? '…' : ''}</div>}
-            </div>
-          )}
-
-          <div className="mg-toolbar">
-            <div className="mg-search-wrap">
-              <span>🔍</span>
-              <input className="mg-search" placeholder="Cerca codice, autista, padroncino…" value={ricerca} onChange={(e) => setRicerca(e.target.value)} />
-            </div>
-            <label className="mg-check-label">
-              <input type="checkbox" checked={soloProblemi} onChange={(e) => setSoloProblemi(e.target.checked)} />
-              Solo margini &lt; {SOGLIA_MARGINE_MIN}% o dati mancanti
-            </label>
-          </div>
-
-          <div className="mg-table-wrap">
-            <table className="mg-table mg-table-fixed">
+          <div className="ds-tablewrap">
+            <table className="ds-table mg2-table">
               <colgroup>
-                <col style={{ width: 40 }} />
-                <col style={{ width: 110 }} />
-                <col />
-                <col style={{ width: 170 }} />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 130 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 200 }} />
-                <col style={{ width: 40 }} />
+                <col style={{ width: 72 }} /><col /><col style={{ width: 150 }} />
+                <col style={{ width: 90 }} /><col style={{ width: 132 }} /><col style={{ width: 72 }} /><col style={{ width: 100 }} />
+                <col style={{ width: 92 }} /><col style={{ width: 132 }} /><col style={{ width: 110 }} /><col style={{ width: 40 }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th className="mg-th-num">#</th>
-                  <th className="mg-th-sort" onClick={() => toggleSort('codice')}>CODICE{sortIcon('codice')}</th>
-                  <th className="mg-th-sort" onClick={() => toggleSort('autista')}>AUTISTA{sortIcon('autista')}</th>
-                  <th className="mg-th-sort" onClick={() => toggleSort('padroncino')}>PADRONCINO{sortIcon('padroncino')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('fatturato')}>FATTURATO{sortIcon('fatturato')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('competenzeAttive')}>COMPETENZE ATTIVE{sortIcon('competenzeAttive')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('extra')}>EXTRA{sortIcon('extra')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('differenza')}>DIFFERENZA{sortIcon('differenza')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('percentuale')}>% MARGINE{sortIcon('percentuale')}</th>
-                  <th className="mg-th-sort mg-th-num" onClick={() => toggleSort('percNonConsegnate')}>% NON CONSEGNATE{sortIcon('percNonConsegnate')}</th>
-                  <th>NOTE</th>
+                  <Th k="codice" sort={sortState} onSort={toggleSort}>Codice</Th>
+                  <Th k="autista" sort={sortState} onSort={toggleSort}>Autista</Th>
+                  <Th k="padroncino" sort={sortState} onSort={toggleSort}>Padroncino</Th>
+                  <Th k="fatturato" sort={sortState} onSort={toggleSort} right>Fatturato</Th>
+                  <Th k="competenzeAttive" sort={sortState} onSort={toggleSort} right>Competenze attive</Th>
+                  <Th k="extra" sort={sortState} onSort={toggleSort} right>Extra</Th>
+                  <Th k="differenza" sort={sortState} onSort={toggleSort} right>Differenza</Th>
+                  <Th k="percentuale" sort={sortState} onSort={toggleSort} right>% margine</Th>
+                  <Th k="percNonConsegnate" sort={sortState} onSort={toggleSort} right>% non consegnate</Th>
+                  <th>Note</th>
                   <th />
                 </tr>
               </thead>
@@ -602,35 +557,18 @@ function MarginiDetail({ mese, onBack, onMeseChange }: { mese: string; onBack: (
                 {righeVisibili.map((r, i) => (
                   <RigaMarginiRow key={r.codice} r={r} i={i} onSaveManuale={salvaManuale} onEsclude={esclude} />
                 ))}
-                {righeVisibili.length === 0 && <tr><td colSpan={12} className="mg-empty">Nessun dato da mostrare</td></tr>}
+                {righeVisibili.length === 0 && <tr><td colSpan={11}><Empty>Nessun dato da mostrare</Empty></td></tr>}
               </tbody>
             </table>
           </div>
-
-          {dati.esclusi.length > 0 && (
-            <div className="mg-warn-box" style={{ marginTop: 12 }}>
-              <strong>🗑️ {dati.esclusi.length} codici esclusi dal calcolo di questo mese</strong>
-              <div className="mg-esclusi-list">
-                {dati.esclusi.map((e) => (
-                  <span key={e.codice} className="mg-esclusi-chip">
-                    <code>{e.codice}</code> {e.autista}
-                    <button title="Ripristina" onClick={() => ripristina(e.codice)}>↺</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
+          <div className="mg2-foot">Mostrati {righeVisibili.length} di {mezziCount} codici · {dati.esclusi.length ? `${dati.esclusi.length} esclusi questo mese` : 'nessun codice escluso questo mese'} · clic su un codice con statistica consegne per il dettaglio delle non consegnate</div>
+        </Card>
+      </>)}
 
       {!loading && !hasDati && !errore && (
-        <div className="mg-empty-state">
-          <span className="mg-empty-icon">💶</span>
-          <div className="mg-empty-title">Nessun dato per {meseLabelItaliano(mese)}</div>
-          <div className="mg-empty-hint">Clicca "Importa file" per caricare Statistica e Fattura</div>
-        </div>
+        <Card pad><Empty>Nessun dato per {meseLabelItaliano(mese).toLowerCase()}: importa la Statistica Margini Dist. e la Fattura Proforma dalle schede qui sopra.</Empty></Card>
       )}
-    </>
+    </Page>
   );
 }
 
@@ -667,48 +605,47 @@ function RigaMarginiRow({ r, i, onSaveManuale, onEsclude }: {
   return (
     <>
     <tr
-      className={`${sottoSoglia ? 'mg-row-danger' : ''} ${haDettaglio ? 'mg-row-clickable' : ''}`}
+      className={`${haDettaglio ? 'is-clickable' : ''}${espansa ? ' is-open' : ''}`}
       onClick={haDettaglio ? () => setEspansa(v => !v) : undefined}
       title={haDettaglio ? 'Clicca per il dettaglio % Non Consegnate' : undefined}
     >
-      <td className="mg-td-num">{i + 1}</td>
       <td>
-        <code className="mg-codice">
-          {haDettaglio && <span className="mg-nc-chevron">{espansa ? '▾' : '▸'}</span>}
+        <span className="mg2-code">
+          {haDettaglio && <span className="ric2-caret" aria-hidden="true"><Icon name={espansa ? 'chevDown' : 'chevRight'} size={11} /></span>}
           {r.codice}
-        </code>
+        </span>
       </td>
-      <td className="mg-td-nome">{r.autista}</td>
-      <td className="mg-td-nome" onClick={stop}>
-        <input type="text" className="mg-inline-input" style={{ width: 150 }} value={padroncinoStr} placeholder="—"
+      <td className="mg2-ell" title={r.autista}>{r.autista}</td>
+      <td onClick={stop}>
+        <input type="text" className="mg2-in" value={padroncinoStr} placeholder="—"
           onChange={(e) => { setPadroncinoStr(e.target.value); schedule({ padroncinoStr: e.target.value }); }} />
       </td>
-      <td className="mg-td-num" onClick={stop}>
-        <input type="number" step="0.01" className="mg-inline-input" style={{ width: 100 }} value={fatturatoStr} placeholder="0,00"
+      <td className="r" onClick={stop}>
+        <input type="number" step="0.01" className="mg2-in r" value={fatturatoStr} placeholder="0,00"
           onChange={(e) => { setFatturatoStr(e.target.value); schedule({ fatturatoStr: e.target.value }); }} />
       </td>
-      <td className="mg-td-num" onClick={stop}>
-        <input type="number" step="0.01" className="mg-inline-input" style={{ width: 100 }} value={competenzeStr} placeholder="0,00"
+      <td className="r" onClick={stop}>
+        <input type="number" step="0.01" className="mg2-in r" value={competenzeStr} placeholder="0,00"
           onChange={(e) => { setCompetenzeStr(e.target.value); schedule({ competenzeStr: e.target.value }); }} />
       </td>
-      <td className="mg-td-num" onClick={stop}>
-        <input type="number" step="0.01" className="mg-inline-input" style={{ width: 90 }} value={extraStr} placeholder="0,00"
+      <td className="r" onClick={stop}>
+        <input type="number" step="0.01" className="mg2-in r" value={extraStr} placeholder="0,00"
           onChange={(e) => { setExtraStr(e.target.value); schedule({ extraStr: e.target.value }); }} />
       </td>
-      <td className="mg-td-num"><span className={`mg-badge ${r.differenza != null && r.differenza < 0 ? 'mg-badge-danger' : 'mg-badge-primary'}`}>{eur(r.differenza)}</span></td>
-      <td className="mg-td-num"><span className={`mg-badge ${sottoSoglia ? 'mg-badge-danger' : 'mg-badge-warn'}`}>{pctStr(r.percentuale)}</span></td>
-      <td className="mg-td-num">
+      <td className="r" style={{ fontWeight: 600, color: r.differenza != null && r.differenza < 0 ? '#B91C1C' : undefined }}>{eur(r.differenza)}</td>
+      <td className="r"><span className={`mg2-pct${sottoSoglia ? ' is-ko' : r.percentuale != null ? ' is-ok' : ''}`}>{pctStr(r.percentuale)}</span></td>
+      <td className="r">
         {r.percNonConsegnate != null
-          ? <span className={`mg-badge ${nonConsegnateAlte ? 'mg-badge-danger' : 'mg-badge-primary'}`}>{pctStr2(r.percNonConsegnate)}</span>
-          : <span className="mg-td-empty">—</span>}
+          ? <span style={{ fontWeight: 600, color: nonConsegnateAlte ? '#B91C1C' : undefined }}>{pctStr2(r.percNonConsegnate)}</span>
+          : <span style={{ color: '#A1A1AA' }}>—</span>}
       </td>
       <td onClick={stop}>
-        <input type="text" className="mg-inline-input" style={{ width: 180 }} value={noteStr} placeholder="Nota…"
+        <input type="text" className="mg2-in" value={noteStr} placeholder="Nota…"
           onChange={(e) => { setNoteStr(e.target.value); schedule({ noteStr: e.target.value }); }} />
       </td>
-      <td className="mg-td-num" onClick={stop}>
-        <button className="mg-icon-btn" title="Escludi questo codice dal calcolo margini"
-          onClick={() => { if (window.confirm(`Escludere il codice ${r.codice} dal calcolo margini di questo mese?`)) onEsclude(r.codice); }}>🗑️</button>
+      <td className="r" onClick={stop}>
+        <IconButton icon="trash" danger label="Escludi questo codice dal calcolo margini"
+          onClick={() => { if (window.confirm(`Escludere il codice ${r.codice} dal calcolo margini di questo mese?`)) onEsclude(r.codice); }} />
       </td>
     </tr>
     {espansa && haDettaglio && (() => {
@@ -717,7 +654,7 @@ function RigaMarginiRow({ r, i, onSaveManuale, onEsclude }: {
       return (
         <tr className="mg-nc-detail-row">
           {/* colonne #, Codice, Autista, Padroncino, Fatturato, Competenze — vuote */}
-          <td colSpan={6} className="mg-nc-detail-spacer" />
+          <td colSpan={5} className="mg-nc-detail-spacer" />
           {/* colonne Extra, Differenza, % Margine — Esito + Non Consegnate */}
           <td colSpan={3} className="mg-nc-detail-list">
             <div className="mg-nc-line mg-nc-line-hd"><span>Esito</span><span>Non Cons.</span></div>
@@ -773,8 +710,8 @@ function AggiungiCodiceModal({ onClose, onSave }: {
     <div className="mg-modal-overlay">
       <div className="mg-modal" onClick={(e) => e.stopPropagation()}>
         <div className="mg-modal-hd">
-          <span>➕ Aggiungi nuovo codice</span>
-          <button className="mg-icon-btn" onClick={onClose}>✕</button>
+          <span>Aggiungi nuovo codice</span>
+          <IconButton icon="close" label="Chiudi" onClick={onClose} />
         </div>
         <div className="mg-modal-body">
           <label className="mg-modal-field">
@@ -799,8 +736,8 @@ function AggiungiCodiceModal({ onClose, onSave }: {
           </label>
         </div>
         <div className="mg-modal-footer">
-          <button className="mg-btn-outline mg-btn-sm" onClick={onClose} disabled={saving}>Annulla</button>
-          <button className="mg-btn-primary" onClick={submit} disabled={saving || !codice.trim()}>{saving ? 'Salvataggio…' : 'Aggiungi'}</button>
+          <Button onClick={onClose} disabled={saving}>Annulla</Button>
+          <Button variant="primary" onClick={submit} disabled={saving || !codice.trim()}>{saving ? 'Salvataggio…' : 'Aggiungi'}</Button>
         </div>
       </div>
     </div>

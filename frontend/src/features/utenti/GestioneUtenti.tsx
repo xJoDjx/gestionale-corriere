@@ -2,12 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import { navItems } from '../../components/layout/Sidebar';
+import { Icon, Page, PageHeader, Card, CardHead, Button, IconButton, Alert, Empty, Th, useSort } from '../../components/ds';
+import '../impostazioni/Impostazioni2.css';
+import './Utenti2.css';
 import { useAuthStore } from '../../stores/auth.store';
 
 // Sezioni disponibili (derivate dalla sidebar, escludendo i divider)
-const SEZIONI = navItems
-  .filter((item): item is { path: string; label: string; icon: string; key: string } => !('divider' in item))
-  .map(({ key, label, icon }) => ({ key, label, icon }));
+const SEZIONI = navItems.map(({ key, label, icon }) => ({ key, label, icon }));
 
 interface User {
   id: string;
@@ -30,9 +31,9 @@ interface NuovoUtenteForm {
 }
 
 const RUOLO_META = {
-  ADMIN:     { label: 'Admin',     cls: 'badge-red',   icon: '🔑' },
-  OPERATORE: { label: 'Operatore', cls: 'badge-blue',  icon: '👤' },
-  VIEWER:    { label: 'Viewer',    cls: 'badge-gray',  icon: '👁️' },
+  ADMIN:     { label: 'Amministratore', color: '#7C5CF0' },
+  OPERATORE: { label: 'Operatore',      color: '#3D63F0' },
+  VIEWER:    { label: 'Solo lettura',   color: '#A1A1AA' },
 };
 
 const fmt = (d: string) => new Date(d).toLocaleDateString('it-IT');
@@ -94,7 +95,7 @@ function SezioniChecklist({
               disabled={disabled}
               style={{ accentColor: 'var(--primary)', cursor: disabled ? 'default' : 'pointer' }}
             />
-            <span>{icon} {label}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name={icon} size={14} /> {label}</span>
           </label>
         ))}
       </div>
@@ -137,17 +138,9 @@ function NuovoUtenteModal({
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
-    }}>
-      <div style={{
-        background: 'var(--bg-primary)', border: '1px solid var(--border)',
-        borderRadius: 16, padding: 28, width: 480,
-        boxShadow: '0 20px 40px rgba(0,0,0,.3)',
-        maxHeight: '90vh', overflowY: 'auto',
-      }}>
-        <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700 }}>👤 Nuovo Utente</h2>
+    <div className="um-back">
+      <div className="ds-card um-modal" style={{ width: 480 }} role="dialog" aria-modal="true">
+        <h2 className="um-h">Nuovo utente</h2>
 
         {[
           { label: 'Nome *', key: 'nome' as const, type: 'text' },
@@ -156,12 +149,12 @@ function NuovoUtenteModal({
           { label: 'Password *', key: 'password' as const, type: 'password' },
         ].map(({ label, key, type }) => (
           <div key={key} style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>{label}</label>
+            <label className="um-lbl">{label}</label>
             <input
               type={type}
               value={form[key] as string}
               onChange={(e) => set(key, e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+              className="ds-input um-in"
             />
             {key === 'email' && (
               <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'block' }}>
@@ -172,15 +165,15 @@ function NuovoUtenteModal({
         ))}
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>Ruolo *</label>
+          <label className="um-lbl">Ruolo *</label>
           <select
             value={form.ruolo}
             onChange={(e) => set('ruolo', e.target.value)}
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13 }}
+            className="ds-input um-in"
           >
             <option value="OPERATORE">Operatore</option>
-            <option value="ADMIN">Admin</option>
-            <option value="VIEWER">Viewer</option>
+            <option value="ADMIN">Amministratore</option>
+            <option value="VIEWER">Solo lettura</option>
           </select>
         </div>
 
@@ -192,20 +185,13 @@ function NuovoUtenteModal({
 
         {form.ruolo === 'ADMIN' && (
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
-            🔑 Gli Admin hanno accesso a tutte le sezioni automaticamente.
+            Gli amministratori hanno accesso a tutte le sezioni automaticamente.
           </p>
         )}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
-            style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}
-          >Annulla</button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-          >{saving ? 'Creazione...' : 'Crea Utente'}</button>
+          <Button onClick={onClose}>Annulla</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Creazione…' : 'Crea utente'}</Button>
         </div>
       </div>
     </div>
@@ -234,10 +220,10 @@ function SezioniModal({
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: 440, boxShadow: '0 20px 40px rgba(0,0,0,.3)' }}>
-        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>
-          🗂️ Sezioni — {user.nome} {user.cognome}
+    <div className="um-back">
+      <div className="ds-card um-modal" style={{ width: 440 }} role="dialog" aria-modal="true">
+        <h3 className="um-h">
+          Sezioni visibili: {user.nome} {user.cognome}
         </h3>
         <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
           Seleziona le sezioni visibili nella barra laterale.
@@ -249,14 +235,14 @@ function SezioniModal({
         </div>
 
         <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
-          💡 Con la lista vuota non ci sono restrizioni (backward compat). Per bloccare l'accesso disattiva l'utente.
+          Con la lista vuota non ci sono restrizioni (backward compat). Per bloccare l'accesso disattiva l'utente.
         </p>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>Annulla</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <Button onClick={onClose}>Annulla</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Salvo...' : 'Salva'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -288,9 +274,9 @@ function ModificaUtenteModal({
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: 420, boxShadow: '0 20px 40px rgba(0,0,0,.3)' }}>
-        <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700 }}>✏️ Modifica Utente</h3>
+    <div className="um-back">
+      <div className="ds-card um-modal" style={{ width: 420 }} role="dialog" aria-modal="true">
+        <h3 className="um-h">Modifica utente</h3>
 
         {[
           { label: 'Nome *', key: 'nome' as const },
@@ -298,21 +284,21 @@ function ModificaUtenteModal({
           { label: 'Email / Username', key: 'email' as const },
         ].map(({ label, key }) => (
           <div key={key} style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>{label}</label>
+            <label className="um-lbl">{label}</label>
             <input
               type="text"
               value={form[key]}
               onChange={e => set(key, e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }}
+              className="ds-input um-in"
             />
           </div>
         ))}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>Annulla</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <Button onClick={onClose}>Annulla</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Salvo...' : 'Salva'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -339,21 +325,21 @@ function CambioPasswordModal({ userId, onClose }: { userId: string; onClose: () 
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: 360, boxShadow: '0 20px 40px rgba(0,0,0,.3)' }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 16 }}>🔒 Cambia Password</h3>
+    <div className="um-back">
+      <div className="ds-card um-modal" style={{ width: 360 }} role="dialog" aria-modal="true">
+        <h3 className="um-h">Cambia password</h3>
         <input
           type="password"
           placeholder="Nuova password (min. 6 caratteri)"
           value={pwd}
           onChange={(e) => setPwd(e.target.value)}
-          style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box', marginBottom: 16 }}
+          className="ds-input um-in" style={{ marginBottom: 16 }}
         />
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>Annulla</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <Button onClick={onClose}>Annulla</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
             {saving ? 'Salvo...' : 'Salva'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -374,16 +360,16 @@ function MostraPasswordModal({ user, onClose }: { user: User; onClose: () => voi
   }, [user.id]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: 380, boxShadow: '0 20px 40px rgba(0,0,0,.3)' }}>
-        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>👁️ Password — {user.nome} {user.cognome}</h3>
+    <div className="um-back">
+      <div className="ds-card um-modal" style={{ width: 380 }} role="dialog" aria-modal="true">
+        <h3 className="um-h">Password: {user.nome} {user.cognome}</h3>
         <p style={{ margin: '0 0 18px', fontSize: 12, color: 'var(--text-muted)' }}>{user.email}</p>
 
         {loading ? (
           <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Caricamento...</p>
         ) : password === null ? (
           <div style={{ padding: '12px 16px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-            ⚠️ Password non disponibile — impostata prima di questo aggiornamento o mai salvata in chiaro.
+            Password non disponibile — impostata prima di questo aggiornamento o mai salvata in chiaro.
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -400,13 +386,13 @@ function MostraPasswordModal({ user, onClose }: { user: User; onClose: () => voi
               style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 16 }}
               title={visible ? 'Nascondi' : 'Mostra'}
             >
-              {visible ? '🙈' : '👁️'}
+              <Icon name={visible ? 'hide' : 'eye'} size={15} />
             </button>
           </div>
         )}
 
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '7px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-secondary)', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>Chiudi</button>
+          <Button onClick={onClose}>Chiudi</Button>
         </div>
       </div>
     </div>
@@ -494,168 +480,133 @@ export default function GestioneUtenti() {
     }
   };
 
-  if (loading) return (
-    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-      Caricamento utenti...
-    </div>
-  );
+  const [stats, setStats] = useState<{ totale: number; perUtente: { userId: string | null; nome: string; count: number }[]; ultimoAccesso: Record<string, string | null> } | null>(null);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [sezDraft, setSezDraft] = useState<string[] | null>(null);
+  const [savingSez, setSavingSez] = useState(false);
+  useEffect(() => { api.get<any>('/audit/stats').then(setStats).catch(() => {}); }, []);
 
-  if (error) return (
-    <div style={{ padding: 32 }}>
-      <div style={{ color: '#dc2626', marginBottom: 12 }}>⚠️ {error}</div>
-      <button onClick={load} style={{ padding: '6px 14px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>Riprova</button>
-    </div>
-  );
+  type K = 'n' | 'a' | 'r' | 'p' | 'l' | 's';
+  const ultimo = (u: User) => stats?.ultimoAccesso?.[u.id] ?? null;
+  const { sorted, sort, toggle } = useSort<User, K>(utenti, (u, k) =>
+    k === 'n' ? `${u.nome} ${u.cognome}` : k === 'a' ? u.email : k === 'r' ? RUOLO_META[u.ruolo].label
+      : k === 'p' ? (u.ruolo === 'ADMIN' ? 999 : u.sezioniVisibili.length || 998) : k === 'l' ? (ultimo(u) ?? '') : (u.attivo ? 0 : 1), { key: 'n', dir: 'asc' });
+
+  if (loading) return <Page><Card pad><Empty>Caricamento utenti…</Empty></Card></Page>;
+  if (error) return <Page><Alert tone="ko" title="Errore" actions={<Button size="sm" onClick={load}>Riprova</Button>}>{error}</Alert></Page>;
 
   const attivi = utenti.filter(u => u.attivo).length;
+  const sel = utenti.find((u) => u.id === selId) ?? utenti.find((u) => u.ruolo !== 'ADMIN') ?? utenti[0];
+  const selSez = sezDraft ?? sel?.sezioniVisibili ?? [];
+  const isSelAdmin = sel?.ruolo === 'ADMIN';
+  const top = stats?.perUtente[0];
+  const topPct = stats && top && stats.totale ? Math.round(top.count / stats.totale * 100) : 0;
+  const maiEntrati = stats ? utenti.filter((u) => u.attivo && !ultimo(u)) : [];
+  const scegli = (u: User) => { setSelId(u.id); setSezDraft(null); };
+  const salvaSezioni = async () => {
+    if (!sel) return;
+    setSavingSez(true);
+    try { await handleSalvaSezioni(sel.id, selSez); setSezDraft(null); }
+    catch (e: any) { alert('Errore: ' + e.message); }
+    finally { setSavingSez(false); }
+  };
+  const fmtAcc = (d: string | null) => d ? new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') : 'Mai';
 
   return (
-    <div style={{ padding: 24 }}>
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>👥 Gestione Utenti</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>
-            {attivi} attivi · {utenti.length} totali
-          </p>
-        </div>
-        <button
-          onClick={() => setShowNuovo(true)}
-          style={{ padding: '9px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
-        >+ Nuovo Utente</button>
-      </div>
+    <Page>
+      <PageHeader eyebrow="Sistema" title="Utenti" sub="Accessi al gestionale, ruoli e sezioni visibili" />
 
-      {/* ── Stats pills ── */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-        {(['ADMIN', 'OPERATORE', 'VIEWER'] as const).map((r) => {
-          const count = utenti.filter(u => u.ruolo === r).length;
-          const m = RUOLO_META[r];
-          return (
-            <div key={r} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-              borderRadius: 10, padding: '10px 18px',
-            }}>
-              <span style={{ fontSize: 18 }}>{m.icon}</span>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{count}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{m.label}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {stats && (topPct > 60 || maiEntrati.length > 0) && (
+        <Alert tone="warn" title={topPct > 60 ? `Il ${topPct}% delle modifiche risulta fatto da ${top?.nome}` : `${maiEntrati.length} utenti non hanno mai fatto accesso`}>
+          {maiEntrati.length > 0 && `${maiEntrati.map((u) => u.nome).join(', ')} non ${maiEntrati.length === 1 ? 'ha' : 'hanno'} mai fatto accesso col proprio utente. `}
+          Con un accesso personale per ognuno lo storico dice chi ha cambiato cosa.
+        </Alert>
+      )}
 
-      {/* ── Tabella ── */}
-      <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid var(--border)' }}>
-              {['UTENTE', 'EMAIL', 'RUOLO', 'SEZIONI', 'STATO', 'CREATO', 'AZIONI'].map((h) => (
-                <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {utenti.map((u) => {
-              const rm = RUOLO_META[u.ruolo];
-              const sezioniLabel = u.ruolo === 'ADMIN'
-                ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>tutte</span>
-                : u.sezioniVisibili.length === 0
-                  ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>nessuna restrizione</span>
-                  : <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 600 }}>{u.sezioniVisibili.length} / {SEZIONI.length}</span>;
-
-              return (
-                <tr
-                  key={u.id}
-                  style={{ borderBottom: '1px solid var(--border)', opacity: u.attivo ? 1 : 0.55, transition: 'background .1s' }}
-                >
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 36, height: 36, borderRadius: '50%',
-                        background: u.attivo ? 'var(--primary)' : 'var(--text-muted)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0,
-                      }}>
-                        {u.nome[0]?.toUpperCase() ?? '?'}
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{u.nome} {u.cognome}</div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{u.email}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <select
-                      value={u.ruolo}
-                      onChange={(e) => handleCambioRuolo(u.id, e.target.value)}
-                      style={{ padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 700, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer' }}
-                    >
-                      <option value="ADMIN">🔑 Admin</option>
-                      <option value="OPERATORE">👤 Operatore</option>
-                      <option value="VIEWER">👁️ Viewer</option>
-                    </select>
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    {sezioniLabel}
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span style={{
-                      display: 'inline-block', padding: '3px 10px', borderRadius: 999,
-                      fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: u.attivo ? 'rgba(34,197,94,.12)' : 'rgba(100,116,139,.12)',
-                      color: u.attivo ? '#16a34a' : '#64748b',
-                    }}>
-                      {u.attivo ? 'Attivo' : 'Disattivo'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)' }}>{fmt(u.createdAt)}</td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button
-                        onClick={() => setModificaUser(u)}
-                        style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
-                        title="Modifica nome, cognome, email"
-                      >✏️ Modifica</button>
-                      {u.ruolo !== 'ADMIN' && (
-                        <button
-                          onClick={() => setSezioniUser(u)}
-                          style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
-                          title="Modifica sezioni visibili"
-                        >🗂️ Sezioni</button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setPasswordUser(u)}
-                          style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
-                          title="Visualizza password"
-                        >👁️ Pwd</button>
-                      )}
-                      <button
-                        onClick={() => handleToggleAttivo(u.id)}
-                        style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border)', background: u.attivo ? '#fef3c7' : 'rgba(34,197,94,.1)', color: u.attivo ? '#92400e' : '#16a34a' }}
-                      >
-                        {u.attivo ? 'Disattiva' : 'Attiva'}
-                      </button>
-                      <button
-                        onClick={() => setCambioPasswordId(u.id)}
-                        style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
-                      >🔒 Cambia</button>
-                      <button
-                        onClick={() => handleElimina(u.id, u.nome + ' ' + u.cognome)}
-                        style={{ padding: '5px 10px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer', border: '1px solid #fca5a5', background: '#fee2e2', color: '#dc2626' }}
-                      >✕</button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {utenti.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
-            Nessun utente trovato
+      <div className="ds-g4">
+        <Card className="ds-s3">
+          <div className="um-head">
+            <CardHead title="Utenti" sub={`${attivi} attivi · ${utenti.length - attivi} disattivati`} />
+            <Button variant="primary" size="sm" icon="plus" onClick={() => setShowNuovo(true)}>Nuovo utente</Button>
           </div>
-        )}
+          <div className="ds-tablewrap">
+            <table className="ds-table um-table">
+              <colgroup><col /><col style={{ width: '15%' }} /><col style={{ width: 136 }} /><col style={{ width: 76 }} /><col style={{ width: 122 }} /><col style={{ width: 88 }} /><col style={{ width: 128 }} /></colgroup>
+              <thead><tr>
+                <Th k="n" sort={sort} onSort={toggle}>Nome</Th>
+                <Th k="a" sort={sort} onSort={toggle}>Accesso</Th>
+                <Th k="r" sort={sort} onSort={toggle}>Ruolo</Th>
+                <Th k="p" sort={sort} onSort={toggle}>Sezioni</Th>
+                <Th k="l" sort={sort} onSort={toggle}>Ultimo accesso</Th>
+                <Th k="s" sort={sort} onSort={toggle}>Stato</Th>
+                <th />
+              </tr></thead>
+              <tbody>
+                {sorted.map((u) => {
+                  const rm = RUOLO_META[u.ruolo];
+                  const on = sel?.id === u.id;
+                  const acc = ultimo(u);
+                  return (
+                    <tr key={u.id} className={`is-clickable${on ? ' is-open' : ''}`} style={{ opacity: u.attivo ? 1 : 0.55 }} onClick={() => scegli(u)}>
+                      <td style={{ fontWeight: 600 }} className="um-ell">{u.nome} {u.cognome}</td>
+                      <td className="um-ell um-mono" title={u.email}>{u.email}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <span className="um-role"><i style={{ background: rm.color }} />
+                          <select value={u.ruolo} onChange={(e) => handleCambioRuolo(u.id, e.target.value)} aria-label={`Ruolo di ${u.nome}`}>
+                            <option value="ADMIN">Amministratore</option>
+                            <option value="OPERATORE">Operatore</option>
+                            <option value="VIEWER">Solo lettura</option>
+                          </select>
+                        </span>
+                      </td>
+                      <td style={{ color: '#52525B' }}>{u.ruolo === 'ADMIN' ? 'Tutte' : u.sezioniVisibili.length === 0 ? 'Nessun limite' : `${u.sezioniVisibili.length} di ${SEZIONI.length}`}</td>
+                      <td style={{ color: acc ? '#3F3F46' : '#A1A1AA', whiteSpace: 'nowrap' }}>{stats ? fmtAcc(acc) : '…'}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <button type="button" role="switch" aria-checked={u.attivo} className={`imp2-tog${u.attivo ? ' is-on' : ''}`} onClick={() => handleToggleAttivo(u.id)}><i />{u.attivo ? 'Attivo' : 'Disattivo'}</button>
+                      </td>
+                      <td className="r" onClick={(e) => e.stopPropagation()}>
+                        <span className="um-acts">
+                          <IconButton icon="edit" label="Modifica nome, cognome, email" onClick={() => setModificaUser(u)} />
+                          <IconButton icon="lock" label="Cambia password" onClick={() => setCambioPasswordId(u.id)} />
+                          {isAdmin && <IconButton icon="eye" label="Visualizza password" onClick={() => setPasswordUser(u)} />}
+                          <IconButton icon="trash" danger label="Elimina utente" onClick={() => handleElimina(u.id, u.nome + ' ' + u.cognome)} />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {utenti.length === 0 && <Empty>Nessun utente trovato</Empty>}
+        </Card>
+
+        <Card pad className="um-perm">
+          <CardHead title="Sezioni visibili" sub={sel ? `${sel.nome} ${sel.cognome} · ${RUOLO_META[sel.ruolo].label}` : ''} />
+          <span className="ds-cardsub">Gli amministratori vedono tutto. Per operatori e lettori si sceglie sezione per sezione; con la lista vuota non ci sono limiti.</span>
+          {sel && (<>
+            <div className="um-checks">
+              {SEZIONI.map(({ key, label }) => {
+                const on = isSelAdmin || selSez.includes(key);
+                return (
+                  <label key={key} className={on ? 'is-on' : ''}>
+                    <input type="checkbox" checked={on} disabled={isSelAdmin}
+                      onChange={() => setSezDraft(selSez.includes(key) ? selSez.filter((k) => k !== key) : [...selSez, key])} />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!isSelAdmin && (
+              <div className="um-permfoot">
+                <button type="button" className="um-link" onClick={() => setSezDraft(SEZIONI.every((x) => selSez.includes(x.key)) ? [] : SEZIONI.map((x) => x.key))}>
+                  {SEZIONI.every((x) => selSez.includes(x.key)) ? 'Deseleziona tutto' : 'Seleziona tutto'}
+                </button>
+                <Button size="sm" icon="check" onClick={salvaSezioni} disabled={savingSez || sezDraft === null}>{savingSez ? 'Salvataggio…' : 'Salva permessi'}</Button>
+              </div>
+            )}
+          </>)}
+        </Card>
       </div>
 
       <NuovoUtenteModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleCrea} />
@@ -683,6 +634,6 @@ export default function GestioneUtenti() {
           onSave={(data) => handleModifica(modificaUser.id, data)}
         />
       )}
-    </div>
+    </Page>
   );
 }

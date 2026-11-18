@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  padronciniApi, mezziApi, palmariApi, codiciAutistaApi,
+  padronciniApi, mezziApi, palmariApi, codiciAutistaApi, documentiApi,
   Padroncino, CreatePadroncinoPayload,
 } from '../../lib/api';
+import type { PadroncinoMezzo, PadroncinoPalmare, PadroncinoCodiceAutista } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
+import { Page, PageHeader, Card, Kpis, Button, SegTabs, Tabs, SearchBox, Select, Th, Dot, Empty, Alert, Tile, Icon, C, useSort, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
+import type { Tone, IconName } from '../../components/ds';
+import './Padroncini2.css';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -56,7 +62,9 @@ function dvrStatus(dateStr?: string | null, esente?: boolean): { label: string; 
 }
 
 // ─── TIPI LOCALI ──────────────────────────────────────
-type Filtro = 'TUTTI' | 'ATTIVO' | 'DISMESSO';
+type Filtro = 'TUTTI' | 'ATTIVO' | 'DISMESSO' | 'ALERT';
+type SortK = 'nome' | 'stato' | 'durc' | 'dvr' | 'palmari' | 'mezzi' | 'autisti' | 'fatturato';
+interface DocInfo { t: string; tone: Tone; k: number }
 
 interface NuovoPadroncinoForm {
   ragioneSociale: string;
@@ -511,8 +519,32 @@ function EmptyTab({ icon, msg }: { icon: string; msg: string }) {
   );
 }
 
+// ─── GRAFICA CONDIVISA DELLE SCHEDE (restyling) ───────
+function TabCard({ title, sub, actions, children, foot }: { title: string; sub?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode; foot?: React.ReactNode }) {
+  return (
+    <Card>
+      <div className="pdx-head">
+        <div className="pdx-head-t">
+          <h2 className="ds-h2">{title}</h2>
+          {sub && <span className="ds-cardsub">{sub}</span>}
+        </div>
+        {actions && <div className="ds-actions">{actions}</div>}
+      </div>
+      {children}
+      {foot && <div className="pl2-foot">{foot}</div>}
+    </Card>
+  );
+}
+function RowAct({ icon, label, onClick, danger, href }: { icon: IconName; label: string; onClick?: () => void; danger?: boolean; href?: string }) {
+  if (href) return <a className={`pdx-act${danger ? ' is-danger' : ''}`} href={href} target="_blank" rel="noreferrer" title={label} aria-label={label} onClick={(e) => e.stopPropagation()}><Icon name={icon} size={13} /></a>;
+  return <button type="button" className={`pdx-act${danger ? ' is-danger' : ''}`} title={label} aria-label={label} onClick={(e) => { e.stopPropagation(); onClick?.(); }}><Icon name={icon} size={13} /></button>;
+}
+function VuotoTab({ msg, cta }: { msg: string; cta?: React.ReactNode }) {
+  return <div className="pdx-empty"><span>{msg}</span>{cta}</div>;
+}
+
 // ─── TAB MEZZI ────────────────────────────────────────
-function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+function TabMezzi({ p, onRefresh, contrSignal }: { p: Padroncino; onRefresh: () => void; contrSignal?: number }) {
   const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
   const [showContratto, setShowContratto] = useState(false);
@@ -543,81 +575,85 @@ function TabMezzi({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
   const attivi = (p.mezziAssegnati || []).filter((m) => !m.dataFine);
   const storici = (p.mezziAssegnati || []).filter((m) => m.dataFine);
 
+  useEffect(() => { if (contrSignal) setShowContratto(true); }, [contrSignal]);
+  const { sorted, sort, toggle } = useSort<PadroncinoMezzo, 'targa' | 'marca' | 'alim' | 'rata' | 'dal'>(attivi, (m, k) =>
+    k === 'targa' ? m.targa : k === 'marca' ? `${m.marca} ${m.modello}` : k === 'alim' ? m.alimentazione : k === 'rata' ? (m.tariffa ?? null) : m.dataInizio,
+    { key: 'targa', dir: 'asc' });
+  const rataTot = attivi.reduce((s, m) => s + (Number(m.tariffa) || 0), 0);
+
   return (
-    <div>
-      <div className="pd-tab-actions">
-        <button className="btn-primary btn-sm" onClick={() => { loadMezziDisp(); setShowAssegna(true); }}>
-          🔗 Assegna Mezzo
-        </button>
-        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
-          📄 Crea Contratto
-        </button>
-      </div>
-
-      {attivi.length === 0 ? (
-        <EmptyTab icon="🚚" msg="Nessun mezzo assegnato attualmente" />
-      ) : (
-        <div className="pd-items-table-wrap">
-          <table className="pd-items-table">
-            <thead>
-              <tr>
-                <th>TARGA</th><th>MARCA / MODELLO</th><th>TIPO</th>
-                <th>DATA INIZIO</th><th>TARIFFA</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {attivi.map((m) => (
-                <tr key={m.id} className="pd-item-row">
-                  <td className="pd-item-targa">{m.targa}</td>
-                  <td><span className="pd-item-marca">{m.marca}</span> <span className="pd-item-modello">{m.modello}</span></td>
-                  <td><span className={`pd-item-badge ${m.alimentazione === 'ELETTRICO' ? 'pd-item-badge-green' : 'pd-item-badge-gray'}`}>{m.alimentazione}</span></td>
-                  <td>{fmtData(m.dataInizio)}</td>
-                  <td className="pd-td-purple">{m.tariffa != null ? <span className="pd-val-purple">{fmtEur(m.tariffa)}</span> : <span className="pd-empty">—</span>}</td>
-                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn-outline btn-sm" title="Vai ai dettagli del mezzo" onClick={() => navigate(`/flotta/${m.mezzoId}`)}>Dettagli</button>
-                    <button className="pd-del-btn" title="Rimuovi assegnazione" onClick={() => handleRimuovi(m.id)}>✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {storici.length > 0 && (
-        <details style={{ marginTop: 12 }}>
-          <summary style={{ fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 0' }}>
-            Storico assegnazioni ({storici.length})
-          </summary>
-          <div className="pd-items-table-wrap" style={{ marginTop: 8 }}>
-            <table className="pd-items-table">
-              <thead>
-                <tr><th>TARGA</th><th>INIZIO</th><th>FINE</th></tr>
-              </thead>
+    <>
+      <TabCard
+        title="Mezzi assegnati"
+        sub={`${attivi.length} in corso${rataTot ? ` · rata totale ${fmtEur2(rataTot)} al mese` : ''}`}
+        actions={<>
+          <Button size="sm" icon="doc" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>Contratto mezzi</Button>
+          <Button size="sm" icon="plus" variant="primary" onClick={() => { loadMezziDisp(); setShowAssegna(true); }}>Assegna mezzo</Button>
+        </>}
+        foot={<>
+          {attivi.length} mezz{attivi.length === 1 ? 'o' : 'i'}{storici.length ? ` · ${storici.length} assegnazion${storici.length === 1 ? 'e chiusa' : 'i chiuse'} nello storico` : ''}
+        </>}
+      >
+        {attivi.length === 0 ? <VuotoTab msg="Nessun mezzo assegnato attualmente" /> : (
+          <div className="ds-tablewrap">
+            <table className="ds-table pdx-table">
+              <thead><tr>
+                <Th k="targa" sort={sort} onSort={toggle}>Targa</Th>
+                <Th k="marca" sort={sort} onSort={toggle}>Marca / modello</Th>
+                <Th k="alim" sort={sort} onSort={toggle}>Alimentazione</Th>
+                <Th k="rata" sort={sort} onSort={toggle} right>Rata €/mese</Th>
+                <Th k="dal" sort={sort} onSort={toggle}>Assegnato dal</Th>
+                <Th />
+              </tr></thead>
               <tbody>
-                {storici.map((m) => (
-                  <tr key={m.id} className="pd-item-row" style={{ opacity: 0.6 }}>
-                    <td>{m.targa}</td>
+                {sorted.map((m) => (
+                  <tr key={m.id} className="is-clickable" onClick={() => navigate(`/flotta/${m.mezzoId}`)}>
+                    <td className="ds-mono" style={{ fontWeight: 600 }}>{m.targa}</td>
+                    <td>{[m.marca, m.modello].filter(Boolean).join(' ')}</td>
+                    <td style={{ color: m.alimentazione === 'ELETTRICO' ? '#0B7A7A' : undefined }}>{m.alimentazione ? m.alimentazione.charAt(0) + m.alimentazione.slice(1).toLowerCase() : '—'}</td>
+                    <td className="r" style={{ fontWeight: 600 }}>{m.tariffa != null ? fmtEur2(m.tariffa) : '—'}</td>
                     <td>{fmtData(m.dataInizio)}</td>
-                    <td>{fmtData(m.dataFine)}</td>
+                    <td className="r pdx-acts">
+                      <RowAct icon="link" label="Vai ai dettagli del mezzo" onClick={() => navigate(`/flotta/${m.mezzoId}`)} />
+                      <RowAct icon="close" label="Chiudi assegnazione" danger onClick={() => handleRimuovi(m.id)} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </details>
-      )}
+        )}
+        {storici.length > 0 && (
+          <details className="pdx-details">
+            <summary>Storico assegnazioni ({storici.length})</summary>
+            <div className="ds-tablewrap">
+              <table className="ds-table pdx-table">
+                <thead><tr><Th>Targa</Th><Th>Inizio</Th><Th>Fine</Th></tr></thead>
+                <tbody>
+                  {storici.map((m) => (
+                    <tr key={m.id} style={{ color: '#6B6B73' }}>
+                      <td className="ds-mono">{m.targa}</td>
+                      <td>{fmtData(m.dataInizio)}</td>
+                      <td>{fmtData(m.dataFine)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+      </TabCard>
 
       <AssegnaModal
         open={showAssegna} onClose={() => setShowAssegna(false)}
-        onSave={handleAssegna} title="Assegna Mezzo a Padroncino" items={mezziDisp}
+        onSave={handleAssegna} title="Assegna mezzo a padroncino" items={mezziDisp}
       />
 
       <ContrattoMezziModal
         open={showContratto} onClose={() => setShowContratto(false)}
         p={p} attivi={attivi}
       />
-    </div>
+    </>
   );
 }
 
@@ -841,7 +877,7 @@ function ContrattoPalmareModal({
 }
 
 // ─── TAB PALMARI ──────────────────────────────────────
-function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+function TabPalmari({ p, onRefresh, contrSignal }: { p: Padroncino; onRefresh: () => void; contrSignal?: number }) {
   const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
   const [showContratto, setShowContratto] = useState(false);
@@ -871,52 +907,59 @@ function TabPalmari({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
 
   const attivi = (p.palmariAssegnati || []).filter((pal) => !pal.dataFine);
 
-  return (
-    <div>
-      <div className="pd-tab-actions">
-        <button className="btn-primary btn-sm" onClick={() => { loadPalmariDisp(); setShowAssegna(true); }}>
-          🔗 Assegna Palmare
-        </button>
-        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
-          📄 Crea Contratto
-        </button>
-      </div>
+  useEffect(() => { if (contrSignal) setShowContratto(true); }, [contrSignal]);
+  const { sorted, sort, toggle } = useSort<PadroncinoPalmare, 'cod' | 'tar' | 'dal'>(attivi, (x, k) =>
+    k === 'cod' ? x.codice : k === 'tar' ? (x.tariffa ?? null) : x.dataInizio, { key: 'cod', dir: 'asc' });
+  const tariffe = Array.from(new Set(attivi.map((x) => x.tariffa).filter((t) => t != null)));
 
-      {attivi.length === 0 ? (
-        <EmptyTab icon="📱" msg="Nessun palmare assegnato" />
-      ) : (
-        <div className="pd-items-table-wrap">
-          <table className="pd-items-table">
-            <thead>
-              <tr><th>CODICE</th><th>TARIFFA €/GG</th><th>DATA INIZIO</th><th></th></tr>
-            </thead>
-            <tbody>
-              {attivi.map((pal) => (
-                <tr key={pal.id} className="pd-item-row">
-                  <td className="pd-item-targa">{pal.codice}</td>
-                  <td className="pd-td-purple">{pal.tariffa != null ? <span className="pd-val-purple">{fmtEur(pal.tariffa)}</span> : <span className="pd-empty">—</span>}</td>
-                  <td>{fmtData(pal.dataInizio)}</td>
-                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn-outline btn-sm" title="Vai ai dettagli del palmare" onClick={() => navigate(`/palmari/${pal.palmareId}`)}>Dettagli</button>
-                    <button className="pd-del-btn" title="Rimuovi" onClick={() => handleRimuovi(pal.id)}>✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+  return (
+    <>
+      <TabCard
+        title="Palmari assegnati"
+        sub={`${attivi.length} in corso${tariffe.length === 1 ? ` · ${fmtEur2(Number(tariffe[0]))} al giorno ciascuno` : ''}`}
+        actions={<>
+          <Button size="sm" icon="doc" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>Contratto palmari</Button>
+          <Button size="sm" icon="plus" variant="primary" onClick={() => { loadPalmariDisp(); setShowAssegna(true); }}>Assegna palmare</Button>
+        </>}
+        foot={`${attivi.length} palmar${attivi.length === 1 ? 'e' : 'i'}`}
+      >
+        {attivi.length === 0 ? <VuotoTab msg="Nessun palmare assegnato" /> : (
+          <div className="ds-tablewrap">
+            <table className="ds-table pdx-table">
+              <thead><tr>
+                <Th k="cod" sort={sort} onSort={toggle}>Palmare</Th>
+                <Th k="tar" sort={sort} onSort={toggle} right>Tariffa €/giorno</Th>
+                <Th k="dal" sort={sort} onSort={toggle}>Assegnato dal</Th>
+                <Th />
+              </tr></thead>
+              <tbody>
+                {sorted.map((pal) => (
+                  <tr key={pal.id} className="is-clickable" onClick={() => navigate(`/palmari/${pal.palmareId}`)}>
+                    <td className="ds-mono" style={{ fontWeight: 600 }}>{pal.codice}</td>
+                    <td className="r">{pal.tariffa != null ? fmtEur2(pal.tariffa) : '—'}</td>
+                    <td>{fmtData(pal.dataInizio)}</td>
+                    <td className="r pdx-acts">
+                      <RowAct icon="link" label="Vai ai dettagli del palmare" onClick={() => navigate(`/palmari/${pal.palmareId}`)} />
+                      <RowAct icon="close" label="Chiudi assegnazione" danger onClick={() => handleRimuovi(pal.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </TabCard>
 
       <AssegnaModal
         open={showAssegna} onClose={() => setShowAssegna(false)}
-        onSave={handleAssegna} title="Assegna Palmare a Padroncino" items={palmariDisp}
+        onSave={handleAssegna} title="Assegna palmare a padroncino" items={palmariDisp}
       />
 
       <ContrattoPalmareModal
         open={showContratto} onClose={() => setShowContratto(false)}
         p={p} attivi={attivi}
       />
-    </div>
+    </>
   );
 }
 
@@ -960,8 +1003,8 @@ function InlineEditCell({
   const cancel = () => setEditing(false);
 
   const displayVal = () => {
-    if (value == null || value === '') return <span className="pd-empty">—</span>;
-    if (tipo === 'euro') return <span className={valueClassName}>{fmtEur(Number(value))}</span>;
+    if (value == null || value === '') return <span className="pdx-muted">—</span>;
+    if (tipo === 'euro') return <span className={valueClassName}>{fmtEur2(Number(value))}</span>;
     return <span className={valueClassName}>{String(value)}</span>;
   };
 
@@ -999,13 +1042,9 @@ function InlineEditCell({
     <span
       title="Clicca per modificare"
       onClick={startEdit}
-      style={{
-        cursor: 'pointer',
-        borderBottom: '1px dashed var(--border)',
-        paddingBottom: 1,
-        minWidth: 24,
-        display: 'inline-block',
-      }}
+      className="pdx-inline"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') startEdit(); }}
     >
       {displayVal()}
     </span>
@@ -1085,7 +1124,7 @@ function ContrattoCodiciModal({
 }
 
 // ─── TAB AUTISTI ──────────────────────────────────────
-function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) {
+function TabAutisti({ p, onRefresh, contrSignal }: { p: Padroncino; onRefresh: () => void; contrSignal?: number }) {
   const navigate = useNavigate();
   const [showAssegna, setShowAssegna] = useState(false);
   const [showContratto, setShowContratto] = useState(false);
@@ -1131,125 +1170,96 @@ function TabAutisti({ p, onRefresh }: { p: Padroncino; onRefresh: () => void }) 
 
   const attivi = (p.codiciAutista || []).filter((a) => !a.dataFine);
 
-  return (
-    <div>
-      <div className="pd-tab-actions">
-        <button className="btn-primary btn-sm" onClick={() => { loadAutistiDisp(); setShowAssegna(true); }}>
-          🔗 Assegna Codice Autista
-        </button>
-        <button className="btn-outline btn-sm" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>
-          📄 Crea Contratto
-        </button>
-      </div>
+  useEffect(() => { if (contrSignal) setShowContratto(true); }, [contrSignal]);
+  type K = 'cod' | 'zone' | 'tf' | 'tr' | 'tg' | 'bo' | 'ma' | 'note' | 'dal';
+  const { sorted, sort, toggle } = useSort<PadroncinoCodiceAutista, K>(attivi, (a, k) => {
+    switch (k) {
+      case 'cod': return a.codice;
+      case 'zone': return a.zone ?? '';
+      case 'tf': return a.tariffaFissa ?? null;
+      case 'tr': return a.tariffaRitiro ?? null;
+      case 'tg': return a.target ?? null;
+      case 'bo': return a.bonus ?? null;
+      case 'ma': return a.malus ?? null;
+      case 'note': return a.note ?? '';
+      case 'dal': return a.dataInizio;
+    }
+  }, { key: 'cod', dir: 'asc' });
 
-      {attivi.length === 0 ? (
-        <EmptyTab icon="👤" msg="Nessun codice autista assegnato" />
-      ) : (
-        <div className="pd-items-table-wrap" style={{ overflowX: 'auto' }}>
-          <table className="pd-items-table" style={{ minWidth: 700 }}>
-            <thead>
-              <tr>
-                <th>CODICE</th>
-                <th>DATA INIZIO</th>
-                <th>TARIFFA</th>
-                <th>TARGET</th>
-                <th>BONUS</th>
-                <th>MALUS</th>
-                <th>TARIFFA RITIRO</th>
-                <th>NOTE</th>
-                <th>ZONE</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {attivi.map((a) => (
-                <tr key={a.id} className="pd-item-row">
-                  <td className="pd-item-targa">{a.codice}</td>
-                  <td>{fmtData(a.dataInizio)}</td>
-                  <td className="pd-td-purple">
-                    <InlineEditCell
-                      value={a.tariffaFissa}
-                      tipo="euro"
-                      placeholder="0.00"
-                      valueClassName="pd-val-purple"
-                      onSave={(v) => handleSaveField(a.codiceId, 'tariffaFissa', v)}
-                    />
-                  </td>
-                  <td>
-                    <InlineEditCell
-                      value={a.target}
-                      tipo="number"
-                      placeholder="0"
-                      onSave={(v) => handleSaveField(a.codiceId, 'target', v)}
-                    />
-                  </td>
-                  <td className="pd-td-green">
-                    <InlineEditCell
-                      value={a.bonus}
-                      tipo="euro"
-                      placeholder="0.00"
-                      valueClassName="pd-val-green"
-                      onSave={(v) => handleSaveField(a.codiceId, 'bonus', v)}
-                    />
-                  </td>
-                  <td className="pd-td-red">
-                    <InlineEditCell
-                      value={a.malus}
-                      tipo="euro"
-                      placeholder="0.00"
-                      valueClassName="pd-val-red"
-                      onSave={(v) => handleSaveField(a.codiceId, 'malus', v)}
-                    />
-                  </td>
-                  <td className="pd-td-amber">
-                    <InlineEditCell
-                      value={a.tariffaRitiro}
-                      tipo="euro"
-                      placeholder="0.00"
-                      valueClassName="pd-val-amber"
-                      onSave={(v) => handleSaveField(a.codiceId, 'tariffaRitiro', v)}
-                    />
-                  </td>
-                  <td>
-                    <InlineEditCell
-                      value={a.note}
-                      tipo="text"
-                      placeholder="Note..."
-                      onSave={(v) => handleSaveField(a.codiceId, 'note', v)}
-                    />
-                  </td>
-                  <td>
-                    <InlineEditCell
-                      value={a.zone}
-                      tipo="text"
-                      placeholder="Zone..."
-                      onSave={(v) => handleSaveField(a.codiceId, 'zone', v)}
-                    />
-                  </td>
-                  <td style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn-outline btn-sm" title="Vai ai dettagli del codice autista" onClick={() => navigate(`/codici-autista/${a.codiceId}`)}>Dettagli</button>
-                    <button className="pd-del-btn" title="Rimuovi" onClick={() => handleRimuovi(a.id)}>✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 4px' }}>
-            💡 Clicca su un valore per modificarlo direttamente
+  return (
+    <>
+      <TabCard
+        title="Codici autista assegnati"
+        sub={`${attivi.length} in corso · tariffe, target e bonus/malus: clic su un valore per modificarlo`}
+        actions={<>
+          <Button size="sm" icon="doc" disabled={attivi.length === 0} onClick={() => setShowContratto(true)}>Contratto codici</Button>
+          <Button size="sm" icon="plus" variant="primary" onClick={() => { loadAutistiDisp(); setShowAssegna(true); }}>Assegna codice</Button>
+        </>}
+        foot={`${attivi.length} codic${attivi.length === 1 ? 'e' : 'i'} autista`}
+      >
+        {attivi.length === 0 ? <VuotoTab msg="Nessun codice autista assegnato" /> : (
+          <div className="ds-tablewrap">
+            <table className="ds-table pdx-table" style={{ minWidth: 980 }}>
+              <thead><tr>
+                <Th k="cod" sort={sort} onSort={toggle}>Codice</Th>
+                <Th k="zone" sort={sort} onSort={toggle}>Zone</Th>
+                <Th k="tf" sort={sort} onSort={toggle} right>Tariffa fissa</Th>
+                <Th k="tr" sort={sort} onSort={toggle} right>Ritiro</Th>
+                <Th k="tg" sort={sort} onSort={toggle} right>Target</Th>
+                <Th k="bo" sort={sort} onSort={toggle} right>Bonus</Th>
+                <Th k="ma" sort={sort} onSort={toggle} right>Malus</Th>
+                <Th k="note" sort={sort} onSort={toggle}>Note</Th>
+                <Th k="dal" sort={sort} onSort={toggle}>Dal</Th>
+                <Th />
+              </tr></thead>
+              <tbody>
+                {sorted.map((a) => (
+                  <tr key={a.id}>
+                    <td className="ds-mono" style={{ fontWeight: 600 }}>{a.codice}</td>
+                    <td style={{ maxWidth: 260 }}>
+                      <InlineEditCell value={a.zone} tipo="text" placeholder="Zone..." onSave={(v) => handleSaveField(a.codiceId, 'zone', v)} />
+                    </td>
+                    <td className="r" style={{ fontWeight: 600 }}>
+                      <InlineEditCell value={a.tariffaFissa} tipo="euro" placeholder="0.00" onSave={(v) => handleSaveField(a.codiceId, 'tariffaFissa', v)} />
+                    </td>
+                    <td className="r">
+                      <InlineEditCell value={a.tariffaRitiro} tipo="euro" placeholder="0.00" onSave={(v) => handleSaveField(a.codiceId, 'tariffaRitiro', v)} />
+                    </td>
+                    <td className="r">
+                      <InlineEditCell value={a.target} tipo="number" placeholder="0" onSave={(v) => handleSaveField(a.codiceId, 'target', v)} />
+                    </td>
+                    <td className="r">
+                      <InlineEditCell value={a.bonus} tipo="euro" placeholder="0.00" valueClassName="pdx-pos" onSave={(v) => handleSaveField(a.codiceId, 'bonus', v)} />
+                    </td>
+                    <td className="r">
+                      <InlineEditCell value={a.malus} tipo="euro" placeholder="0.00" valueClassName="pdx-neg" onSave={(v) => handleSaveField(a.codiceId, 'malus', v)} />
+                    </td>
+                    <td style={{ maxWidth: 200 }}>
+                      <InlineEditCell value={a.note} tipo="text" placeholder="Note..." onSave={(v) => handleSaveField(a.codiceId, 'note', v)} />
+                    </td>
+                    <td>{fmtData(a.dataInizio)}</td>
+                    <td className="r pdx-acts">
+                      <RowAct icon="link" label="Vai ai dettagli del codice autista" onClick={() => navigate(`/codici-autista/${a.codiceId}`)} />
+                      <RowAct icon="close" label="Chiudi assegnazione" danger onClick={() => handleRimuovi(a.id)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        )}
+      </TabCard>
 
       <AssegnaModal
         open={showAssegna} onClose={() => setShowAssegna(false)}
-        onSave={handleAssegna} title="Assegna Codice Autista" items={autistiDisp}
+        onSave={handleAssegna} title="Assegna codice autista" items={autistiDisp}
       />
 
       <ContrattoCodiciModal
         open={showContratto} onClose={() => setShowContratto(false)}
         p={p} attivi={attivi}
       />
-    </div>
+    </>
   );
 }
 
@@ -1346,6 +1356,7 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
   const [storico, setStorico] = useState<StoricoMese[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const prevMeseRef = useRef(new Map<string, StoricoMese>());
 
   useEffect(() => {
     let cancelled = false;
@@ -1357,8 +1368,24 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
     return () => { cancelled = true; };
   }, [p.id]);
 
-  if (loading) return <div className="pd-empty-tab"><div className="pd-spinner" /></div>;
-  if (storico.length === 0) return <EmptyTab icon="📊" msg="Nessun conteggio trovato per questo padroncino" />;
+  type SK = 'mese' | 'stato' | 'fat' | 'add' | 'comp' | 'net' | 'sped' | 'df' | 'dsp';
+  const sortHook = useSort<StoricoMese, SK>(storico, (r, k) => {
+    const prev = prevMeseRef.current.get(r.mese);
+    switch (k) {
+      case 'mese': return r.mese;
+      case 'stato': return r.stato;
+      case 'fat': return r.fatturatoLordo ?? r.fatturato;
+      case 'add': return r.addebiti;
+      case 'comp': return r.compensazioni;
+      case 'net': return r.netto;
+      case 'sped': return r.nSpedizioni;
+      case 'df': return pctDelta(r.fatturatoLordo ?? r.fatturato, prev ? (prev.fatturatoLordo ?? prev.fatturato) : null);
+      case 'dsp': return pctDelta(r.nSpedizioni, prev?.nSpedizioni ?? null);
+    }
+  }, { key: 'mese', dir: 'asc' });
+
+  if (loading) return <TabCard title="Storico conteggi"><VuotoTab msg="Caricamento…" /></TabCard>;
+  if (storico.length === 0) return <TabCard title="Storico conteggi"><VuotoTab msg="Nessun conteggio trovato per questo padroncino" /></TabCard>;
 
   // Mappa mese → riga precedente (ordine cronologico) per calcolo delta %
   const sorted = [...storico].sort((a, b) => a.mese.localeCompare(b.mese));
@@ -1380,134 +1407,93 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
       netto:     r.netto,
     }));
 
+  prevMeseRef.current = prevMese;
+  const maxV = Math.max(1, ...chartData.map((d) => Math.max(d.fatturato, d.netto)));
+  const STATO_TONE: Record<string, Tone> = { BOZZA: 'warn', CHIUSO: 'na', CONFERMATO: 'ok' };
+  const deltaTxt = (pct: number | null) => pct == null ? <span className="pdx-muted">—</span>
+    : <span style={{ color: pct >= 0 ? '#15803D' : '#B91C1C', fontWeight: 600 }}>{pct >= 0 ? '+' : '−'}{fmtNum2(Math.abs(pct), 1)}%</span>;
+
   return (
-    <div>
-      {/* ── KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-        <div className="pd-fin-card pd-fin-card--blue">
-          <span className="pd-fin-card-label">Fatturato totale (c/IVA)</span>
-          <span className="pd-fin-card-val blue">{fmtEur(totFatt)}</span>
-        </div>
-        <div className="pd-fin-card pd-fin-card--yellow">
-          <span className="pd-fin-card-label">Addebiti totali</span>
-          <span className="pd-fin-card-val orange">{fmtEur(totAdd)}</span>
-        </div>
-        <div className={`pd-fin-card ${totNetto >= 0 ? 'pd-fin-card--green' : 'pd-fin-card--red'}`}>
-          <span className="pd-fin-card-label">Netto totale</span>
-          <span className={`pd-fin-card-val ${totNetto >= 0 ? 'green' : ''}`}
-            style={totNetto < 0 ? { color: '#dc2626' } : {}}>
-            {fmtEur(totNetto)}
-          </span>
-        </div>
-        <div className="pd-fin-card">
-          <span className="pd-fin-card-label">Mesi registrati</span>
-          <span className="pd-fin-card-val">{storico.length}</span>
-        </div>
+    <TabCard
+      title="Storico conteggi"
+      sub={`${storico.length} mes${storico.length === 1 ? 'e' : 'i'} · fatturato ${fmtEur2(totFatt)} · addebiti e compensazioni ${fmtEur2(totAdd)} · netto ${fmtEur2(totNetto)}`}
+      foot="Fatturato con IVA (blu) e netto bonificato (verde) per mese · clic su una riga per aprire il conteggio"
+    >
+      <div role="img" aria-label="Fatturato con IVA e netto bonificato per mese" className="pdx-chart">
+        {chartData.map((m) => (
+          <div key={m.mese} className="pdx-chart-col" title={`${m.mese} · fatturato ${fmtEur2(m.fatturato)} · addebiti ${fmtEur2(m.addebiti)} · netto ${fmtEur2(m.netto)}`}>
+            <div className="pdx-chart-bars">
+              <span style={{ height: `${Math.max(0, (m.fatturato / maxV) * 100)}%`, background: C.blue }} />
+              <span style={{ height: `${Math.max(0, (m.netto / maxV) * 100)}%`, background: C.green }} />
+            </div>
+            <span className="pdx-chart-l">{m.mese.split(' ')[0].toLowerCase()}</span>
+          </div>
+        ))}
       </div>
-
-      {/* ── Grafico ── */}
-      <div style={{
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '20px 8px 12px 8px',
-        marginBottom: 20,
-      }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, paddingLeft: 12 }}>
-          ANDAMENTO MENSILE
-        </p>
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={chartData} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis
-              dataKey="mese"
-              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-              width={42}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              iconType="circle"
-              iconSize={8}
-              wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-              formatter={(value) =>
-                value === 'fatturato' ? 'Fatturato (c/IVA)'
-                : value === 'addebiti' ? 'Addebiti + Comp.'
-                : 'Netto'
-              }
-            />
-            <Bar dataKey="fatturato" fill={CHART_COLORS.fatturato} radius={[4,4,0,0]} maxBarSize={36} />
-            <Bar dataKey="addebiti"  fill={CHART_COLORS.addebiti}  radius={[4,4,0,0]} maxBarSize={36} />
-            <Line
-              type="monotone"
-              dataKey="netto"
-              stroke={CHART_COLORS.netto}
-              strokeWidth={2.5}
-              dot={{ r: 4, fill: CHART_COLORS.netto, strokeWidth: 0 }}
-              activeDot={{ r: 6 }}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* ── Tabella dettaglio ── */}
-      <div className="pd-items-table-wrap">
-        <table className="pd-items-table">
-          <thead>
-            <tr>
-              <th>MESE</th>
-              <th>STATO</th>
-              <th style={{ textAlign: 'right' }}>FATTURATO (c/IVA)</th>
-              <th style={{ textAlign: 'right' }}>Δ FATT.</th>
-              <th style={{ textAlign: 'right' }}>ADDEBITI</th>
-              <th style={{ textAlign: 'right' }}>COMP.</th>
-              <th style={{ textAlign: 'right' }}>SPEDIZIONI</th>
-              <th style={{ textAlign: 'right' }}>Δ SPED.</th>
-              <th style={{ textAlign: 'right' }}>BONIFICATO</th>
-            </tr>
-          </thead>
+      <div className="ds-tablewrap">
+        <table className="ds-table pdx-table" style={{ minWidth: 980 }}>
+          <thead><tr>
+            <Th k="mese" sort={sortHook.sort} onSort={sortHook.toggle}>Mese</Th>
+            <Th k="stato" sort={sortHook.sort} onSort={sortHook.toggle}>Stato</Th>
+            <Th k="fat" sort={sortHook.sort} onSort={sortHook.toggle} right>Fatturato c/IVA</Th>
+            <Th k="add" sort={sortHook.sort} onSort={sortHook.toggle} right>Addebiti</Th>
+            <Th k="comp" sort={sortHook.sort} onSort={sortHook.toggle} right>Compensazioni</Th>
+            <Th k="net" sort={sortHook.sort} onSort={sortHook.toggle} right>Bonificato</Th>
+            <Th k="sped" sort={sortHook.sort} onSort={sortHook.toggle} right>Spedizioni</Th>
+            <Th k="df" sort={sortHook.sort} onSort={sortHook.toggle} right>Δ fatturato</Th>
+            <Th k="dsp" sort={sortHook.sort} onSort={sortHook.toggle} right>Δ spedizioni</Th>
+            <Th />
+          </tr></thead>
           <tbody>
-            {storico.map((r) => (
-              <tr key={r.id} className="pd-item-row" style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/conteggi/${p.id}?mese=${r.mese}`)}>
-                <td style={{ fontWeight: 600 }}>{fmtMese(r.mese)}</td>
-                <td><StatoConteggioBadge stato={r.stato} /></td>
-                <td style={{ textAlign: 'right', color: 'var(--primary)' }}>{fmtEur(r.fatturatoLordo ?? r.fatturato)}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <DeltaBadge pct={pctDelta(
-                    r.fatturatoLordo ?? r.fatturato,
-                    prevMese.get(r.mese) ? (prevMese.get(r.mese)!.fatturatoLordo ?? prevMese.get(r.mese)!.fatturato) : null
-                  )} />
-                </td>
-                <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.addebiti)}</td>
-                <td style={{ textAlign: 'right', color: '#ea580c' }}>{fmtEur(r.compensazioni)}</td>
-                <td style={{ textAlign: 'right' }}>
-                  {r.nSpedizioni !== null ? r.nSpedizioni.toLocaleString('it-IT') : <span className="pd-empty">—</span>}
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  <DeltaBadge pct={pctDelta(r.nSpedizioni, prevMese.get(r.mese)?.nSpedizioni ?? null)} />
-                </td>
-                <td style={{ textAlign: 'right', color: r.netto >= 0 ? '#16a34a' : 'var(--danger)', fontWeight: 600 }}>
-                  {fmtEur(r.netto)}
-                </td>
-              </tr>
-            ))}
+            {sortHook.sorted.map((r) => {
+              const prev = prevMese.get(r.mese);
+              return (
+                <tr key={r.id} className="is-clickable" onClick={() => navigate(`/conteggi/${p.id}?mese=${r.mese}`)}>
+                  <td style={{ fontWeight: 600 }}>{fmtMese(r.mese)}</td>
+                  <td><Dot tone={STATO_TONE[r.stato] ?? 'na'}>{r.stato.charAt(0) + r.stato.slice(1).toLowerCase()}</Dot></td>
+                  <td className="r">{fmtEur2(r.fatturatoLordo ?? r.fatturato)}</td>
+                  <td className="r" style={{ color: '#B91C1C' }}>{fmtEur2(r.addebiti)}</td>
+                  <td className="r" style={{ color: '#1D4ED8' }}>{fmtEur2(r.compensazioni)}</td>
+                  <td className="r" style={{ fontWeight: 600, color: r.netto < 0 ? '#B91C1C' : undefined }}>{fmtEur2(r.netto)}</td>
+                  <td className="r">{r.nSpedizioni !== null ? fmtNum2(r.nSpedizioni) : <span className="pdx-muted">—</span>}</td>
+                  <td className="r">{deltaTxt(pctDelta(r.fatturatoLordo ?? r.fatturato, prev ? (prev.fatturatoLordo ?? prev.fatturato) : null))}</td>
+                  <td className="r">{deltaTxt(pctDelta(r.nSpedizioni, prev?.nSpedizioni ?? null))}</td>
+                  <td className="r pdx-acts"><RowAct icon="link" label="Apri conteggio" onClick={() => navigate(`/conteggi/${p.id}?mese=${r.mese}`)} /></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </div>
+    </TabCard>
   );
 }
 
 function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promise<void> }) {
   const [docs, setDocs] = useState<Documento[]>((p as any).documenti || []);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  const [cerca, setCerca] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  // Ricerca su nome, tipo, note e date (caricamento/scadenza); più parole = tutte richieste
+  const docsFiltrati = useMemo(() => {
+    const words = cerca.toLowerCase().split(/\s+/).filter(Boolean);
+    const dt = (x?: string | null) => (x ? new Date(x).toLocaleDateString('it-IT') : '');
+    return docs.filter(d => {
+      if (filtroTipo && (d.tipo ?? '') !== filtroTipo) return false;
+      if (!words.length) return true;
+      const h = [d.nome, d.tipo, d.note, dt(d.createdAt), dt(d.scadenza)].filter(Boolean).join(' ').toLowerCase();
+      return words.every(w => h.includes(w));
+    });
+  }, [docs, cerca, filtroTipo]);
+  const tipiPresenti = useMemo(
+    () => Array.from(new Set(docs.map(d => d.tipo).filter(Boolean) as string[])).sort(),
+    [docs],
+  );
+  const openPreview = (d: Documento) => setPreview({
+    title: d.nome, path: `/documenti/${d.id}/download`,
+    fileHint: d.filePath, mimeType: (d as any).mimeType,
+    onDownload: () => documentiApi.download(d.id),
+  });
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1631,162 +1617,127 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
     'CONTRATTO', 'VISURA', 'DURC', 'DVR', 'LICENZA', 'IDENTITA', 'ALTRO',
   ];
 
-  return (
-    <div>
-      <div className="pd-tab-actions">
-        <button className="btn-primary btn-sm" onClick={() => { setShowUpload(!showUpload); setEditingDocId(null); }}>
-          📎 Carica Documento
-        </button>
-      </div>
+  const TIPO_COL: Record<string, string> = { DURC: C.red, DVR: C.green, CONTRATTO: C.blue, VISURA: C.purple, LICENZA: C.orange, IDENTITA: C.teal, ALTRO: '#71717A' };
+  const cap = (t: string) => !t ? '' : ['DURC', 'DVR'].includes(t) ? t : t === 'IDENTITA' ? 'Identità' : t.charAt(0) + t.slice(1).toLowerCase();
+  const { sorted, sort, toggle } = useSort<Documento, 'tipo' | 'nome' | 'sca' | 'car' | 'dim'>(docsFiltrati, (d, k) =>
+    k === 'tipo' ? d.tipo : k === 'nome' ? d.nome : k === 'sca' ? (d.scadenza ?? null) : k === 'car' ? d.createdAt : (d.dimensione ?? null),
+    { key: 'tipo', dir: 'asc' });
 
+  const formFields = (f: { nome: string; tipo: string; scadenza: string; note: string }, setF: (fn: (x: typeof f) => typeof f) => void, upload: boolean) => (
+    <div className="pdx-form">
+      <label className="ds-field"><span>Tipo documento{upload ? ' *' : ''}</span>
+        <select className="ds-input" value={f.tipo} onChange={(e) => setF((x) => ({ ...x, tipo: e.target.value }))}>
+          {TIPI_DOC.map((t) => <option key={t} value={t}>{cap(t)}</option>)}
+        </select>
+      </label>
+      <label className="ds-field"><span>Nome{upload ? ' (opzionale)' : ''}</span>
+        <input className="ds-input" placeholder={upload ? 'Es. Contratto 2024' : ''} value={f.nome} onChange={(e) => setF((x) => ({ ...x, nome: e.target.value }))} />
+      </label>
+      <label className="ds-field"><span>Scadenza{upload ? ' (opzionale)' : ''}</span>
+        <input className="ds-input" type="date" value={f.scadenza} onChange={(e) => setF((x) => ({ ...x, scadenza: e.target.value }))} />
+      </label>
+      <label className="ds-field"><span>Note</span>
+        <input className="ds-input" value={f.note} onChange={(e) => setF((x) => ({ ...x, note: e.target.value }))} />
+      </label>
+    </div>
+  );
+
+  return (
+    <TabCard
+      title="Documenti"
+      sub="Con scadenza dove serve: alimentano gli avvisi"
+      actions={<Button size="sm" icon="upload" variant="primary" onClick={() => { setShowUpload(!showUpload); setEditingDocId(null); }}>Carica documento</Button>}
+      foot={`${docs.length} document${docs.length === 1 ? 'o' : 'i'}`}
+    >
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
+      {docs.length > 0 && (
+        <div className="pdx-docsearch">
+          <SearchBox value={cerca} onChange={setCerca} placeholder="Cerca per nome, tipo, note, data…" width={300} />
+          <Select size="sm" label="Tipo" value={filtroTipo} onChange={setFiltroTipo}
+            options={[{ value: '', label: 'Tutti' }, ...tipiPresenti.map((t) => ({ value: t, label: cap(t) }))]} />
+          {(cerca || filtroTipo) && <span className="pdx-muted" style={{ fontSize: 12 }}>{docsFiltrati.length} di {docs.length}</span>}
+        </div>
+      )}
       {editingDocId && (
-        <div className="pd-upload-panel">
-          <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>✏️ Modifica documento</div>
-          <div className="pd-modal-grid2" style={{ marginBottom: 12 }}>
-            <div className="pd-modal-field">
-              <label>Nome</label>
-              <input className="pd-modal-input" value={editForm.nome}
-                onChange={(e) => setEditForm((f) => ({ ...f, nome: e.target.value }))} />
-            </div>
-            <div className="pd-modal-field">
-              <label>Tipo Documento</label>
-              <select className="pd-modal-input" value={editForm.tipo}
-                onChange={(e) => setEditForm((f) => ({ ...f, tipo: e.target.value }))}>
-                {TIPI_DOC.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="pd-modal-field">
-              <label>Scadenza</label>
-              <input className="pd-modal-input" type="date" value={editForm.scadenza}
-                onChange={(e) => setEditForm((f) => ({ ...f, scadenza: e.target.value }))} />
-            </div>
-            <div className="pd-modal-field">
-              <label>Note</label>
-              <input className="pd-modal-input" value={editForm.note}
-                onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-            <button className="btn-outline btn-sm" onClick={() => setEditingDocId(null)}>Annulla</button>
-            <button className="btn-primary btn-sm" onClick={handleSaveEdit} disabled={saving}>
-              {saving ? 'Salvataggio...' : '💾 Salva modifiche'}
-            </button>
+        <div className="pdx-panel">
+          <span className="ds-h2">Modifica documento</span>
+          {formFields(editForm, setEditForm as any, false)}
+          <div className="pdx-panel-actions">
+            <Button size="sm" onClick={() => setEditingDocId(null)}>Annulla</Button>
+            <Button size="sm" variant="primary" onClick={handleSaveEdit} disabled={saving}>{saving ? 'Salvataggio…' : 'Salva modifiche'}</Button>
           </div>
         </div>
       )}
 
       {showUpload && (
-        <div className="pd-upload-panel">
-          <div className="pd-modal-grid2" style={{ marginBottom: 12 }}>
-            <div className="pd-modal-field">
-              <label>Tipo Documento *</label>
-              <select className="pd-modal-input" value={uploadForm.tipo}
-                onChange={(e) => setUploadForm((f) => ({ ...f, tipo: e.target.value }))}>
-                {TIPI_DOC.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="pd-modal-field">
-              <label>Nome (opzionale)</label>
-              <input className="pd-modal-input" placeholder="Es. Contratto 2024"
-                value={uploadForm.nome}
-                onChange={(e) => setUploadForm((f) => ({ ...f, nome: e.target.value }))} />
-            </div>
-            <div className="pd-modal-field">
-              <label>Scadenza (opzionale)</label>
-              <input className="pd-modal-input" type="date" value={uploadForm.scadenza}
-                onChange={(e) => setUploadForm((f) => ({ ...f, scadenza: e.target.value }))} />
-            </div>
-            <div className="pd-modal-field">
-              <label>Note</label>
-              <input className="pd-modal-input" value={uploadForm.note}
-                onChange={(e) => setUploadForm((f) => ({ ...f, note: e.target.value }))} />
-            </div>
-          </div>
-
-          <div
-            className={`pd-doc-upload-zone ${selectedFile ? 'pd-doc-upload-done' : ''}`}
-            onClick={() => fileRef.current?.click()}
-          >
+        <div className="pdx-panel">
+          <span className="ds-h2">Nuovo documento</span>
+          {formFields(uploadForm, setUploadForm as any, true)}
+          <div className={`pdx-drop${selectedFile ? ' is-done' : ''}`} onClick={() => fileRef.current?.click()} role="button" tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter') fileRef.current?.click(); }}>
             <input ref={fileRef} type="file"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
               style={{ display: 'none' }}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} />
             {selectedFile ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 24 }}>📄</span>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{selectedFile.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtSize(selectedFile.size)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
+                <Icon name="doc" size={18} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 600 }}>{selectedFile.name}</span>
+                  <span className="pdx-muted" style={{ fontSize: 12 }}>{fmtSize(selectedFile.size)}</span>
                 </div>
-                <button className="pd-del-btn" style={{ marginLeft: 'auto' }}
-                  onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}>✕</button>
+                <span style={{ marginLeft: 'auto' }}><RowAct icon="close" label="Rimuovi file" danger onClick={() => setSelectedFile(null)} /></span>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                <div style={{ fontSize: 28 }}>📂</div>
-                <div style={{ fontSize: 13, marginTop: 4 }}>Clicca per selezionare il file</div>
-                <div style={{ fontSize: 11, marginTop: 2 }}>PDF, JPG, PNG, DOC, XLS (max 20MB)</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontWeight: 500 }}>Clicca per selezionare il file</div>
+                <div className="pdx-muted" style={{ fontSize: 12, marginTop: 2 }}>PDF, JPG, PNG, DOC, XLS (max 20MB)</div>
               </div>
             )}
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-            <button className="btn-outline btn-sm" onClick={() => { setShowUpload(false); setSelectedFile(null); }}>Annulla</button>
-            <button className="btn-primary btn-sm" onClick={handleUpload} disabled={uploading || !selectedFile}>
-              {uploading ? 'Caricamento...' : '⬆️ Carica'}
-            </button>
+          <div className="pdx-panel-actions">
+            <Button size="sm" onClick={() => { setShowUpload(false); setSelectedFile(null); }}>Annulla</Button>
+            <Button size="sm" variant="primary" icon="upload" onClick={handleUpload} disabled={uploading || !selectedFile}>{uploading ? 'Caricamento…' : 'Carica'}</Button>
           </div>
         </div>
       )}
 
-      {loading ? (
-        <div className="pd-empty-tab"><div className="pd-spinner" /></div>
-      ) : docs.length === 0 ? (
-        <EmptyTab icon="📁" msg="Nessun documento caricato" />
-      ) : (
-        <div className="pd-items-table-wrap">
-          <table className="pd-items-table">
-            <thead>
-              <tr><th>DOCUMENTO</th><th>TIPO</th><th>SCADENZA</th><th>NOTE</th><th>DIM.</th><th>DATA</th><th></th></tr>
-            </thead>
+      {loading ? <VuotoTab msg="Caricamento…" /> : docs.length === 0 ? <VuotoTab msg="Nessun documento caricato" /> : (
+        <div className="ds-tablewrap">
+          <table className="ds-table pdx-table" style={{ minWidth: 860 }}>
+            <thead><tr>
+              <Th k="tipo" sort={sort} onSort={toggle}>Tipo</Th>
+              <Th k="nome" sort={sort} onSort={toggle}>Nome</Th>
+              <Th k="sca" sort={sort} onSort={toggle}>Scadenza</Th>
+              <Th>Note</Th>
+              <Th k="car" sort={sort} onSort={toggle}>Caricato il</Th>
+              <Th k="dim" sort={sort} onSort={toggle} right>Dimensione</Th>
+              <Th />
+            </tr></thead>
             <tbody>
-              {docs.map((d) => {
+              {sorted.length === 0 && <tr><td colSpan={7}><VuotoTab msg="Nessun documento corrisponde alla ricerca" /></td></tr>}
+              {sorted.map((d) => {
                 const scad = d.scadenza ? scadenzaInfo(d.scadenza) : null;
+                const tone: Tone = !scad ? 'na' : scad.cls === 'pd-scad-expired' ? 'ko' : scad.cls === 'pd-scad-warning' ? 'warn' : 'ok';
                 return (
-                  <tr key={d.id} className="pd-item-row">
-                    <td>
-                      <a
-                        href={`${API_BASE.replace('/api', '')}/uploads/padroncini/${normalizeDocPath(d.filePath)}`}
-                        target="_blank" rel="noreferrer"
-                        style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
-                      >
-                        📄 {d.nome}
-                      </a>
+                  <tr key={d.id}>
+                    <td><span className="pdx-tipo"><span aria-hidden="true" style={{ background: TIPO_COL[d.tipo] ?? '#71717A' }} />{cap(d.tipo)}</span></td>
+                    <td style={{ maxWidth: 340 }}>
+                      <button type="button" className="pdx-doclink" title={`Anteprima di ${d.nome}`} onClick={() => openPreview(d)}>{d.nome}</button>
                     </td>
                     <td>
-                      <span className="pd-doc-badge pd-doc-ok">{d.tipo}</span>
+                      {d.scadenza
+                        ? <Dot tone={tone} title={scad?.label}>{new Date(d.scadenza).toLocaleDateString('it-IT')}{tone === 'ko' ? ' · Scaduto' : tone === 'warn' ? ` · ${scad?.label}` : ''}</Dot>
+                        : <span className="pdx-muted">—</span>}
                     </td>
-                    <td>
-                      {d.scadenza ? (
-                        <span className={`pd-scad-days ${scad?.cls}`}>
-                          {new Date(d.scadenza).toLocaleDateString('it-IT')}
-                          {scad && <span style={{ fontSize: 10, marginLeft: 4 }}>({scad.label})</span>}
-                        </span>
-                      ) : <span className="pd-empty">—</span>}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      title={d.note || ''}>
-                      {d.note ? d.note : <span className="pd-empty">—</span>}
-                    </td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtSize(d.dimensione)}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmtData(d.createdAt)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="pd-del-btn" title="Modifica"
-                          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', fontSize: 14 }}
-                          onClick={() => openEdit(d)}>✏️</button>
-                        <button className="pd-del-btn" title="Elimina" onClick={() => handleDelete(d.id)}>🗑</button>
-                      </div>
+                    <td className="pdx-muted" style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.note || ''}>{d.note || '—'}</td>
+                    <td>{fmtData(d.createdAt)}</td>
+                    <td className="r pdx-muted">{fmtSize(d.dimensione)}</td>
+                    <td className="r pdx-acts">
+                      <RowAct icon="eye" label="Anteprima" onClick={() => openPreview(d)} />
+                      <RowAct icon="download" label="Scarica" onClick={() => documentiApi.download(d.id)} />
+                      <RowAct icon="edit" label="Modifica" onClick={() => openEdit(d)} />
+                      <RowAct icon="trash" label="Elimina" danger onClick={() => handleDelete(d.id)} />
                     </td>
                   </tr>
                 );
@@ -1795,7 +1746,7 @@ function TabDocumenti({ p, onRefresh }: { p: Padroncino; onRefresh: () => Promis
           </table>
         </div>
       )}
-    </div>
+    </TabCard>
   );
 }
 
@@ -1816,120 +1767,64 @@ function TabInfo({ p }: { p: Padroncino }) {
   const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
   const durcInfo = scadenzaInfo(p.scadenzaDurc);
   const dvrInfo = scadenzaInfo(p.scadenzaDvr);
+  const toneOf = (cls: string): Tone => cls === 'pd-doc-ok' ? 'ok' : cls === 'pd-doc-warning' ? 'warn' : cls === 'pd-doc-expired' ? 'ko' : cls === 'pd-doc-esente' ? 'info' : 'na';
+  const docs: Documento[] = ((p as any).documenti || []);
+  const ultimo = (tipo: string) => docs.filter((d) => d.tipo === tipo).sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
+  const contratto = ultimo('CONTRATTO');
+  const visura = ultimo('VISURA');
 
-  const barClass = (st: { cls: string }) => {
-    if (st.cls === 'pd-doc-ok') return 'pd-scad-bar--green';
-    if (st.cls === 'pd-doc-warning') return 'pd-scad-bar--yellow';
-    if (st.cls === 'pd-doc-expired') return 'pd-scad-bar--red';
-    if (st.cls === 'pd-doc-esente') return 'pd-scad-bar--blue';
-    return 'pd-scad-bar--gray';
-  };
-
-  const durcScaduto = durcSt.cls === 'pd-doc-expired';
-  const dvrScaduto = dvrSt.cls === 'pd-doc-expired';
-  const alertMsg = durcScaduto && dvrScaduto
-    ? 'DURC e DVR scaduti — verificare documentazione'
-    : durcScaduto
-      ? 'DURC scaduto — verificare documentazione'
-      : dvrScaduto
-        ? 'DVR scaduto — verificare documentazione'
-        : null;
+  type Campo = { l: string; v?: React.ReactNode; mono?: boolean; tone?: Tone };
+  const sezioni: { t: string; c: string; icon: IconName; campi: Campo[] }[] = [
+    { t: 'Dati anagrafici', c: C.blue, icon: 'info', campi: [
+      { l: 'Ragione sociale', v: p.ragioneSociale }, { l: 'Partita IVA', v: p.partitaIva, mono: true },
+      { l: 'Codice fiscale', v: p.codiceFiscale, mono: true }, { l: 'Indirizzo', v: p.indirizzo },
+      { l: 'Telefono', v: p.telefono }, { l: 'Email', v: p.email },
+      { l: 'PEC', v: p.pec }, { l: 'IBAN', v: p.iban, mono: true },
+    ] },
+    { t: 'Rappresentante legale', c: C.purple, icon: 'user', campi: [
+      { l: 'Nome', v: p.rappresentanteNome }, { l: 'Cognome', v: p.rappresentanteCognome },
+      { l: 'Qualifica', v: p.qualificaRappresentante }, { l: 'Codice fiscale', v: p.cfRappresentante, mono: true },
+    ] },
+    { t: 'Documenti e scadenze', c: C.red, icon: 'doc', campi: [
+      { l: 'DURC', tone: toneOf(durcSt.cls), v: p.scadenzaDurc
+        ? `${durcSt.cls === 'pd-doc-expired' ? 'Scaduto il' : durcSt.cls === 'pd-doc-warning' ? 'In scadenza il' : 'Valido fino al'} ${fmtData(p.scadenzaDurc)}` : '' },
+      { l: 'DVR', tone: toneOf(dvrSt.cls), v: p.dvrEsente ? 'Esente: non soggetto a DVR' : p.scadenzaDvr
+        ? `${dvrSt.cls === 'pd-doc-expired' ? 'Scaduto il' : 'Valido fino al'} ${fmtData(p.scadenzaDvr)}` : '' },
+      { l: 'Contratto', tone: contratto ? 'ok' : 'na', v: contratto ? `Caricato il ${fmtData(contratto.createdAt)}` : '' },
+      { l: 'Visura', tone: visura ? 'ok' : 'na', v: visura ? `Caricata il ${fmtData(visura.createdAt)}` : '' },
+    ] },
+    { t: 'Note', c: C.yellow, icon: 'note', campi: [
+      { l: 'Nota', v: p.note }, { l: 'Stato', tone: p.attivo ? 'ok' : 'na', v: p.attivo ? 'Attivo' : 'Dismesso' },
+      ...(p.codice ? [{ l: 'Codice', v: p.codice, mono: true }] : []),
+    ] },
+  ];
 
   return (
-    <div className="pd-info-stack">
-      {/* ── Anagrafica + Contatti (2 colonne) ── */}
-      <div className="pd-info-grid2">
-        <div className="pd-info-card">
-          <h4 className="pd-info-h">Dati Anagrafici</h4>
-          <div className="pd-info-fields pd-info-fields--2col">
-            <Field label="Ragione Sociale" value={p.ragioneSociale} />
-            <span />
-            <Field label="Partita IVA" value={p.partitaIva} mono />
-            <Field label="Codice Fiscale" value={p.codiceFiscale} mono />
-            <Field label="Indirizzo" value={p.indirizzo} />
-          </div>
-
-          {/* Rappresentante legale — mostrato solo se compilato */}
-          {(p.rappresentanteNome || p.rappresentanteCognome || p.cfRappresentante) && (
-            <>
-              <div style={{ borderTop: '1px dashed var(--border)', margin: '12px 0 8px', paddingTop: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                  👤 Rappresentante Legale
-                </span>
-              </div>
-              <div className="pd-info-fields pd-info-fields--2col">
-                <Field
-                  label="Nome e Cognome"
-                  value={[p.rappresentanteNome, p.rappresentanteCognome].filter(Boolean).join(' ') || null}
-                />
-                <Field
-                  label="Qualifica"
-                  value={p.qualificaRappresentante}
-                />
-                <Field label="C.F. Rappresentante" value={p.cfRappresentante} mono />
-                <span />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="pd-info-card">
-          <h4 className="pd-info-h">Contatti</h4>
-          <div className="pd-info-fields pd-info-fields--2col">
-            <Field label="Telefono" value={p.telefono} />
-            <Field label="Email" value={p.email} />
-            <Field label="PEC" value={p.pec} />
-            <Field label="IBAN" value={p.iban} mono />
-          </div>
-        </div>
+    <div className="pdx-stack">
+      <div className="ds-g2">
+        {sezioni.map((s) => (
+          <Card key={s.t} pad className="pdx-info">
+            <div className="pdx-info-h"><Tile color={s.c} icon={s.icon} size="md" /><h2 className="ds-h2">{s.t}</h2></div>
+            <dl className="pdx-dl">
+              {s.campi.map((f) => {
+                const vuoto = f.v === null || f.v === undefined || f.v === '';
+                return (
+                  <div key={f.l} style={f.l === 'Nota' ? { gridColumn: '1 / -1' } : undefined}>
+                    <dt>{f.l}</dt>
+                    <dd className={`${vuoto ? 'pdx-muted' : ''}${f.mono && !vuoto ? ' ds-mono' : ''}`}>
+                      {f.tone && !vuoto && <span aria-hidden="true" className="pdx-dot" style={{ background: { ok: '#15A06A', ko: '#E5484D', warn: '#EA6A2A', na: '#A1A1AA', info: '#3D63F0' }[f.tone] }} />}
+                      <span style={f.tone && !vuoto ? { color: { ok: '#15803D', ko: '#B91C1C', warn: '#C2410C', na: '#52525B', info: '#1D4ED8' }[f.tone] } : undefined}>{vuoto ? 'Non inserito' : f.v}</span>
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </Card>
+        ))}
       </div>
-
-      {/* ── Documenti & Scadenze ── */}
-      <div className="pd-info-card">
-        <h4 className="pd-info-h">Documenti & Scadenze</h4>
-        <div className="pd-scad-list">
-          <div className={`pd-scad-item ${barClass(durcSt)}`}>
-            <span className="pd-scad-label">DURC</span>
-            <span className="pd-scad-date">
-              {p.scadenzaDurc ? new Date(p.scadenzaDurc).toLocaleDateString('it-IT') : 'Non inserito'}
-            </span>
-            <div className="pd-scad-end">
-              <span className={`pd-doc-badge ${durcSt.cls}`}>{durcSt.label}</span>
-              {durcInfo && <span className="pd-scad-days">{durcInfo.label}</span>}
-            </div>
-          </div>
-          <div className={`pd-scad-item ${barClass(dvrSt)}`}>
-            <span className="pd-scad-label">DVR</span>
-            <span className="pd-scad-date">
-              {p.dvrEsente
-                ? 'Non soggetto a DVR'
-                : p.scadenzaDvr
-                  ? new Date(p.scadenzaDvr).toLocaleDateString('it-IT')
-                  : 'Non inserito'}
-            </span>
-            <div className="pd-scad-end">
-              <span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span>
-              {dvrInfo && !p.dvrEsente && <span className="pd-scad-days">{dvrInfo.label}</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Alert banner ── */}
-      {alertMsg && (
-        <div className="pd-alert-banner">
-          <span className="pd-alert-banner-ico">⚠️</span>
-          <span className="pd-alert-banner-msg">{alertMsg}</span>
-        </div>
-      )}
 
       {/* ── Andamento fatturato ── */}
       <AndamentoChart padroncinoId={p.id} />
-
-      {/* ── Note ── */}
-      <div className="pd-info-card">
-        <h4 className="pd-info-h">Note</h4>
-        <p className="pd-note-text">{p.note || <span className="pd-empty">Nessuna nota</span>}</p>
-      </div>
     </div>
   );
 }
@@ -1986,66 +1881,43 @@ function AndamentoChart({ padroncinoId }: { padroncinoId: string }) {
   for (let y = currentYear - 5; y <= currentYear + 1; y++) years.push(y);
 
   return (
-    <div className="pd-info-card">
-      <div className="pd-chart-head">
-        <h4 className="pd-info-h" style={{ border: 'none', padding: 0, margin: 0 }}>Andamento Fatturato</h4>
-        <div className="pd-chart-range">
-          <label>
-            Dal
-            <select
-              value={yearFrom}
-              onChange={(e) => {
-                const v = parseInt(e.target.value);
-                setYearFrom(v);
-                if (v > yearTo) setYearTo(v);
-              }}
-            >
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </label>
-          <label>
-            Al
-            <select
-              value={yearTo}
-              onChange={(e) => {
-                const v = parseInt(e.target.value);
-                setYearTo(v);
-                if (v < yearFrom) setYearFrom(v);
-              }}
-            >
-              {years.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </label>
+    <Card>
+      <div className="pdx-head">
+        <div className="pdx-head-t">
+          <h2 className="ds-h2">Andamento fatturato</h2>
+          <span className="ds-cardsub">Fatturato, addebiti e da bonificare per mese</span>
+        </div>
+        <div className="ds-actions">
+          <Select size="sm" label="Dal" value={String(yearFrom)} options={years.map((y) => ({ value: String(y), label: String(y) }))}
+            onChange={(v) => { const n = parseInt(v); setYearFrom(n); if (n > yearTo) setYearTo(n); }} />
+          <Select size="sm" label="Al" value={String(yearTo)} options={years.map((y) => ({ value: String(y), label: String(y) }))}
+            onChange={(v) => { const n = parseInt(v); setYearTo(n); if (n < yearFrom) setYearFrom(n); }} />
         </div>
       </div>
-      <div className="pd-chart-wrap">
+      <div style={{ padding: '4px 12px 14px' }}>
         {loading ? (
-          <div className="pd-chart-loading">Caricamento…</div>
+          <VuotoTab msg="Caricamento…" />
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEEEF0" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6B6B73' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#6B6B73' }} axisLine={false} tickLine={false}
                 tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)} />
               <Tooltip
-                formatter={(v: any) => fmtEur(Number(v))}
-                contentStyle={{
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
+                formatter={(v: any) => fmtEur2(Number(v))}
+                cursor={{ fill: '#F6F6F7' }}
+                contentStyle={{ background: '#FFFFFF', border: '1px solid #EAEAEC', borderRadius: 8, fontSize: 12 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="fatturato"    name="Fatturato"    fill="#2563eb" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="addebiti"     name="Addebiti"     fill="#f97316" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="daBonificare" name="Da bonificare" fill="#16a34a" radius={[3, 3, 0, 0]} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="fatturato"    name="Fatturato"     fill={C.blue}   radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="addebiti"     name="Addebiti"      fill={C.red}    radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="daBonificare" name="Da bonificare" fill={C.green}  radius={[3, 3, 0, 0]} maxBarSize={22} />
             </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -2103,96 +1975,109 @@ export function PadroncinoDetail({
     }
   };
 
-  const durc = scadenzaInfo(p.scadenzaDurc);
   const durcSt = durcStatus(p.scadenzaDurc);
   const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
 
   const nMezzi = p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0;
   const nPalmari = p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0;
   const nAutisti = p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0;
+  const nDocs = ((p as any).documenti || []).length;
 
-  const TABS = [
-    { key: 'info',      icon: '📋', label: 'Anagrafica' },
-    { key: 'mezzi',     icon: '🚛', label: 'Mezzi',    count: nMezzi },
-    { key: 'palmari',   icon: '📱', label: 'Palmari',  count: nPalmari },
-    { key: 'autisti',   icon: '👤', label: 'Autisti',  count: nAutisti },
-    { key: 'storico',   icon: '📊', label: 'Storico Conteggi' },
-    { key: 'documenti', icon: '📁', label: 'Documenti' },
-    { key: 'log',       icon: '📜', label: 'Log' },
+  // Menu "Genera contratto": apre la scheda giusta e il suo modale
+  const [contrOpen, setContrOpen] = useState(false);
+  const [contrSig, setContrSig] = useState<{ tab: string; n: number }>({ tab: '', n: 0 });
+  const apriContratto = (t: string) => { setContrOpen(false); setTab(t); setContrSig((s) => ({ tab: t, n: s.n + 1 })); };
+  const sig = (t: string) => (contrSig.tab === t ? contrSig.n : 0);
+
+  const TABS: { value: string; label: string; count?: number; color: string; icon: IconName }[] = [
+    { value: 'info',      label: 'Anagrafica', color: '#0B0B0C', icon: 'info' },
+    { value: 'mezzi',     label: 'Mezzi', count: nMezzi, color: C.teal, icon: 'mezzi' },
+    { value: 'palmari',   label: 'Palmari', count: nPalmari, color: C.blue, icon: 'palm' },
+    { value: 'autisti',   label: 'Autisti', count: nAutisti, color: C.purple, icon: 'cod' },
+    { value: 'storico',   label: 'Storico conteggi', color: C.green, icon: 'trend' },
+    { value: 'documenti', label: 'Documenti', count: nDocs, color: C.orange, icon: 'doc' },
+    { value: 'log',       label: 'Storico modifiche', color: '#71717A', icon: 'stor' },
   ];
 
+  const toneOf = (cls: string): Tone => cls === 'pd-doc-ok' ? 'ok' : cls === 'pd-doc-warning' ? 'warn' : cls === 'pd-doc-expired' ? 'ko' : cls === 'pd-doc-esente' ? 'info' : 'na';
+  const durcTxt = !p.scadenzaDurc ? 'DURC non inserito'
+    : durcSt.cls === 'pd-doc-expired' ? `DURC scaduto il ${fmtData(p.scadenzaDurc)}`
+    : durcSt.cls === 'pd-doc-warning' ? `DURC in scadenza il ${fmtData(p.scadenzaDurc)}`
+    : `DURC fino al ${fmtData(p.scadenzaDurc)}`;
+  const dvrTxt = p.dvrEsente ? 'DVR esente' : !p.scadenzaDvr ? 'DVR non inserito'
+    : dvrSt.cls === 'pd-doc-expired' ? `DVR scaduto il ${fmtData(p.scadenzaDvr)}` : `DVR fino al ${fmtData(p.scadenzaDvr)}`;
+  const iniziali = p.ragioneSociale.replace(/[^A-Za-zÀ-ú0-9& ]/g, ' ').split(/\s+/).filter((w) => w && w !== '&').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const hue = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal][p.ragioneSociale.length % 7];
+
   return (
-    <div className="pd-detail-panel">
-      <div className="pd-detail-header">
-        <div className="pd-detail-header-row">
-          <div className="pd-detail-title-row">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {onBack && (
-                <button className="btn-outline btn-sm" onClick={onBack}>← Torna alla lista</button>
-              )}
-              <h2 className="pd-detail-title">{p.ragioneSociale}</h2>
-              <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
-                {p.attivo ? 'ATTIVO' : 'DISMESSO'}
-              </span>
-              <span className={`pd-doc-badge ${durcSt.cls}`}>DURC: {durcSt.label}</span>
-              <span className={`pd-doc-badge ${dvrSt.cls}`}>DVR: {dvrSt.label}</span>
-              {p.fatturatoMese != null && (
-                <span className="pd-detail-fatt">Fatt. {fmtEur(p.fatturatoMese)}</span>
-              )}
+    <div className="ds-page pdx-page">
+      <header className="pdx-top">
+        <div className="pdx-top-l">
+          <span aria-hidden="true" className="pdx-avatar" style={{ background: p.attivo ? hue : '#A1A1AA' }}>{iniziali}</span>
+          <div className="pdx-top-t">
+            <span className="ds-eyebrow">
+              {onBack ? <button type="button" className="pdx-link" onClick={onBack}>Padroncini</button> : 'Padroncino'}
+              {p.partitaIva ? ` · P. IVA ${p.partitaIva}` : ''}{p.codice ? ` · Cod. ${p.codice}` : ''}
+            </span>
+            <div className="pdx-top-row">
+              <h1 className="ds-h1" style={{ margin: 0 }}>{p.ragioneSociale}</h1>
+              <Dot tone={p.attivo ? 'ok' : 'na'}>{p.attivo ? 'Attivo' : 'Dismesso'}</Dot>
+              <Dot tone={toneOf(durcSt.cls)}>{durcTxt}</Dot>
+              <Dot tone={toneOf(dvrSt.cls)}>{dvrTxt}</Dot>
             </div>
-            <span className="pd-detail-codice">
-              {p.codice ? `Cod. ${p.codice} · ` : ''}{nMezzi} mezzi · {nPalmari} palmari · {nAutisti} autisti
+            <span className="ds-sub" style={{ margin: 0 }}>
+              {[p.indirizzo, `${nMezzi} mezz${nMezzi === 1 ? 'o' : 'i'}`, `${nPalmari} palmar${nPalmari === 1 ? 'e' : 'i'}`, `${nAutisti} autist${nAutisti === 1 ? 'a' : 'i'}`].filter(Boolean).join(' · ')}
             </span>
           </div>
-          <div className="pd-detail-actions">
-            <button className="btn-outline btn-sm" onClick={() => setShowModifica(true)}>✏️ Modifica</button>
-            <button className="btn-danger btn-sm" onClick={handleElimina}>🗑 Elimina</button>
+        </div>
+        <div className="ds-actions" style={{ alignItems: 'flex-start' }}>
+          <div className="pdx-menuwrap">
+            <Button icon="doc" aria-expanded={contrOpen} onClick={() => setContrOpen((v) => !v)}>
+              Genera contratto <Icon name="chevDown" size={12} />
+            </Button>
+            {contrOpen && (
+              <>
+                <div className="pdx-menu-bg" onClick={() => setContrOpen(false)} />
+                <div className="pdx-menu" role="menu">
+                  {[
+                    { t: 'Noleggio mezzi', s: 'Scegli i mezzi da includere', tab: 'mezzi', n: nMezzi },
+                    { t: 'Noleggio palmari', s: 'Scegli i palmari da includere', tab: 'palmari', n: nPalmari },
+                    { t: 'Codici autista', s: 'Scegli i codici da includere', tab: 'autisti', n: nAutisti },
+                  ].map((o) => (
+                    <button key={o.tab} type="button" role="menuitem" disabled={o.n === 0} onClick={() => apriContratto(o.tab)}>
+                      <span style={{ fontWeight: 600 }}>{o.t}</span>
+                      <span className="pdx-muted" style={{ fontSize: 12 }}>{o.n === 0 ? 'Niente assegnato' : o.s}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
+          <Button icon="edit" onClick={() => setShowModifica(true)}>Modifica</Button>
+          <Button icon="trash" variant="danger" onClick={handleElimina}>Elimina</Button>
         </div>
-      </div>
+      </header>
 
-      <div className="pd-fin-cards">
-        <div className="pd-fin-card pd-fin-card--blue">
-          <span className="pd-fin-card-label">FATTURATO TOTALE</span>
-          <span className="pd-fin-card-val blue">{p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}</span>
-        </div>
-        <div className="pd-fin-card pd-fin-card--yellow">
-          <span className="pd-fin-card-label">ADDEBITI TOTALI</span>
-          <span className="pd-fin-card-val orange">{p.addebitiTotali != null ? fmtEur(p.addebitiTotali) : '—'}</span>
-        </div>
-        <div className="pd-fin-card pd-fin-card--green">
-          <span className="pd-fin-card-label">DA BONIFICARE</span>
-          <span className="pd-fin-card-val green">{p.daBonificare != null ? fmtEur(p.daBonificare) : '—'}</span>
-        </div>
-        <div className="pd-fin-card pd-fin-card--purple">
-          <span className="pd-fin-card-label">MEDIA MENSILE</span>
-          <span className="pd-fin-card-val purple">{p.mediaMensile != null ? fmtEur(p.mediaMensile) : '—'}</span>
-          <span className="pd-fin-card-sub">fattura/mese</span>
-        </div>
-      </div>
+      <Kpis items={[
+        { label: 'Fatturato totale', value: p.fatturatoTotale != null ? fmtEur2(p.fatturatoTotale) : '—', sub: 'Con IVA · tutti i conteggi', color: C.blue, icon: 'euro' },
+        { label: 'Addebiti totali', value: p.addebitiTotali != null ? fmtEur2(p.addebitiTotali) : '—', sub: 'Noleggi, palmari, ricariche, vari', color: C.red, icon: 'cont' },
+        { label: 'Da bonificare', value: p.daBonificare != null ? fmtEur2(p.daBonificare) : '—', sub: 'Fatturato meno addebiti', color: C.green, icon: 'scudo' },
+        { label: 'Media mensile', value: p.mediaMensile != null ? fmtEur2(p.mediaMensile) : '—', sub: 'Fattura al mese', color: C.purple, icon: 'trend' },
+      ]} />
 
-      <div className="pd-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`pd-tab ${tab === t.key ? 'pd-tab-active' : ''}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.icon} {t.label}
-            {t.count !== undefined && <span className="pd-tab-count">{t.count}</span>}
-          </button>
-        ))}
-      </div>
+      <Tabs<string> items={TABS} value={tab} onChange={setTab} label="Sezioni del padroncino" />
 
-      <div className="pd-tab-body">
-        {tab === 'info' && <TabInfo p={p} />}
-        {tab === 'mezzi' && <TabMezzi p={p} onRefresh={handleRefresh} />}
-        {tab === 'palmari' && <TabPalmari p={p} onRefresh={handleRefresh} />}
-        {tab === 'autisti' && <TabAutisti p={p} onRefresh={handleRefresh} />}
-        {tab === 'storico' && <TabStoricoConteggi p={p} />}
-        {tab === 'documenti' && <TabDocumenti p={p} onRefresh={handleRefresh} />}
-        {tab === 'log' && <LogEntita entityType="padroncino" entityId={p.id} />}
-      </div>
+      {tab === 'info' && <TabInfo p={p} />}
+      {tab === 'mezzi' && <TabMezzi p={p} onRefresh={handleRefresh} contrSignal={sig('mezzi')} />}
+      {tab === 'palmari' && <TabPalmari p={p} onRefresh={handleRefresh} contrSignal={sig('palmari')} />}
+      {tab === 'autisti' && <TabAutisti p={p} onRefresh={handleRefresh} contrSignal={sig('autisti')} />}
+      {tab === 'storico' && <TabStoricoConteggi p={p} />}
+      {tab === 'documenti' && <TabDocumenti p={p} onRefresh={handleRefresh} />}
+      {tab === 'log' && (
+        <TabCard title="Storico modifiche" sub="Ogni modifica con valore precedente e autore">
+          <div style={{ padding: '0 18px 16px' }}><LogEntita entityType="padroncino" entityId={p.id} /></div>
+        </TabCard>
+      )}
 
       {showModifica && (
         <ModificaPadroncinoModal
@@ -2258,9 +2143,9 @@ export default function PadronciniPage() {
     const s = search.toLowerCase();
     return padroncini.filter((p) => {
       const matchSearch = !s || p.ragioneSociale.toLowerCase().includes(s) ||
-        (p.partitaIva || '').toLowerCase().includes(s);
+        (p.partitaIva || '').toLowerCase().includes(s) || (p.codice || '').toLowerCase().includes(s);
       const matchFiltro =
-        filtro === 'TUTTI' ||
+        filtro === 'TUTTI' || filtro === 'ALERT' ||
         (filtro === 'ATTIVO' && p.attivo) ||
         (filtro === 'DISMESSO' && !p.attivo);
       return matchSearch && matchFiltro;
@@ -2288,198 +2173,187 @@ export default function PadronciniPage() {
     }
   };
 
-  if (loading) return (
-    <div className="pd-page">
-      <div className="pd-loading"><div className="pd-spinner" /><span>Caricamento padroncini...</span></div>
-    </div>
-  );
+  // ── Solo visualizzazione: stato documenti come nel mockup ──
+  const docDurc = (p: Padroncino): DocInfo => {
+    const st = durcStatus(p.scadenzaDurc);
+    const data = fmtData(p.scadenzaDurc);
+    if (st.cls === 'pd-doc-absent') return { t: 'Non inserito', tone: 'na', k: 0 };
+    if (st.cls === 'pd-doc-expired') return { t: `Scaduto ${data}`, tone: 'ko', k: new Date(p.scadenzaDurc!).getTime() };
+    if (st.cls === 'pd-doc-warning') return { t: `In scadenza ${data}`, tone: 'warn', k: new Date(p.scadenzaDurc!).getTime() };
+    return { t: data, tone: 'ok', k: new Date(p.scadenzaDurc!).getTime() };
+  };
+  const docDvr = (p: Padroncino): DocInfo => {
+    const st = dvrStatus(p.scadenzaDvr, p.dvrEsente);
+    const data = fmtData(p.scadenzaDvr);
+    if (st.cls === 'pd-doc-esente') return { t: 'Esente', tone: 'info', k: 9e15 };
+    if (st.cls === 'pd-doc-absent') return { t: 'Non inserito', tone: 'na', k: 0 };
+    if (st.cls === 'pd-doc-expired') return { t: `Scaduto ${data}`, tone: 'ko', k: new Date(p.scadenzaDvr!).getTime() };
+    return { t: data, tone: 'ok', k: new Date(p.scadenzaDvr!).getTime() };
+  };
+  const conAlert = (p: Padroncino) => p.attivo && (docDurc(p).tone !== 'ok' || !['ok', 'info'].includes(docDvr(p).tone));
+  const nAttivi = padroncini.filter((p) => p.attivo).length;
+  const nAlert = padroncini.filter(conAlert).length;
+
+  const righe = filtro === 'ALERT' ? filtered.filter(conAlert) : filtered;
+  const { sorted, sort, toggle } = useSort<Padroncino, SortK>(righe, (p, k) => {
+    switch (k) {
+      case 'nome': return p.ragioneSociale.toLowerCase();
+      case 'stato': return p.attivo ? 0 : 1;
+      case 'durc': return docDurc(p).k;
+      case 'dvr': return docDvr(p).k;
+      case 'palmari': return p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0;
+      case 'mezzi': return p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0;
+      case 'autisti': return p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0;
+      case 'fatturato': return p.fatturatoTotale ?? null;
+    }
+  }, { key: 'nome', dir: 'asc' });
+
+  // Testo dell'avviso documenti, costruito dai dati
+  const attiviP = padroncini.filter((p) => p.attivo);
+  const nomeBreve = (n: string) => n.replace(/\s+(S\.?R\.?L\.?S?\.?|SRLS|SRL|SAS|SNC|S\.?A\.?S\.?)$/i, '').trim();
+  const lista = (xs: string[]) => xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`;
+  const scaduti = attiviP.filter((p) => docDurc(p).tone === 'ko').map((p) => nomeBreve(p.ragioneSociale));
+  const inScad = attiviP.filter((p) => docDurc(p).tone === 'warn');
+  const senzaDoc = attiviP.filter((p) => docDurc(p).tone === 'na' && docDvr(p).tone === 'na').map((p) => nomeBreve(p.ragioneSociale));
+  const frasi = [
+    scaduti.length ? `DURC scaduto per ${lista(scaduti)}` : '',
+    inScad.length ? `in scadenza per ${lista(inScad.map((p) => `${nomeBreve(p.ragioneSociale)} il ${fmtData(p.scadenzaDurc).slice(0, 5)}`))}` : '',
+  ].filter(Boolean).join('; ');
+  const avviso = [frasi ? frasi.charAt(0).toUpperCase() + frasi.slice(1) + '.' : '', senzaDoc.length ? `${lista(senzaDoc)} ${senzaDoc.length === 1 ? 'non ha' : 'non hanno'} DURC né DVR a sistema.` : ''].filter(Boolean).join(' ');
+  // Stesso criterio della tabella: padroncini attivi con DURC scaduto o in scadenza
+  const nAlertDoc = scaduti.length + inScad.length;
+
+  if (loading) return <Page><Card pad><Empty>Caricamento padroncini…</Empty></Card></Page>;
   if (error) return (
-    <div className="pd-page">
-      <div className="pd-error">⚠️ {error} <button className="btn-primary btn-sm" onClick={load}>Riprova</button></div>
-    </div>
+    <Page><Alert tone="ko" title="Errore di caricamento" actions={<Button size="sm" onClick={load}>Riprova</Button>}>{error}</Alert></Page>
   );
+
+  const AV = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
+  const iniz = (n: string) => n.replace(/[^A-Za-zÀ-ú0-9& ]/g, ' ').split(/\s+/).filter((w) => w && w !== '&').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   return (
-    <div className="pd-page">
-      <div className="pd-page-titlebar">
-        <h1>Padroncini</h1>
+    <Page>
+      <PageHeader
+        eyebrow="Operativo"
+        title="Padroncini"
+        sub="Anagrafiche, documenti, risorse assegnate e fatturato"
+        actions={<>
+          <input ref={importInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportaExcel} />
+          <Button icon="upload" onClick={() => importInputRef.current?.click()} disabled={importando} title="Importa padroncini da file Excel">
+            {importando ? 'Importazione…' : 'Importa Excel'}
+          </Button>
+          <Button icon="plus" variant="primary" onClick={() => setShowNuovo(true)}>Nuovo padroncino</Button>
+        </>}
+      />
 
-        {(stats?.alertDocumenti ?? 0) > 0 && (
-          <span
-            className="pd-alert-pill"
-            title="Documenti in scadenza o scaduti"
-          >
-            <span className="pd-alert-pill-ico">⚠️</span>
-            {stats?.alertDocumenti ?? 0} alert
+      <Kpis items={[
+        { label: 'Padroncini attivi', value: stats?.attivi ?? nAttivi, sub: `${stats?.dismissi ?? padroncini.length - nAttivi} dismessi · ${stats?.totali ?? padroncini.length} totali`, color: C.blue, icon: 'pad' },
+        { label: 'Alert documenti', value: nAlertDoc, sub: 'DURC scaduti o in scadenza', color: C.red, icon: 'alert', subColor: nAlertDoc ? '#B91C1C' : undefined },
+        { label: 'Flotta mezzi', value: stats?.flottaMezzi ?? 0, sub: `${stats?.flottaDisponibili ?? 0} disponibili`, color: C.teal, icon: 'mezzi' },
+        { label: 'Palmari attivi', value: stats?.palmariAttivi ?? 0, sub: `su ${stats?.palmariTotali ?? 0} totali`, color: C.purple, icon: 'palm' },
+      ]} />
+
+      {avviso && (
+        <div className="pl2-alert">
+          <span aria-hidden="true" className="pl2-dot" />
+          <span style={{ flex: '1 1 360px' }}>
+            <span style={{ fontWeight: 600 }}>{nAlertDoc} alert document{nAlertDoc === 1 ? 'o' : 'i'}.</span>{' '}
+            <span style={{ color: '#3F3F46' }}>{avviso}</span>
           </span>
-        )}
-      </div>
-      <div className="pd-page-header">
-        <div className="pd-page-stats">
-          <div className="pd-page-stat pd-page-stat--blue">
-            <div className="pd-page-stat-head">
-              <span className="pd-page-stat-label">PADRONCINI ATTIVI</span>
-              <span className="pd-page-stat-icon">👥</span>
-            </div>
-            <span className="pd-page-stat-val">{stats?.attivi ?? padroncini.filter(p => p.attivo).length}</span>
-            <span className="pd-page-stat-sub">{stats?.dismissi ?? 0} dismessi · {stats?.totali ?? padroncini.length} totali</span>
-          </div>
-          <div className="pd-page-stat pd-page-stat--alert">
-            <div className="pd-page-stat-head">
-              <span className="pd-page-stat-label">ALERT DOCUMENTI</span>
-              <span className="pd-page-stat-icon">⚠️</span>
-            </div>
-            <span className="pd-page-stat-val pd-page-stat-val-red">{stats?.alertDocumenti ?? 0}</span>
-            <span className="pd-page-stat-sub">DURC scaduti o in scadenza</span>
-          </div>
-          <div className="pd-page-stat pd-page-stat--green">
-            <div className="pd-page-stat-head">
-              <span className="pd-page-stat-label">FLOTTA MEZZI</span>
-              <span className="pd-page-stat-icon">🚛</span>
-            </div>
-            <span className="pd-page-stat-val">{stats?.flottaMezzi ?? 0}</span>
-            <span className="pd-page-stat-sub">{stats?.flottaDisponibili ?? 0} disponibili</span>
-          </div>
-          <div className="pd-page-stat pd-page-stat--purple">
-            <div className="pd-page-stat-head">
-              <span className="pd-page-stat-label">PALMARI ATTIVI</span>
-              <span className="pd-page-stat-icon">📱</span>
-            </div>
-            <span className="pd-page-stat-val">{stats?.palmariAttivi ?? 0}</span>
-            <span className="pd-page-stat-sub">su {stats?.palmariTotali ?? 0} totali</span>
-          </div>
+          <Button size="sm" onClick={() => setFiltro('ALERT')}>Mostra solo questi</Button>
         </div>
-      </div>
+      )}
 
-      <div className="pd-toolbar">
-        <div className="pd-search-wrap">
-          <span>🔍</span>
-          <input className="pd-search" placeholder="Cerca per nome, codice o P.IVA..."
-            value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Card>
+        <div className="pl2-toolbar">
+          <SegTabs<Filtro>
+            value={filtro}
+            onChange={setFiltro}
+            label="Vista"
+            items={[
+              { value: 'ATTIVO', label: 'Attivi', count: nAttivi },
+              { value: 'DISMESSO', label: 'Dismessi', count: padroncini.length - nAttivi },
+              { value: 'TUTTI', label: 'Tutti', count: padroncini.length },
+              { value: 'ALERT', label: 'Con alert', count: nAlert },
+            ]}
+          />
+          <SearchBox value={search} onChange={setSearch} placeholder="Cerca per nome, codice o P. IVA…" width={300} />
         </div>
-        <div className="pd-filters">
-          {(['TUTTI', 'ATTIVO', 'DISMESSO'] as const).map((f) => (
-            <button key={f} className={`pd-filter-btn ${filtro === f ? 'pd-filter-active' : ''}`}
-              onClick={() => setFiltro(f)}>{f}</button>
-          ))}
+        <div className="ds-tablewrap">
+          <table className="ds-table pl2-table">
+            <thead>
+              <tr>
+                <Th k="nome" sort={sort} onSort={toggle}>Padroncino</Th>
+                <Th k="stato" sort={sort} onSort={toggle}>Stato</Th>
+                <Th k="durc" sort={sort} onSort={toggle}>DURC</Th>
+                <Th k="dvr" sort={sort} onSort={toggle}>DVR</Th>
+                <Th k="palmari" sort={sort} onSort={toggle} right>Palmari</Th>
+                <Th k="mezzi" sort={sort} onSort={toggle} right>Mezzi</Th>
+                <Th k="autisti" sort={sort} onSort={toggle} right>Autisti</Th>
+                <Th k="fatturato" sort={sort} onSort={toggle} right>Fatturato totale</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && (
+                <tr><td colSpan={8}><Empty>Nessun padroncino trovato</Empty></td></tr>
+              )}
+              {sorted.map((p, i) => {
+                const durc = docDurc(p);
+                const dvr = docDvr(p);
+                const durcInfo = scadenzaInfo(p.scadenzaDurc);
+                const sub = [p.codice ? `Cod. ${p.codice}` : '', p.indirizzo || 'Sede non inserita', p.partitaIva ? `P. IVA ${p.partitaIva}` : ''].filter(Boolean).join(' · ');
+                return (
+                  <tr key={p.id} className="is-clickable" onClick={() => navigate(`/padroncini/${p.id}`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/padroncini/${p.id}`); }} tabIndex={0}>
+                    <td>
+                      <div className="pl2-who">
+                        <span aria-hidden="true" className="pl2-av" style={{ background: p.attivo ? AV[i % 7] : '#A1A1AA' }}>{iniz(p.ragioneSociale)}</span>
+                        <span className="pl2-who-t">
+                          <span className="pl2-name">{p.ragioneSociale}</span>
+                          <span className="pl2-sub" title={sub}>{sub}</span>
+                        </span>
+                      </div>
+                    </td>
+                    <td><Dot tone={p.attivo ? 'ok' : 'na'}>{p.attivo ? 'Attivo' : 'Dismesso'}</Dot></td>
+                    <td><Dot tone={durc.tone} title={durcInfo?.label}>{durc.t}</Dot></td>
+                    <td><Dot tone={dvr.tone}>{dvr.t}</Dot></td>
+                    <td className="r">{p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0}</td>
+                    <td className="r">{p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0}</td>
+                    <td className="r">{p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0}</td>
+                    <td className="r" style={{ fontWeight: 600 }}>{p.fatturatoTotale != null ? fmtEur2(p.fatturatoTotale) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".xlsx,.xls"
-          style={{ display: 'none' }}
-          onChange={handleImportaExcel}
-        />
-        <button
-          className="btn-secondary pd-import-btn"
-          onClick={() => importInputRef.current?.click()}
-          disabled={importando}
-          title="Importa padroncini da file Excel"
-        >
-          {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
-        </button>
-        <button className="btn-primary pd-nuovo-btn" onClick={() => setShowNuovo(true)}>+ Nuovo</button>
-      </div>
+        <div className="pl2-foot">{sorted.length} di {padroncini.length} padroncini · fatturato con IVA di tutti i conteggi</div>
+      </Card>
 
       {importResult && (
-        <div className="pd-import-overlay" onClick={() => setImportResult(null)}>
-          <div className="pd-import-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>📥 Risultati Importazione Excel</h3>
-            <div className="pd-import-stats">
+        <div className="modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="modal-panel pl2-import" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Risultati importazione Excel</h3>
+            <div className="pl2-import-stats">
               <div><strong>{importResult.creati}</strong> creati</div>
               <div><strong>{importResult.saltati}</strong> saltati (duplicati)</div>
               <div><strong>{importResult.errori.length}</strong> errori</div>
             </div>
             {importResult.errori.length > 0 && (
-              <div className="pd-import-errors">
-                <h4>Errori:</h4>
+              <div className="pl2-import-err">
+                <h4>Errori</h4>
                 <ul>
                   {importResult.errori.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}
                   {importResult.errori.length > 20 && <li>… e altri {importResult.errori.length - 20}</li>}
                 </ul>
               </div>
             )}
-            <button className="btn-primary" onClick={() => setImportResult(null)}>Chiudi</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button variant="primary" onClick={() => setImportResult(null)}>Chiudi</Button></div>
           </div>
         </div>
       )}
 
-      <div className="pd-table-wrap">
-        <table className="pd-table">
-          <thead>
-            <tr>
-              <th>PADRONCINO</th>
-              <th>STATO</th>
-              <th>DURC</th>
-              <th>DVR</th>
-              <th style={{ textAlign: 'center' }}>PALM.</th>
-              <th style={{ textAlign: 'center' }}>MEZZI</th>
-              <th style={{ textAlign: 'center' }}>AUTISTI</th>
-              <th style={{ textAlign: 'right' }}>FATTURATO</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} className="pd-empty-row">Nessun padroncino trovato</td></tr>
-            )}
-            {filtered.map((p) => {
-              const durcSt = durcStatus(p.scadenzaDurc);
-              const durcInfo = scadenzaInfo(p.scadenzaDurc);
-              const dvrSt = dvrStatus(p.scadenzaDvr, p.dvrEsente);
-              return (
-                <tr key={p.id} className="pd-row"
-                  onClick={() => navigate(`/padroncini/${p.id}`)}>
-                  <td>
-                    <span className="pd-ragsoc">{p.ragioneSociale}</span>
-                    {p.codice && (
-                      <div className="pd-codice-row">Cod. {p.codice}</div>
-                    )}
-                  </td>
-                  <td>
-                    <span className={`pd-stato-badge ${p.attivo ? 'pd-stato-attivo' : 'pd-stato-dismesso'}`}>
-                      {p.attivo ? 'ATTIVO' : 'DISMESSO'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="pd-tooltip-container">
-                      <span className={`pd-doc-badge ${durcSt.cls}`}>
-                        {durcSt.label}
-                      </span>
-                      {durcInfo && (
-                        <span className="pd-tooltip-text">
-                          {durcInfo.label}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td><span className={`pd-doc-badge ${dvrSt.cls}`}>{dvrSt.label}</span></td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className="pd-count pd-count-blue">
-                      {p.palmariAssegnati?.filter((m) => !m.dataFine).length ?? 0}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className="pd-count pd-count-blue">
-                      {p.mezziAssegnati?.filter((m) => !m.dataFine).length ?? 0}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span className="pd-count pd-count-blue">
-                      {p.codiciAutista?.filter((a) => !a.dataFine).length ?? 0}
-                    </span>
-                  </td>
-                  <td className="pd-fatturato">
-                    {p.fatturatoTotale != null ? fmtEur(p.fatturatoTotale) : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="pd-table-footer">{filtered.length} di {padroncini.length} padroncini</div>
-
       <NuovoPadroncinoModal open={showNuovo} onClose={() => setShowNuovo(false)} onSave={handleCreate} />
-    </div>
+    </Page>
   );
 }

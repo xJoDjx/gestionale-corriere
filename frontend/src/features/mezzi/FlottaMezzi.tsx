@@ -11,7 +11,13 @@ import BulkContrattoModal from './BulkContrattoModal';
 import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import { type AuditEntry, getHumanReadableDescription, fmtDate as fmtDateOra } from '../../lib/auditFormat';
+import {
+  Page, PageHeader, Button, IconButton, Tabs, SegTabs, Empty, Alert, Th, Icon, C,
+  fmtNum, type Tone, type IconName,
+} from '../../components/ds';
+import TaskList from '../../components/ds/TaskList';
 import './FlottaMezzi.css';
+import './Flotta.css';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -19,7 +25,7 @@ const fmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
 
 const fmtEur = (n: number | null | undefined) =>
-  n == null ? '—' : n.toLocaleString('it-IT', { minimumFractionDigits: 2 }) + ' €';
+  n == null ? '—' : '€ ' + fmtNum(Number(n), 2);
 
 const daysDiff = (d: string | null | undefined): number | null => {
   if (!d) return null;
@@ -40,6 +46,10 @@ const kmPercent = (km: number | null | undefined, limite: number | null | undefi
   return Math.min(100, Math.round((km / limite) * 100));
 };
 
+/** Percentuale km sul limite senza tetto (serve per vedere chi l'ha superato). */
+const kmPercent0 = (km: number | null | undefined, limite: number | null | undefined) =>
+  !km || !limite ? null : Math.round((km / limite) * 100);
+
 const kmBarCls = (pct: number) => {
   if (pct >= 90) return 'fm-km-bar-red';
   if (pct >= 70) return 'fm-km-bar-orange';
@@ -55,13 +65,26 @@ const kmTextCls = (pct: number) => {
 
 // ─── COSTANTI ─────────────────────────────────────────────────────────────────
 
-const STATO_BADGE: Record<string, { label: string; cls: string }> = {
-  ASSEGNATO:      { label: 'Assegnato',     cls: 'fm-badge-assigned'   },
-  DISPONIBILE:    { label: 'Disponibile',   cls: 'fm-badge-available'  },
-  IN_REVISIONE:   { label: 'In Revisione',  cls: 'fm-badge-revision'   },
-  FUORI_SERVIZIO: { label: 'Fuori Servizio',cls: 'fm-badge-fuori'      },
-  VENDUTO:        { label: 'Venduto',       cls: 'fm-badge-gray'       },
-  DISMESSO:       { label: 'Dismesso',      cls: 'fm-badge-gray'       },
+const STATO_BADGE: Record<string, { label: string; cls: string; tone: Tone }> = {
+  ASSEGNATO:      { label: 'Assegnato',      cls: 'fm-badge-assigned',  tone: 'info' },
+  DISPONIBILE:    { label: 'Disponibile',    cls: 'fm-badge-available', tone: 'ok'   },
+  IN_REVISIONE:   { label: 'In revisione',   cls: 'fm-badge-revision',  tone: 'warn' },
+  FUORI_SERVIZIO: { label: 'Fuori servizio', cls: 'fm-badge-fuori',     tone: 'ko'   },
+  VENDUTO:        { label: 'Venduto',        cls: 'fm-badge-gray',      tone: 'na'   },
+  DISMESSO:       { label: 'Dismesso',       cls: 'fm-badge-gray',      tone: 'na'   },
+};
+
+const POSSESSO_COLOR: Record<string, string> = { PROPRIETA: '#15803D', NOLEGGIO: '#1D4ED8', ESTERNO: '#6D28D9' };
+
+/** Tono della scadenza: scaduta o entro 7 giorni rosso, entro 30 arancio. */
+const scadTone = (d: string | null | undefined): Tone => {
+  const g = daysDiff(d);
+  if (g === null) return 'na';
+  return g <= 7 ? 'ko' : g <= 30 ? 'warn' : 'na';
+};
+const scadTip = (d: string | null | undefined) => {
+  const g = daysDiff(d);
+  return g === null ? undefined : g < 0 ? `Scaduta da ${-g} giorni` : `Tra ${g} giorni`;
 };
 
 const POSSESSO_BADGE: Record<string, { label: string; cls: string }> = {
@@ -91,11 +114,12 @@ const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
 
 // ─── COLUMN PICKER ────────────────────────────────────────────────────────────
 
-type ColKey = 'tipo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio';
+type ColKey = 'tipo' | 'tipoMezzo' | 'marcaModello' | 'alimentazione' | 'stato' | 'assegnatoA' | 'assicurazione' | 'revisione' | 'km' | 'kmAggiornatiAl' | 'canone' | 'rataPda' | 'fineNoleggio' | 'inseritoIl';
 
 const COL_DEFS: { key: ColKey; label: string }[] = [
-  { key: 'tipo',          label: 'Tipo possesso'   },
-  { key: 'marcaModello',  label: 'Marca / Modello' },
+  { key: 'marcaModello',  label: 'Marca / modello' },
+  { key: 'tipoMezzo',     label: 'Tipo'            },
+  { key: 'tipo',          label: 'Possesso'        },
   { key: 'alimentazione', label: 'Alimentazione'   },
   { key: 'stato',         label: 'Stato'           },
   { key: 'assegnatoA',    label: 'Assegnato a'     },
@@ -106,12 +130,13 @@ const COL_DEFS: { key: ColKey; label: string }[] = [
   { key: 'canone',        label: 'Canone noleggio' },
   { key: 'rataPda',       label: 'Rata PDA'        },
   { key: 'fineNoleggio',  label: 'Fine Noleggio'   },
+  { key: 'inseritoIl',    label: 'Inserito il'     },
 ];
 
-const COLS_KEY = 'fm-cols-v4';
+const COLS_KEY = 'fm-cols-v5';
 const DEFAULT_COLS: Record<ColKey, boolean> = {
-  tipo: true, marcaModello: true, alimentazione: true, stato: true, assegnatoA: true,
-  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true,
+  tipoMezzo: true, tipo: true, marcaModello: true, alimentazione: true, stato: true, assegnatoA: true,
+  assicurazione: true, revisione: true, km: true, kmAggiornatiAl: false, canone: true, rataPda: true, fineNoleggio: true, inseritoIl: true,
 };
 
 function loadCols(): Record<ColKey, boolean> {
@@ -139,13 +164,19 @@ export default function FlottaMezzi() {
   const [filtroStato,     setFiltroStato]     = useState('ATTIVI');
   const [filtroPossesso,  setFiltroPossesso]  = useState<'TUTTI' | TipoPossessoMezzo>('TUTTI');
   const [filtroCategoria, setFiltroCategoria] = useState<'TUTTI' | 'DISTRIBUZIONE' | 'AUTO_AZIENDALE' | 'FLOTTA'>('TUTTI');
+  const [filtroAlim, setFiltroAlim] = useState<string>('TUTTE');
+  const [pannello, setPannello] = useState<null | 'attivita' | 'note' | 'modifiche'>(null);
+  const [scadTab90, setScadTab90] = useState<string>('Tutte');
+  // Riepilogo (scadenze e composizione) richiudibile; la scelta resta salvata nel browser
+  const [riepChiuso, setRiepChiuso] = useState<boolean>(() => { try { return localStorage.getItem('flotta_riepilogo_chiuso') === '1'; } catch { return false; } });
+  const toggleRiep = () => setRiepChiuso((v) => { try { localStorage.setItem('flotta_riepilogo_chiuso', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
 
-  type SortField = 'targa' | 'tipo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio';
+  type SortField = 'targa' | 'tipo' | 'tipoMezzo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio' | 'inseritoIl';
   const [sortField, setSortField] = useState<SortField>('targa');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  type ScadenzaTipo = 'Fine Noleggio' | 'Revisione' | 'Assicurazione';
-  const [scadenzaTab, setScadenzaTab] = useState<ScadenzaTipo>('Fine Noleggio');
+  type ScadenzaTipo = 'Fine Noleggio' | 'Revisione' | 'Assicurazione' | 'Bollo';
+  const [scadenzaTab, setScadenzaTab] = useState<ScadenzaTipo>('Assicurazione');
 
   const [nuovoOpen,         setNuovoOpen]         = useState(false);
   const [importando,        setImportando]        = useState(false);
@@ -195,8 +226,9 @@ export default function FlottaMezzi() {
                           : statoUpper === filtroStato;
     const matchPossesso  = filtroPossesso  === 'TUTTI' || (m.tipoPossesso ?? 'NOLEGGIO') === filtroPossesso;
     const matchCategoria = filtroCategoria === 'TUTTI' || (m.categoria ?? 'DISTRIBUZIONE') === filtroCategoria;
-    return matchSearch && matchStato && matchPossesso && matchCategoria;
-  }), [mezzi, search, filtroStato, filtroPossesso, filtroCategoria]);
+    const matchAlim      = filtroAlim === 'TUTTE' || (m.alimentazione ?? '') === filtroAlim;
+    return matchSearch && matchStato && matchPossesso && matchCategoria && matchAlim;
+  }), [mezzi, search, filtroStato, filtroPossesso, filtroCategoria, filtroAlim]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     let va: any, vb: any;
@@ -207,6 +239,7 @@ export default function FlottaMezzi() {
         vb = POSSESSO_BADGE[(b.tipoPossesso as string) ?? 'NOLEGGIO']?.label ?? b.tipoPossesso ?? '';
         break;
       case 'marca':   va = a.marca + a.modello; vb = b.marca + b.modello; break;
+      case 'tipoMezzo': va = a.tipo ?? ''; vb = b.tipo ?? ''; break;
       case 'alimentazione':
         va = ALIMENTAZIONE_BADGE[a.alimentazione]?.label ?? a.alimentazione ?? '';
         vb = ALIMENTAZIONE_BADGE[b.alimentazione]?.label ?? b.alimentazione ?? '';
@@ -241,6 +274,10 @@ export default function FlottaMezzi() {
         vb = b.kmAttualiAl ? new Date(b.kmAttualiAl).getTime() : -Infinity;
         break;
       case 'fineNoleggio': va = a.fineNoleggio ?? ''; vb = b.fineNoleggio ?? ''; break;
+      case 'inseritoIl':
+        va = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
+        vb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
+        break;
       default: va = ''; vb = '';
     }
     if (typeof va === 'string') return sortOrder === 'asc' ? va.localeCompare(vb, 'it') : vb.localeCompare(va, 'it');
@@ -260,6 +297,8 @@ export default function FlottaMezzi() {
         const ass = daysDiff(m.scadenzaAssicurazione);
         const rev = daysDiff(m.scadenzaRevisione);
         const fn  = daysDiff(m.fineNoleggio);
+        const bol = daysDiff(m.scadenzaBollo);
+        if (bol !== null && bol <= 30) items.push({ targa: m.targa, id: m.id, tipo: 'Bollo', giorni: bol });
         if (ass !== null && ass <= 30) items.push({ targa: m.targa, id: m.id, tipo: 'Assicurazione', giorni: ass });
         if (rev !== null && rev <= 30) items.push({ targa: m.targa, id: m.id, tipo: 'Revisione',     giorni: rev });
         if (fn  !== null && fn  <= 30) items.push({ targa: m.targa, id: m.id, tipo: 'Fine Noleggio',  giorni: fn });
@@ -268,7 +307,7 @@ export default function FlottaMezzi() {
   }, [mezzi]);
 
   const scadenzeFiltrate = useMemo(() => {
-    return prossimeScadenze.filter(s => s.tipo === scadenzaTab).slice(0, 5);
+    return prossimeScadenze.filter(s => s.tipo === scadenzaTab);
   }, [prossimeScadenze, scadenzaTab]);
 
   const selectedMezzi    = useMemo(() => mezzi.filter(m => selectedIds.has(m.id)), [mezzi, selectedIds]);
@@ -415,200 +454,495 @@ export default function FlottaMezzi() {
     catch (e: any) { alert('Errore eliminazione attività: ' + e.message); await loadTasks(); }
   };
 
-  if (loading) return (
-    <div className="fm-page"><div className="fm-loading"><div className="fm-spinner" /><span>Caricamento flotta...</span></div></div>
-  );
+  if (loading) return <Page><Empty>Caricamento flotta…</Empty></Page>;
   if (error) return (
-    <div className="fm-page"><div className="fm-error"><span>⚠️ {error}</span><button className="fm-btn-primary fm-btn-sm" onClick={loadData}>Riprova</button></div></div>
+    <Page><Alert tone="ko" title="Errore di caricamento" actions={<Button size="sm" onClick={loadData}>Riprova</Button>}>{error}</Alert></Page>
   );
 
-  const statTotali      = stats?.totali      ?? mezzi.length;
-  const statAssegnati   = stats?.assegnati   ?? 0;
+  // ─── Dati per i riquadri (solo visualizzazione) ─────────────────────────
+  const inFlotta = mezzi.filter(m => m.stato.toUpperCase() !== 'DISMESSO' && m.stato.toUpperCase() !== 'VENDUTO');
+  const nDismessi = mezzi.length - inFlotta.length;
+  const statTotali = stats?.totali ?? mezzi.length;
+  const statAssegnati = stats?.assegnati ?? 0;
   const statDisponibili = stats?.disponibili ?? 0;
-  const statCanone      = stats?.entrateNoleggio ?? null;
-  const statRate        = stats?.sommaRate ?? null;
-  const statMargine     = stats?.margine ?? null;
+  const conta = (f: (m: Mezzo) => boolean) => inFlotta.filter(f).length;
+  const nNol = conta(m => (m.tipoPossesso ?? 'NOLEGGIO') === 'NOLEGGIO');
+  const nProp = conta(m => m.tipoPossesso === 'PROPRIETA');
+  const nEst = conta(m => m.tipoPossesso === 'ESTERNO');
+  const isDiesel = (a: string) => ['GASOLIO', 'DIESEL', 'GASOLIO_MHEV'].includes((a ?? '').toUpperCase());
+  const nGas = conta(m => isDiesel(m.alimentazione));
+  const nEle = conta(m => (m.alimentazione ?? '').toUpperCase() === 'ELETTRICO');
+  const nAltro = inFlotta.length - nGas - nEle;
+  const perc = (n: number) => (inFlotta.length ? Math.round((n / inFlotta.length) * 100) : 0);
+
+  const TONO: Record<string, [string, string]> = { ko: ['#B91C1C', '#E5484D'], warn: ['#C2410C', '#EA6A2A'], na: ['#52525B', '#A1A1AA'], ok: ['#15803D', '#15A06A'], nn: ['#3F3F46', '#D4D4D8'], info: ['#1D4ED8', '#3D63F0'] };
+  const dataIt = (iso: string) => fmt(iso);
+
+  // Avvisi chilometri
+  const kmRows = inFlotta.map(m => ({ m, p: kmPercent0(m.kmAttuali, m.kmLimite) })).filter(x => x.p !== null) as { m: Mezzo; p: number }[];
+  const oltre = kmRows.filter(x => x.p > 100).sort((a, b) => b.p - a.p);
+  const vicini = kmRows.filter(x => x.p >= 90 && x.p <= 100).sort((a, b) => b.p - a.p);
+  const POSS_LABEL: Record<string, string> = { PROPRIETA: 'di proprietà', NOLEGGIO: 'a noleggio', ESTERNO: 'esterno' };
+  const avvisi = [
+    ...oltre.map(x => ({ key: x.m.id, tono: 'ko', t: `${x.m.targa} ha superato il limite chilometrico.`, s: `${fmtNum(x.m.kmAttuali)} km su ${fmtNum(x.m.kmLimite)} · ${(STATO_BADGE[x.m.stato.toUpperCase()]?.label ?? x.m.stato).toLowerCase()}, ${POSS_LABEL[x.m.tipoPossesso ?? 'NOLEGGIO'] ?? ''}`, cta: 'Apri mezzo', go: () => navigate(`/flotta/${x.m.id}`) })),
+    ...(vicini.length ? [{ key: 'vicini', tono: 'warn', t: `${vicini.length} ${vicini.length === 1 ? 'mezzo sopra' : 'mezzi sopra'} il 90% del limite km.`, s: vicini.map(x => `${x.m.targa} ${x.p}%`).join(' · '), cta: 'Mostra', go: () => { setSortField('kmPct'); setSortOrder('desc'); document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' }); } }] : []),
+  ];
+
+  // Scadenze: scadute e nei prossimi 90 giorni, per tipo
+  type TipoScad = 'Assicurazione' | 'Revisione' | 'Bollo' | 'Fine noleggio' | 'Tachigrafo';
+  const SCAD_DEF: { t: TipoScad; campo: keyof Mezzo; tile: string; icon: IconName }[] = [
+    { t: 'Assicurazione', campo: 'scadenzaAssicurazione', tile: C.red, icon: 'scudo' },
+    { t: 'Revisione', campo: 'scadenzaRevisione', tile: C.orange, icon: 'cal' },
+    { t: 'Bollo', campo: 'scadenzaBollo', tile: C.purple, icon: 'euro' },
+    { t: 'Fine noleggio', campo: 'fineNoleggio', tile: C.blue, icon: 'doc' },
+    { t: 'Tachigrafo', campo: 'scadenzaTachigrafo', tile: C.teal, icon: 'cal' },
+  ];
+  const scad90 = SCAD_DEF.map(d => ({
+    ...d,
+    items: inFlotta
+      .map(m => ({ m, iso: m[d.campo] as string | null | undefined }))
+      .filter(x => !!x.iso)
+      .map(x => ({ ...x, g: daysDiff(x.iso)! }))
+      .filter(x => x.g <= 90)
+      .sort((a, b) => a.g - b.g),
+  }));
+  const scad90Tot = scad90.reduce((n, d) => n + d.items.filter(x => x.g < 0).length, 0);
+  const tagScad = (g: number): [string, string] => (g < 0 ? ['ko', `Scaduta da ${-g} gg`] : g <= 30 ? ['warn', `Tra ${g} giorni`] : ['nn', `Tra ${g} giorni`]);
+  const padDi = (m: Mezzo) => m.assegnazioni?.find(a => !a.dataFine)?.padroncino.ragioneSociale ?? null;
+  const modello = (m: Mezzo) => `${m.marca} ${m.modello}`.trim();
+  let righeScad: { key: string; tile: string; icon: IconName; t: string; sub: string; tono: string; tag: string; data: string; to?: string }[] = [];
+  let notaScad = '';
+  if (scadTab90 === 'Tutte') {
+    for (const d of scad90) {
+      const scad = d.items.filter(x => x.g < 0);
+      if (scad.length) {
+        const anni = Array.from(new Set(scad.map(x => x.iso!.slice(0, 4)))).sort();
+        const date = Array.from(new Set(scad.map(x => dataIt(x.iso!))));
+        const assic = d.t === 'Assicurazione';
+        righeScad.push({ key: d.t + 'scad', tile: d.tile, icon: d.icon, t: `${d.t} · ${scad.length} ${scad.length === 1 ? 'mezzo' : 'mezzi'}`,
+          sub: assic && anni.length > 1 ? `Date ferme tra il ${anni[0]} e il ${anni[anni.length - 1]}: da aggiornare` : `${scad.slice(0, 6).map(x => x.m.targa).join(', ')}${scad.length > 6 ? ` e altri ${scad.length - 6}` : ''}`,
+          tono: 'ko', tag: assic && anni.length > 1 ? 'Da aggiornare' : 'Scaduto', data: date.length === 1 ? date[0] : '—' });
+      }
+      const perData = new Map<string, typeof d.items>();
+      d.items.filter(x => x.g >= 0).forEach(x => { const k = dataIt(x.iso!); perData.set(k, [...(perData.get(k) ?? []), x]); });
+      perData.forEach((xs, data) => {
+        const [tono, tag] = tagScad(xs[0].g);
+        const pads = Array.from(new Set(xs.map(x => padDi(x.m)).filter(Boolean))) as string[];
+        righeScad.push({ key: d.t + data, tile: d.tile, icon: d.icon,
+          t: `${d.t} · ${xs.length <= 3 ? xs.map(x => x.m.targa).join(', ') : `${xs.length} mezzi`}`,
+          sub: xs.length <= 3 ? `${Array.from(new Set(xs.map(x => modello(x.m)))).join(', ')} · ${pads.length ? pads.map(p => p.replace(/ (S\.?R\.?L\.?S?\.?|SAS|SRL|SRLS)$/i, '')).join(', ') : 'non assegnati'}` : `${modello(xs[0].m)} ${xs.slice(0, 3).map(x => x.m.targa).join(', ')} e altri ${xs.length - 3}`,
+          tono, tag, data, to: xs.length === 1 ? `/flotta/${xs[0].m.id}` : undefined });
+      });
+    }
+    const ord = (r: typeof righeScad[number]) => (r.tag === 'Scaduto' ? -1e6 : r.tag === 'Da aggiornare' ? -5e5 : Number(r.tag.replace(/\D/g, '')) || 0);
+    righeScad.sort((a, b) => ord(a) - ord(b));
+  } else {
+    const d = scad90.find(x => x.t === scadTab90)!;
+    righeScad = d.items.map(x => { const [tono, tag] = tagScad(x.g); return { key: x.m.id, tile: d.tile, icon: d.icon, t: `${x.m.targa} · ${modello(x.m)}`, sub: padDi(x.m) ?? 'Non assegnato', tono, tag, data: dataIt(x.iso!), to: `/flotta/${x.m.id}` }; });
+    if (!righeScad.length) notaScad = 'Nessuna scadenza nei prossimi 90 giorni';
+  }
+
+  const VISTE: { value: string; label: string }[] = [
+    { value: 'ATTIVI', label: 'Attivi' },
+    { value: 'ASSEGNATO', label: 'Assegnati' },
+    { value: 'DISPONIBILE', label: 'Disponibili' },
+    { value: 'DISMESSO', label: 'Dismessi' },
+    { value: 'FUORI_SERVIZIO', label: 'Fuori servizio' },
+    { value: 'IN_REVISIONE', label: 'In revisione' },
+    { value: 'VENDUTO', label: 'Venduti' },
+    { value: 'TUTTI', label: 'Tutti' },
+  ];
+  const contaVista = (v: string) => mezzi.filter(m => {
+    const st = m.stato.toUpperCase();
+    return v === 'TUTTI' ? true : v === 'ATTIVI' ? st !== 'DISMESSO' && st !== 'VENDUTO' : st === v;
+  }).length;
+  const sortState = { key: sortField, dir: sortOrder };
+  const alimentazioni = Array.from(new Set(mezzi.map(m => m.alimentazione).filter(Boolean))).sort();
+  const nColVisibili = COL_DEFS.filter(c => cols[c.key]).length;
+  const SORT_LABEL: Record<string, string> = { targa: 'targa', tipo: 'possesso', tipoMezzo: 'tipo', marca: 'marca', alimentazione: 'alimentazione', stato: 'stato', padroncino: 'assegnatario', assicurazione: 'assicurazione', revisione: 'revisione', canone: 'canone', rata: 'rata', kmPct: 'km', kmAggiornatiAl: 'data km', fineNoleggio: 'fine noleggio', inseritoIl: 'data di inserimento' };
+  const AVC = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
+  const padIdx = (nome: string) => { let h = 0; for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AVC[h % AVC.length]; };
+  const iniziali = (s2: string) => s2.replace(/[^A-Za-z0-9 ]/g, ' ').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  const dotData = (iso: string | null | undefined) => {
+    if (!iso) return <span className="fl-empty">Non inserita</span>;
+    const g = daysDiff(iso)!;
+    const tono = g < 0 ? 'ko' : g <= 30 ? 'warn' : 'nn';
+    return <span className="fl-dot" style={{ color: tono === 'nn' ? '#0B0B0C' : TONO[tono][0] }} title={g < 0 ? `Scaduta da ${-g} giorni` : `Tra ${g} giorni`}><i style={{ background: TONO[tono][1] }} />{fmt(iso)}</span>;
+  };
+  const apriContratti = () => {
+    if (selectedIds.size === 0) { alert('Seleziona prima i mezzi dalla tabella (casella a sinistra di ogni riga).'); document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' }); return; }
+    setBulkContrattoOpen(true);
+  };
 
   return (
-    <div className="fm-page">
-
-      {/* ── HEADER ── */}
-      <div className="fm-header">
-        <div>
-          <h1 className="fm-title">Flotta Mezzi</h1>
-          <span className="fm-subtitle">Gestione veicoli, scadenze e assegnazioni padroncini</span>
-        </div>
-        <div className="fm-header-actions">
-          {prossimeScadenze.length > 0 && (
-            <span className="fm-scad-alert">⚠️ {prossimeScadenze.length} scadenze entro 30gg</span>
-          )}
+    <Page>
+      <PageHeader
+        eyebrow="Risorse"
+        title="Flotta mezzi"
+        sub={`${inFlotta.length} mezzi · ${nNol} a noleggio, ${nProp} di proprietà, ${nEst} ${nEst === 1 ? 'esterno' : 'esterni'}`}
+        actions={<>
           <input ref={importInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportaExcel} />
-          <button className="fm-btn-outline" onClick={() => importInputRef.current?.click()} disabled={importando}>
-            {importando ? '⏳ Importazione...' : '📥 Importa Excel'}
-          </button>
-          <button className="fm-btn-primary" onClick={() => setNuovoOpen(true)}>+ Nuovo Mezzo</button>
-        </div>
-      </div>
+          <Button icon="check" onClick={() => setPannello('attivita')}>Promemoria{tasks.filter(t => !t.completata).length ? ` · ${tasks.filter(t => !t.completata).length}` : ''}</Button>
+          <Button icon="upload" onClick={() => importInputRef.current?.click()} disabled={importando}>{importando ? 'Importazione…' : 'Importa Excel'}</Button>
+          <Button icon="doc" onClick={apriContratti}>Contratto multiplo</Button>
+          <Button icon="plus" variant="primary" onClick={() => setNuovoOpen(true)}>Nuovo mezzo</Button>
+        </>}
+      />
 
-      {/* ── KPI ROW ── */}
-      <div className="fm-kpi-row">
-        <div className="fm-kpi-card fm-kpi-blue">
-          <span className="fm-kpi-label">Totali</span>
-          <span className="fm-kpi-val">{statTotali}</span>
-          <span className="fm-kpi-sub">{statAssegnati} assegnati</span>
-        </div>
-        <div className="fm-kpi-card fm-kpi-green">
-          <span className="fm-kpi-label">Disponibili</span>
-          <span className="fm-kpi-val fm-kpi-val-green">{statDisponibili}</span>
-          <span className="fm-kpi-sub">pronti all'assegnazione</span>
-        </div>
-        <div className="fm-kpi-card fm-kpi-amber">
-          <span className="fm-kpi-label">Canone Noleggio</span>
-          <span className="fm-kpi-val fm-kpi-val-amber">{fmtEur(statCanone)}</span>
-          <span className="fm-kpi-sub">costo mensile</span>
-        </div>
-        <div className="fm-kpi-card fm-kpi-purple">
-          <span className="fm-kpi-label">Rate PDA</span>
-          <span className="fm-kpi-val fm-kpi-val-purple">{fmtEur(statRate)}</span>
-          <span className="fm-kpi-sub">incasso mensile</span>
-        </div>
-        <div className={`fm-kpi-card ${(statMargine ?? 0) >= 0 ? 'fm-kpi-green' : 'fm-kpi-red'}`}>
-          <span className="fm-kpi-label">Margine</span>
-          <span className={`fm-kpi-val ${(statMargine ?? 0) >= 0 ? 'fm-kpi-val-green' : 'fm-kpi-val-red'}`}>{fmtEur(statMargine)}</span>
-          <span className="fm-kpi-sub">netto mensile</span>
-        </div>
-      </div>
-
-      {/* ── INFO PANELS ── */}
-      <div className="fm-info-row">
-
-        {/* Scadenze */}
-        <div className="fm-info-panel">
-          <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">⚠️ Scadenze Imminenti</span>
-            {prossimeScadenze.length > 0 && (
-              <span className="fm-info-count">{prossimeScadenze.length}</span>
-            )}
-          </div>
-          <div className="fm-scad-tabs">
-            {(['Fine Noleggio', 'Revisione', 'Assicurazione'] as const).map(tab => {
-              const count = prossimeScadenze.filter(s => s.tipo === tab).length;
-              return (
-                <button
-                  key={tab}
-                  className={`fm-scad-tab ${scadenzaTab === tab ? 'active' : ''}`}
-                  onClick={() => setScadenzaTab(tab)}
-                >
-                  {tab}{count > 0 && <span className="fm-scad-tab-count">{count}</span>}
-                </button>
-              );
-            })}
-          </div>
-          {scadenzeFiltrate.length === 0
-            ? <div className="fm-info-empty">Nessuna scadenza nei prossimi 30 giorni</div>
-            : scadenzeFiltrate.map((s, i) => (
-              <div key={i} className="fm-info-row-item" onClick={() => navigate(`/flotta/${s.id}`)}>
-                <span className="fm-info-targa">{s.targa}</span>
-                <span className="fm-info-nome">{s.tipo}</span>
-                <span className={`fm-scad-pill ${s.giorni < 0 ? 'pill-red' : s.giorni <= 7 ? 'pill-orange' : 'pill-yellow'}`}>
-                  {s.giorni < 0 ? `${Math.abs(s.giorni)}gg fa` : `${s.giorni}gg`}
-                </span>
-              </div>
-            ))}
-        </div>
-
-        {/* Note */}
-        <div className="fm-info-panel">
-          <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">📝 Ultime Note</span>
-            <button className="fm-nota-toggle" onClick={() => setNotaForm(f => ({ ...f, open: !f.open }))}>
-              {notaForm.open ? '✕ chiudi' : '+ nota'}
-            </button>
-          </div>
-          {notaForm.open && (
-            <div className="fm-nota-form">
-              <select className="fm-nota-select" value={notaForm.mezzoId} onChange={e => setNotaForm(f => ({ ...f, mezzoId: e.target.value }))}>
-                <option value="">— Seleziona mezzo —</option>
-                {mezzi.map(m => <option key={m.id} value={m.id}>{m.targa} – {m.marca} {m.modello}</option>)}
-              </select>
-              <textarea className="fm-nota-textarea" rows={2} placeholder="Testo nota..." value={notaForm.testo} onChange={e => setNotaForm(f => ({ ...f, testo: e.target.value }))} />
-              <div className="fm-nota-actions">
-                <button className="fm-btn-outline fm-btn-sm" onClick={() => setNotaForm({ open: false, mezzoId: '', testo: '' })}>Annulla</button>
-                <button className="fm-btn-primary fm-btn-sm" onClick={handleAddNota} disabled={notaSaving || !notaForm.mezzoId || !notaForm.testo.trim()}>
-                  {notaSaving ? 'Salvo...' : 'Salva nota'}
-                </button>
-              </div>
+      <section aria-label="Indicatori flotta" className="ds-g4">
+        {[
+          { c: C.teal, i: 'mezzi' as IconName, l: 'Mezzi', v: fmtNum(statTotali), seg: [[statAssegnati, C.green], [statDisponibili, C.blue], [nDismessi, '#A1A1AA']] as [number, string][], s: `${statAssegnati} assegnati · ${statDisponibili} disponibili · ${nDismessi} dismessi` },
+          { c: C.red, i: 'euro' as IconName, l: 'Canoni noleggio', v: fmtEur(stats?.entrateNoleggio ?? null), s: 'Costo mensile' },
+          { c: C.green, i: 'euro' as IconName, l: 'Rate PDA', v: fmtEur(stats?.sommaRate ?? null), s: 'Incasso mensile' },
+          { c: C.purple, i: 'marg' as IconName, l: 'Margine', v: fmtEur(stats?.margine ?? null), s: 'Canoni − rate, calcolo attuale' },
+        ].map(k => (
+          <div key={k.l} className="ds-kpi">
+            <div className="ds-kpi-top">
+              <span aria-hidden="true" className="ds-tile" style={{ background: k.c }}><Icon name={k.i} size={11} stroke={2.6} /></span>
+              <span className="ds-kpi-label">{k.l}</span>
             </div>
-          )}
-          {ultimeNote.length === 0
-            ? <div className="fm-info-empty">Nessuna nota registrata</div>
-            : ultimeNote.map(n => {
-              const m = mezziMap[n.entityId];
-              return (
-                <div key={n.id} className="fm-info-row-item" onClick={() => navigate(`/flotta/${n.entityId}`)}>
-                  <span className="fm-info-targa">{m?.targa ?? '—'}</span>
-                  <span className="fm-info-nota" title={n.contenuto}>{n.contenuto}</span>
-                  <span className="fm-info-ago">{n.user ? `${n.user.nome[0]}.${n.user.cognome[0]}.` : '—'} · {fmt(n.createdAt)}</span>
-                </div>
-              );
-            })}
-        </div>
-
-        {/* Log */}
-        <div className="fm-info-panel">
-          <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">🕐 Ultime Modifiche</span>
+            <span className="ds-kpi-value fl-kpi-big">{k.v}</span>
+            {k.seg && (
+              <div aria-hidden="true" className="ds-seg">
+                {k.seg.map(([n, col], i) => <span key={i} style={{ width: `${(n / (statTotali + nDismessi || 1)) * 100}%`, background: col }} />)}
+              </div>
+            )}
+            <span className="ds-kpi-sub">{k.s}</span>
           </div>
-          {ultimiLog.length === 0
-            ? <div className="fm-info-empty">Nessuna modifica recente</div>
-            : ultimiLog.map(l => {
-              // Gli eventi di assegnazione/fine-assegnazione hanno entityType
-              // 'assegnazione_mezzo' ed entityId = id dell'assegnazione, non del
-              // mezzo: risolviamo il mezzo per targa per collegare la riga giusta.
-              const relatedTarga = l.dataDopo?.targa ?? l.dataPrima?.targa;
-              const relatedMezzo = mezziMap[l.entityId]
-                ?? (relatedTarga ? mezzi.find(m => m.targa === relatedTarga) : undefined);
-              const targa = relatedMezzo?.targa ?? relatedTarga ?? '—';
-              const descrizione = getHumanReadableDescription({ ...l, entityType: l.entityType ?? 'mezzo' }, { hideIdentifier: true });
-              return (
-                <div key={l.id} className="fm-info-row-item" onClick={() => navigate(`/flotta/${relatedMezzo?.id ?? l.entityId}`)}>
-                  <span className="fm-info-targa">{targa}</span>
-                  <span className="fm-info-desc" title={descrizione}>{descrizione}</span>
-                  <span className="fm-info-ago">{l.user ? `${l.user.nome[0]}.${l.user.cognome[0]}.` : '—'} · {fmtDateOra(l.createdAt)}</span>
-                </div>
-              );
-            })}
-        </div>
+        ))}
+      </section>
 
-        {/* Cose da fare */}
-        <div className="fm-info-panel">
-          <div className="fm-info-panel-head">
-            <span className="fm-info-panel-title">✅ Cose da Fare</span>
-            <button className="fm-nota-toggle" onClick={handleOpenNewTask}>+ attività</button>
+      {(oltre.length > 0 || vicini.length > 0) && (
+        <div className={`fl-avviso fl-avviso-${oltre.length ? 'ko' : 'warn'} fl-kmbar`}>
+          <i aria-hidden="true" />
+          <strong>Limite km</strong>
+          <span className="fl-kmsub">
+            {oltre.length > 0 && `${oltre.length} ${oltre.length === 1 ? 'superato' : 'superati'}`}
+            {oltre.length > 0 && vicini.length > 0 && ' · '}
+            {vicini.length > 0 && `${vicini.length} sopra il 90%`}
+          </span>
+          <span className="fl-kmchips">
+            {[...oltre.map(x => ({ ...x, ko: true })), ...vicini.map(x => ({ ...x, ko: false }))].map(x => (
+              <button key={x.m.id} type="button" className={`fl-kmchip${x.ko ? ' is-ko' : ''}`}
+                title={`${x.m.targa}: ${fmtNum(x.m.kmAttuali)} km su ${fmtNum(x.m.kmLimite)} · ${(STATO_BADGE[x.m.stato.toUpperCase()]?.label ?? x.m.stato).toLowerCase()}, ${POSS_LABEL[x.m.tipoPossesso ?? 'NOLEGGIO'] ?? ''}`}
+                onClick={() => navigate(`/flotta/${x.m.id}`)}>
+                {x.m.targa} <b>{x.p}%</b>
+              </button>
+            ))}
+          </span>
+          <button type="button" className="fl-avviso-btn" onClick={() => { setSortField('kmPct'); setSortOrder('desc'); document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' }); }}>Mostra in tabella</button>
+        </div>
+      )}
+
+      <div className="fl-riep-toggle">
+        <button type="button" aria-expanded={!riepChiuso} onClick={() => toggleRiep()}>
+          <Icon name={riepChiuso ? 'chevRight' : 'chevDown'} size={13} />
+          {riepChiuso ? `Mostra scadenze e composizione${scad90Tot ? ` · ${scad90Tot} già scadute` : ''}` : 'Nascondi scadenze e composizione'}
+        </button>
+        <button type="button" onClick={() => document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' })}>
+          Vai all'elenco mezzi <Icon name="chevDown" size={13} />
+        </button>
+      </div>
+
+      {!riepChiuso && <div className="ds-g4">
+        <section className="ds-card ds-s3" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="ds-cardhead" style={{ padding: '16px 18px 10px' }}>
+            <div className="ds-cardhead-text">
+              <h2 className="ds-h2">Scadenze</h2>
+              <span className="ds-cardsub">Scadute e nei prossimi 90 giorni, per tipo</span>
+            </div>
           </div>
-          {tasks.length === 0
-            ? <div className="fm-info-empty">Nessuna attività registrata</div>
-            : tasks.map(t => (
-              <div key={t.id} className={`task-list-item ${t.completata ? 'task-done' : ''}`} onClick={() => handleOpenEditTask(t)}>
-                <input
-                  type="checkbox"
-                  className="task-checkbox"
-                  checked={t.completata}
-                  onClick={e => e.stopPropagation()}
-                  onChange={() => handleToggleTask(t)}
-                />
-                <div className="task-body">
-                  {t.targa && <span className="task-tag">🚚 {t.targa}</span>}
-                  {t.codiceAutista && <span className="task-tag">👤 {t.codiceAutista}</span>}
-                  {t.palmare && <span className="task-tag">📱 {t.palmare}</span>}
-                  {t.padroncino && <span className="task-tag task-tag-pad">🏢 {t.padroncino}</span>}
-                  <span className="task-text" title={t.testo}>{t.testo}</span>
-                </div>
-                <button className="task-remove" onClick={e => { e.stopPropagation(); handleRemoveTask(t.id); }} title="Elimina">✕</button>
+          <div style={{ padding: '0 18px 10px' }}>
+            <SegTabs
+              items={['Tutte', ...SCAD_DEF.map(d => d.t)].map(t => ({ value: t, label: t, count: t === 'Tutte' ? '' : scad90.find(x => x.t === t)!.items.length }))}
+              value={scadTab90}
+              onChange={setScadTab90}
+              label="Tipo di scadenza"
+            />
+          </div>
+          <div className="fl-scroll" tabIndex={0} aria-label="Elenco scadenze">
+            {righeScad.map(r => (
+              <div key={r.key} className={`fl-scadrow${r.to ? ' is-link' : ''}`} onClick={r.to ? () => navigate(r.to!) : undefined}>
+                <span aria-hidden="true" className="fl-scadtile" style={{ background: r.tile }}><Icon name={r.icon} size={13} stroke={2.4} /></span>
+                <span className="fl-scadtext"><strong>{r.t}</strong><span>{r.sub}</span></span>
+                <span className="fl-scadtag" style={{ color: TONO[r.tono][0] }}><i style={{ background: TONO[r.tono][1] }} />{r.tag}</span>
+                <span className="fl-scaddata">{r.data}</span>
               </div>
             ))}
+          </div>
+          {notaScad && <div className="fl-scadnote">{notaScad}</div>}
+        </section>
+
+        <section className="ds-card ds-card-pad">
+          <div className="ds-cardhead-text">
+            <h2 className="ds-h2">Composizione</h2>
+            <span className="ds-cardsub">Per alimentazione e possesso</span>
+          </div>
+          {[
+            { t: 'Alimentazione', v: [['Gasolio e diesel', nGas, '#52525B'], ['Elettrico', nEle, C.teal], ['Benzina, ibrido, metano', nAltro, C.yellow]] as [string, number, string][] },
+            { t: 'Possesso', v: [['Noleggio', nNol, C.blue], ['Proprietà', nProp, C.green], ['Esterni', nEst, C.purple]] as [string, number, string][] },
+          ].map(g => (
+            <div key={g.t} className="fl-comp">
+              <span className="fl-comp-t">{g.t}</span>
+              <div aria-hidden="true" className="fl-comp-bar">{g.v.filter(x => x[1] > 0).map(([l, n, c]) => <span key={l} style={{ width: `${perc(n)}%`, background: c }} />)}</div>
+              {g.v.map(([l, n, c]) => (
+                <div key={l} className="fl-comp-row"><i style={{ background: c }} /><span>{l}</span><strong>{n}</strong><small>{perc(n)}%</small></div>
+              ))}
+            </div>
+          ))}
+        </section>
+      </div>}
+
+      {importResult && (
+        <Alert tone="ok" title={`Importazione completata: ${importResult.creati} creati, ${importResult.saltati} saltati`}
+          actions={<IconButton icon="close" label="Chiudi" onClick={() => setImportResult(null)} />}>
+          {importResult.errori.length > 0 && (
+            <details><summary>{importResult.errori.length} errori</summary>
+              <ul style={{ margin: '6px 0 0 18px' }}>{importResult.errori.map((e, i) => <li key={i}>{e}</li>)}</ul>
+            </details>
+          )}
+        </Alert>
+      )}
+
+      {/* ── TABELLA ── */}
+      <section className="ds-card" id="fl-tabella">
+        <div className="ds-cardhead" style={{ padding: '16px 18px 6px' }}>
+          <div className="ds-cardhead-text">
+            <h2 className="ds-h2">Tutti i mezzi</h2>
+            <span className="ds-cardsub">Clic su un'intestazione per ordinare · clic di nuovo per invertire</span>
+          </div>
+          <div className="ds-actions">
+            <label className="ds-search" style={{ minWidth: 220 }}>
+              <Icon name="search" size={13} />
+              <span className="sr-only">Cerca targa, marca, padroncino</span>
+              <input placeholder="Cerca targa, marca, padroncino…" value={search} onChange={e => setSearch(e.target.value)} />
+            </label>
+            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Possesso</span>
+              <select value={filtroPossesso} onChange={e => setFiltroPossesso(e.target.value as any)}>
+                <option value="TUTTI">Possesso</option>
+                <option value="PROPRIETA">Proprietà</option>
+                <option value="NOLEGGIO">Noleggio</option>
+                <option value="ESTERNO">Esterno</option>
+              </select><Icon name="chevDown" size={12} />
+            </label>
+            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Categoria</span>
+              <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value as any)}>
+                <option value="TUTTI">Categoria</option>
+                <option value="DISTRIBUZIONE">Distribuzione</option>
+                <option value="AUTO_AZIENDALE">Auto aziendale</option>
+                <option value="FLOTTA">Flotta</option>
+              </select><Icon name="chevDown" size={12} />
+            </label>
+            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Alimentazione</span>
+              <select value={filtroAlim} onChange={e => setFiltroAlim(e.target.value)}>
+                <option value="TUTTE">Alimentazione</option>
+                {alimentazioni.map(a => <option key={a} value={a}>{ALIMENTAZIONE_BADGE[a]?.label ?? a}</option>)}
+              </select><Icon name="chevDown" size={12} />
+            </label>
+            <div className="ds-pop" ref={colPickerRef}>
+              <Button size="sm" icon="columns" aria-expanded={colPickerOpen} onClick={() => setColPickerOpen(o => !o)}>Colonne {nColVisibili + 1}/{COL_DEFS.length + 1}</Button>
+              {colPickerOpen && (
+                <div className="ds-popmenu" role="menu">
+                  <span style={{ padding: '4px 8px', fontSize: 12, color: 'var(--text-muted)' }}>Colonne visibili</span>
+                  {COL_DEFS.map(({ key, label }) => (
+                    <label key={key}>
+                      <input type="checkbox" checked={cols[key]} onChange={() => toggleCol(key)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+        <div style={{ padding: '4px 18px 10px' }}>
+          <SegTabs items={VISTE.map(v => ({ value: v.value, label: v.label, count: contaVista(v.value) }))} value={filtroStato} onChange={setFiltroStato} label="Filtra per stato" />
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="fl-bulk" role="region" aria-label="Azioni sui mezzi selezionati">
+            <span style={{ fontWeight: 600, flex: '1 1 auto' }}>{selectedIds.size} {selectedIds.size === 1 ? 'mezzo selezionato' : 'mezzi selezionati'}</span>
+            <button type="button" onClick={() => setBulkModalOpen(true)}><Icon name="userAdd" size={13} />Assegna o rimuovi padroncino</button>
+            <button type="button" onClick={() => setBulkContrattoOpen(true)}><Icon name="doc" size={13} />Crea contratti</button>
+            <button type="button" aria-label="Annulla selezione" className="fl-bulk-x" onClick={clearSelection}><Icon name="close" size={14} /></button>
+          </div>
+        )}
+
+        <div className="ds-tablewrap">
+          <table className="ds-table fl-table">
+            <thead>
+              <tr>
+                <th style={{ width: 20 }}>
+                  <input type="checkbox" className="ds-check" aria-label="Seleziona tutti" checked={sorted.length > 0 && selectedIds.size === sorted.length} onChange={toggleSelectAll} />
+                </th>
+                <Th k="targa" sort={sortState} onSort={handleSort}>Targa</Th>
+                {cols.marcaModello  && <Th k="marca" sort={sortState} onSort={handleSort}>Marca / modello</Th>}
+                {cols.tipoMezzo     && <Th k="tipoMezzo" sort={sortState} onSort={handleSort}>Tipo</Th>}
+                {cols.tipo          && <Th k="tipo" sort={sortState} onSort={handleSort}>Possesso</Th>}
+                {cols.alimentazione && <Th k="alimentazione" sort={sortState} onSort={handleSort}>Alimentazione</Th>}
+                {cols.stato         && <Th k="stato" sort={sortState} onSort={handleSort}>Stato</Th>}
+                {cols.assegnatoA    && <Th k="padroncino" sort={sortState} onSort={handleSort}>Assegnato a</Th>}
+                {cols.assicurazione && <Th k="assicurazione" sort={sortState} onSort={handleSort}>Assicurazione</Th>}
+                {cols.revisione     && <Th k="revisione" sort={sortState} onSort={handleSort}>Revisione</Th>}
+                {cols.km            && <Th k="kmPct" sort={sortState} onSort={handleSort}>Km / limite</Th>}
+                {cols.kmAggiornatiAl && <Th k="kmAggiornatiAl" sort={sortState} onSort={handleSort}>Km agg. al</Th>}
+                {cols.canone        && <Th k="canone" sort={sortState} onSort={handleSort} right>Canone</Th>}
+                {cols.rataPda       && <Th k="rata" sort={sortState} onSort={handleSort} right>Rata PDA</Th>}
+                {cols.fineNoleggio  && <Th k="fineNoleggio" sort={sortState} onSort={handleSort}>Fine noleggio</Th>}
+                {cols.inseritoIl    && <Th k="inseritoIl" sort={sortState} onSort={handleSort}>Inserito il</Th>}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && (
+                <tr><td colSpan={20}><Empty>Nessun mezzo trovato</Empty></td></tr>
+              )}
+              {sorted.map(m => {
+                const attiva      = m.assegnazioni?.find(a => !a.dataFine);
+                const padroncino  = attiva?.padroncino;
+                const possKey     = (m.tipoPossesso as string) ?? 'NOLEGGIO';
+                const possesso    = POSSESSO_BADGE[possKey] ?? POSSESSO_BADGE['NOLEGGIO'];
+                const statoBadge  = STATO_BADGE[m.stato.toUpperCase()] ?? { label: m.stato, cls: '', tone: 'na' as Tone };
+                const pct         = kmPercent0(m.kmAttuali, m.kmLimite);
+                const elettrico   = (m.alimentazione ?? '').toUpperCase() === 'ELETTRICO';
+                const dismesso    = ['DISMESSO', 'VENDUTO'].includes(m.stato.toUpperCase());
+                const autocarro   = /autocarro|camion/i.test(m.tipo ?? '');
+                const alim        = m.alimentazione ? (ALIMENTAZIONE_BADGE[m.alimentazione]?.label ?? m.alimentazione) : null;
+                const statoTono   = statoBadge.tone === 'info' ? 'ok' : statoBadge.tone === 'ok' ? 'info' : statoBadge.tone;
+                const nomePad     = padroncino?.ragioneSociale ?? m.utilizzatore ?? null;
+                return (
+                  <tr key={m.id} className={`is-clickable${selectedIds.has(m.id) ? ' is-open' : ''}`} onClick={() => navigate(`/flotta/${m.id}`)}>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" className="ds-check" aria-label={`Seleziona ${m.targa}`} checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)} />
+                    </td>
+                    <td><span className="ds-mono fl-targa-link">{m.targa}</span></td>
+                    {cols.marcaModello && (
+                      <td>
+                        <span className="fl-mm">
+                          <span aria-hidden="true" className="fl-mmtile" style={{ background: elettrico ? C.teal : dismesso ? '#A1A1AA' : '#52525B' }}>
+                            <Icon name={elettrico ? 'ric' : autocarro ? 'mezzi' : 'mezzi'} size={12} stroke={2.4} />
+                          </span>
+                          <span>{modello(m)}</span>
+                        </span>
+                      </td>
+                    )}
+                    {cols.tipoMezzo && <td>{m.tipo ? m.tipo.charAt(0) + m.tipo.slice(1).toLowerCase() : <span className="fl-empty">—</span>}</td>}
+                    {cols.tipo && (
+                      <td><span className="fl-dot" style={{ color: POSSESSO_COLOR[possKey] ?? '#1D4ED8', fontWeight: 500, fontSize: 12 }}><i style={{ background: possKey === 'PROPRIETA' ? C.green : possKey === 'ESTERNO' ? C.purple : C.blue, borderRadius: 2 }} />{possesso.label}</span></td>
+                    )}
+                    {cols.alimentazione && <td style={{ color: elettrico ? '#0B7A7A' : (m.alimentazione ?? '').toUpperCase() === 'METANO' ? '#8A6100' : undefined }}>{alim ?? <span className="fl-empty">—</span>}</td>}
+                    {cols.stato && <td><span className="fl-dot" style={{ color: TONO[statoTono][0], fontWeight: 500, fontSize: 12 }}><i style={{ background: TONO[statoTono][1] }} />{statoBadge.label}</span></td>}
+                    {cols.assegnatoA && (
+                      <td className="fl-ellipsis" title={nomePad ?? undefined}>
+                        {padroncino ? (
+                          <span className="fl-pad"><span aria-hidden="true" className="fl-padav" style={{ background: padIdx(padroncino.ragioneSociale) }}>{iniziali(padroncino.ragioneSociale)}</span>{padroncino.ragioneSociale}</span>
+                        ) : m.utilizzatore ? <span>{m.utilizzatore}</span> : <span className="fl-empty">—</span>}
+                      </td>
+                    )}
+                    {cols.assicurazione && <td>{dotData(m.scadenzaAssicurazione)}</td>}
+                    {cols.revisione && <td>{dotData(m.scadenzaRevisione)}</td>}
+                    {cols.km && (
+                      <td>
+                        {m.kmAttuali != null ? (
+                          <span className="fl-km">
+                            <span style={{ color: pct != null && pct >= 90 ? '#B91C1C' : undefined }}>{fmtNum(m.kmAttuali)}{m.kmLimite ? ` / ${fmtNum(m.kmLimite)}` : ''}</span>
+                            {pct != null && <span className="fl-km-bar"><i style={{ width: `${Math.min(100, pct)}%`, background: pct >= 90 ? '#E5484D' : pct >= 75 ? C.orange : C.teal }} /></span>}
+                          </span>
+                        ) : <span className="fl-empty">Non inseriti</span>}
+                      </td>
+                    )}
+                    {cols.kmAggiornatiAl && <td>{m.kmAttualiAl ? fmt(m.kmAttualiAl) : <span className="fl-empty">—</span>}</td>}
+                    {cols.canone && <td className="r">{m.canoneNoleggio != null ? fmtEur(m.canoneNoleggio) : <span className="fl-empty">—</span>}</td>}
+                    {cols.rataPda && <td className="r" style={{ fontWeight: 600 }}>{m.rataNoleggio != null ? fmtEur(m.rataNoleggio) : <span className="fl-empty">—</span>}</td>}
+                    {cols.fineNoleggio && <td>{m.fineNoleggio ? fmt(m.fineNoleggio) : <span className="fl-empty">—</span>}</td>}
+                    {cols.inseritoIl && <td title={m.createdAt ? new Date(m.createdAt).toLocaleString('it-IT') : undefined}>{m.createdAt ? fmt(m.createdAt) : <span className="fl-empty">—</span>}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="ds-foot">Mostrati {filtered.length} di {mezzi.length} mezzi · ordinati per {SORT_LABEL[sortField] ?? sortField}</div>
+      </section>
+
+      {/* Pannello laterale: promemoria, note e modifiche (come prima nei riquadri della pagina) */}
+      {pannello && (
+        <div className="fl-drawer-wrap" onClick={() => setPannello(null)}>
+          <aside className="fl-drawer" role="dialog" aria-label="Promemoria, note e modifiche" onClick={e => e.stopPropagation()}>
+            <div className="fl-drawer-head">
+              <h2 className="ds-h2" style={{ fontSize: 16 }}>Flotta: promemoria e note</h2>
+              <IconButton icon="close" label="Chiudi" onClick={() => setPannello(null)} />
+            </div>
+            <div style={{ padding: '0 18px' }}>
+              <Tabs
+                items={[
+                  { value: 'attivita', label: 'Cose da fare', count: tasks.filter(t => !t.completata).length },
+                  { value: 'note', label: 'Ultime note', count: ultimeNote.length },
+                  { value: 'modifiche', label: 'Ultime modifiche' },
+                ]}
+                value={pannello}
+                onChange={v => setPannello(v as typeof pannello)}
+              />
+            </div>
+            <button type="button" className="fl-drawer-all" onClick={() => navigate(`/storico/mezzi?tab=${pannello}`)}>
+              Elenco completo con ricerca <Icon name="chevRight" size={12} />
+            </button>
+            <div className="fl-drawer-body">
+              {pannello === 'attivita' && (
+                <>
+                  <div style={{ padding: '12px 18px' }}><Button size="sm" variant="primary" icon="plus" onClick={handleOpenNewTask}>Nuova attività</Button></div>
+                  <TaskList tasks={tasks} onToggle={handleToggleTask} onEdit={handleOpenEditTask} onRemove={handleRemoveTask} />
+                </>
+              )}
+              {pannello === 'note' && (
+                <>
+                  <div className="fl-form">
+                    <label className="ds-field"><span>Mezzo</span>
+                      <select className="ds-input" value={notaForm.mezzoId} onChange={e => setNotaForm(f => ({ ...f, mezzoId: e.target.value }))}>
+                        <option value="">Scegli un mezzo…</option>
+                        {mezzi.map(m => <option key={m.id} value={m.id}>{m.targa} – {m.marca} {m.modello}</option>)}
+                      </select>
+                    </label>
+                    <label className="ds-field"><span>Nuova nota</span>
+                      <textarea className="ds-input" rows={2} value={notaForm.testo} onChange={e => setNotaForm(f => ({ ...f, testo: e.target.value }))} />
+                    </label>
+                    <div className="ds-actions" style={{ justifyContent: 'flex-end' }}>
+                      <Button size="sm" variant="blue" onClick={handleAddNota} disabled={notaSaving || !notaForm.mezzoId || !notaForm.testo.trim()}>{notaSaving ? 'Salvo…' : 'Salva nota'}</Button>
+                    </div>
+                  </div>
+                  <div className="ds-list">
+                    {ultimeNote.length === 0 ? <Empty>Nessuna nota registrata</Empty> : ultimeNote.map(n => {
+                      const m = mezziMap[n.entityId];
+                      return (
+                        <button key={n.id} type="button" className="ds-listrow fl-rowbtn fl-stack" onClick={() => navigate(`/flotta/${n.entityId}`)}>
+                          <span className="fl-line"><span className="ds-mono fl-targa">{m?.targa ?? '—'}</span><span className="fl-meta">{n.user ? `${n.user.nome} ${n.user.cognome[0]}.` : '—'} · {fmt(n.createdAt)}</span></span>
+                          <span className="fl-text" title={n.contenuto}>{n.contenuto}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {pannello === 'modifiche' && (
+                <div className="ds-list">
+                  {ultimiLog.length === 0 ? <Empty>Nessuna modifica recente</Empty> : ultimiLog.map(l => {
+                    // Gli eventi di assegnazione hanno entityId = id dell'assegnazione: risolviamo il mezzo per targa.
+                    const relatedTarga = l.dataDopo?.targa ?? l.dataPrima?.targa;
+                    const relatedMezzo = mezziMap[l.entityId] ?? (relatedTarga ? mezzi.find(m => m.targa === relatedTarga) : undefined);
+                    const targa = relatedMezzo?.targa ?? relatedTarga ?? '—';
+                    const descrizione = getHumanReadableDescription({ ...l, entityType: l.entityType ?? 'mezzo' }, { hideIdentifier: true });
+                    return (
+                      <button key={l.id} type="button" className="ds-listrow fl-rowbtn fl-stack" onClick={() => navigate(`/flotta/${relatedMezzo?.id ?? l.entityId}`)}>
+                        <span className="fl-line"><span className="ds-mono fl-targa">{targa}</span><span className="fl-meta">{l.user ? `${l.user.nome} ${l.user.cognome[0]}.` : '—'} · {fmtDateOra(l.createdAt)}</span></span>
+                        <span className="fl-text" title={descrizione}>{descrizione}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       <TaskModal
         open={taskModalOpen}
@@ -620,261 +954,6 @@ export default function FlottaMezzi() {
         refOptions={targheOptions}
         editingTask={editingTask}
       />
-
-      {/* ── TOOLBAR ── */}
-      <div className="fm-toolbar">
-        <div className="fm-search-wrap">
-          <span style={{ fontSize: 14, color: '#94a3b8' }}>🔍</span>
-          <input className="fm-search" placeholder="Cerca targa, marca, padroncino…" value={search} onChange={e => setSearch(e.target.value)} />
-          {search && <button className="fm-search-clear" onClick={() => setSearch('')}>✕</button>}
-        </div>
-        <select className="fm-select" value={filtroPossesso} onChange={e => setFiltroPossesso(e.target.value as any)}>
-          <option value="TUTTI">Tutti i tipi</option>
-          <option value="PROPRIETA">Proprietà</option>
-          <option value="NOLEGGIO">Noleggio</option>
-          <option value="ESTERNO">Esterno</option>
-        </select>
-        <select className="fm-select" value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value as any)}>
-          <option value="TUTTI">Tutte le categorie</option>
-          <option value="DISTRIBUZIONE">Distribuzione</option>
-          <option value="AUTO_AZIENDALE">Auto Aziendale</option>
-          <option value="FLOTTA">Flotta</option>
-        </select>
-        <div className="fm-col-picker-wrap" ref={colPickerRef}>
-          <button className="fm-btn-outline" onClick={() => setColPickerOpen(o => !o)}>Colonne ▾</button>
-          {colPickerOpen && (
-            <div className="fm-col-picker-dropdown">
-              {COL_DEFS.map(({ key, label }) => (
-                <label key={key} className="fm-col-option">
-                  <input type="checkbox" checked={cols[key]} onChange={() => toggleCol(key)} />
-                  {label}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="fm-filters">
-          {(['ATTIVI', 'TUTTI', 'DISPONIBILE', 'ASSEGNATO', 'IN_REVISIONE', 'FUORI_SERVIZIO', 'VENDUTO', 'DISMESSO'] as const).map(s => (
-            <button key={s} className={`fm-filter-btn ${filtroStato === s ? 'fm-filter-active' : ''}`} onClick={() => setFiltroStato(s)}>
-              {s === 'ATTIVI' ? 'Attivi' : s === 'TUTTI' ? 'Tutti (storico)' : STATO_BADGE[s]?.label ?? s}
-            </button>
-          ))}
-          <span className="fm-result-count">{filtered.length} mezzi</span>
-        </div>
-      </div>
-
-      {/* ── BULK BAR ── */}
-      {selectedIds.size > 0 && (
-        <div className="fm-bulk-bar">
-          <span className="fm-bulk-count">☑ {selectedIds.size} selezionati</span>
-          <button className="fm-btn-primary fm-btn-sm" onClick={() => setBulkModalOpen(true)}>⚡ Azione massiva</button>
-          <button className="fm-btn-primary fm-btn-sm" onClick={() => setBulkContrattoOpen(true)}>📄 Crea Contratti</button>
-          <button className="fm-bulk-deselect" onClick={clearSelection}>✕ Deseleziona</button>
-        </div>
-      )}
-
-      {/* ── IMPORT RESULT ── */}
-      {importResult && (
-        <div className="fm-import-result">
-          <span>Importazione completata: <strong>{importResult.creati}</strong> creati, <strong>{importResult.saltati}</strong> saltati.</span>
-          {importResult.errori.length > 0 && (
-            <details><summary>{importResult.errori.length} errori</summary>
-              <ul>{importResult.errori.map((e, i) => <li key={i}>{e}</li>)}</ul>
-            </details>
-          )}
-          <button className="fm-import-close" onClick={() => setImportResult(null)}>✕</button>
-        </div>
-      )}
-
-      {/* ── TABELLA ── */}
-      <div className="fm-table-wrap">
-        <div style={{ overflowX: 'auto' }}>
-          <table className="fm-table">
-            <thead>
-              <tr className="fm-thead-row">
-                <th className="fm-th fm-th-cb">
-                  <input type="checkbox" className="fm-checkbox" checked={sorted.length > 0 && selectedIds.size === sorted.length} onChange={toggleSelectAll} />
-                </th>
-                <th className="fm-th-sort" onClick={() => handleSort('targa')}>TARGA{si('targa')}</th>
-                {cols.tipo         && <th className="fm-th-sort" onClick={() => handleSort('tipo')}>TIPO{si('tipo')}</th>}
-                {cols.marcaModello && <th className="fm-th-sort" onClick={() => handleSort('marca')}>MARCA / MODELLO{si('marca')}</th>}
-                {cols.alimentazione && <th className="fm-th-sort" onClick={() => handleSort('alimentazione')}>ALIMENTAZIONE{si('alimentazione')}</th>}
-                {cols.stato        && <th className="fm-th-sort" onClick={() => handleSort('stato')}>STATO{si('stato')}</th>}
-                {cols.assegnatoA   && <th className="fm-th-sort" onClick={() => handleSort('padroncino')}>ASSEGNATO A{si('padroncino')}</th>}
-                {cols.assicurazione && <th className="fm-th-sort" onClick={() => handleSort('assicurazione')}>ASSICURAZIONE{si('assicurazione')}</th>}
-                {cols.revisione    && <th className="fm-th-sort" onClick={() => handleSort('revisione')}>REVISIONE{si('revisione')}</th>}
-                {cols.km           && <th className="fm-th fm-th-sort" onClick={() => handleSort('kmPct')}>KM / LIMITE{si('kmPct')}</th>}
-                {cols.kmAggiornatiAl && <th className="fm-th fm-th-sort" onClick={() => handleSort('kmAggiornatiAl')}>KM AGGIORNATI AL{si('kmAggiornatiAl')}</th>}
-                {cols.canone       && <th className="fm-th fm-th-purple fm-th-sort" style={{ textAlign: 'right' }} onClick={() => handleSort('canone')}>CANONE NLG{si('canone')}</th>}
-                {cols.rataPda      && <th className="fm-th fm-th-amber fm-th-sort" style={{ textAlign: 'right' }} onClick={() => handleSort('rata')}>RATA PDA{si('rata')}</th>}
-                {cols.fineNoleggio  && <th className="fm-th fm-th-sort" onClick={() => handleSort('fineNoleggio')}>FINE NLG{si('fineNoleggio')}</th>}
-                <th className="fm-th" style={{ width: 90 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 && (
-                <tr><td colSpan={20} className="fm-empty-row">Nessun mezzo trovato</td></tr>
-              )}
-              {sorted.map(m => {
-                const attiva      = m.assegnazioni?.find(a => !a.dataFine);
-                const padroncino  = attiva?.padroncino;
-                const possesso    = POSSESSO_BADGE[(m.tipoPossesso as string) ?? 'NOLEGGIO'] ?? POSSESSO_BADGE['NOLEGGIO'];
-                const statoBadge  = STATO_BADGE[m.stato.toUpperCase()] ?? { label: m.stato, cls: 'fm-badge-gray' };
-                const assicInfo   = scadenzaCell(m.scadenzaAssicurazione);
-                const revInfo     = scadenzaCell(m.scadenzaRevisione);
-                const pct         = kmPercent(m.kmAttuali, m.kmLimite);
-                const societa     = m.societaNoleggio ?? m.proprietario ?? null;
-
-                return (
-                  <tr
-                    key={m.id}
-                    className={`fm-row${selectedIds.has(m.id) ? ' fm-row-selected' : ''}`}
-                    onClick={() => navigate(`/flotta/${m.id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
-
-                    <td className="fm-td fm-td-cb" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" className="fm-checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)} />
-                    </td>
-
-                    {/* TARGA */}
-                    <td className="fm-td">
-                      <div className="fm-targa-cell">
-                        <span className="fm-targa">{m.targa}</span>
-                        {societa && <span className="fm-societa">{societa}</span>}
-                      </div>
-                    </td>
-
-                    {/* TIPO */}
-                    {cols.tipo && (
-                      <td className="fm-td">
-                        <span className={`fm-cat-tag ${possesso.cls}`}>{possesso.label}</span>
-                      </td>
-                    )}
-
-                    {/* MARCA / MODELLO */}
-                    {cols.marcaModello && (
-                      <td className="fm-td">
-                        <span className="fm-marca-modello">{m.marca} {m.modello}</span>
-                      </td>
-                    )}
-
-                    {/* ALIMENTAZIONE */}
-                    {cols.alimentazione && (
-                      <td className="fm-td">
-                        {m.alimentazione
-                          ? (() => {
-                              const alim = ALIMENTAZIONE_BADGE[m.alimentazione] ?? { label: m.alimentazione, icon: '', cls: 'fm-alim-altro' };
-                              return <span className={`fm-alimentazione ${alim.cls}`}>{alim.icon} {alim.label}</span>;
-                            })()
-                          : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* STATO */}
-                    {cols.stato && (
-                      <td className="fm-td">
-                        <span className={`fm-badge ${statoBadge.cls}`}>{statoBadge.label}</span>
-                      </td>
-                    )}
-
-                    {/* ASSEGNATO A */}
-                    {cols.assegnatoA && (
-                      <td className="fm-td" style={{ maxWidth: 160 }}>
-                        {padroncino
-                          ? <span className="fm-padroncino">{padroncino.ragioneSociale}</span>
-                          : m.utilizzatore
-                            ? <span className="fm-padroncino">{m.utilizzatore}</span>
-                            : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* ASSICURAZIONE */}
-                    {cols.assicurazione && (
-                      <td className="fm-td">
-                        {assicInfo
-                          ? <span className={`fm-scad-val ${assicInfo.cls}`}>{assicInfo.giorni}</span>
-                          : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* REVISIONE */}
-                    {cols.revisione && (
-                      <td className="fm-td">
-                        {revInfo
-                          ? <span className={`fm-scad-val ${revInfo.cls}`}>{revInfo.giorni}</span>
-                          : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* KM */}
-                    {cols.km && (
-                      <td className="fm-td">
-                        {m.kmAttuali != null ? (
-                          <div className="fm-km-cell">
-                            <div className="fm-km-top">
-                              <span className="fm-km-val">{m.kmAttuali.toLocaleString('it-IT')} km</span>
-                              {pct != null && <span className={`fm-km-pct ${kmTextCls(pct)}`}>{pct}%</span>}
-                            </div>
-                            <div className="fm-km-bar-bg">
-                              {pct != null && <div className={`fm-km-bar-fill ${kmBarCls(pct)}`} style={{ width: `${pct}%` }} />}
-                            </div>
-                            <span className="fm-km-limite">
-                              {m.kmLimite ? `limite ${m.kmLimite.toLocaleString('it-IT')} km` : 'nessun limite'}
-                            </span>
-                          </div>
-                        ) : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* KM AGGIORNATI AL */}
-                    {cols.kmAggiornatiAl && (
-                      <td className="fm-td">
-                        {m.kmAttualiAl
-                          ? <span className="fm-data">{fmt(m.kmAttualiAl)}</span>
-                          : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* CANONE */}
-                    {cols.canone && (
-                      <td className="fm-td fm-td-purple" style={{ textAlign: 'right' }}>
-                        {m.canoneNoleggio != null ? <span className="fm-num">{fmtEur(m.canoneNoleggio)}</span> : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* RATA PDA */}
-                    {cols.rataPda && (
-                      <td className="fm-td fm-td-amber" style={{ textAlign: 'right' }}>
-                        {m.rataNoleggio != null ? <span className="fm-rata">{fmtEur(m.rataNoleggio)}</span> : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* FINE NOLEGGIO */}
-                    {cols.fineNoleggio && (
-                      <td className="fm-td">
-                        {m.fineNoleggio
-                          ? (() => { const info = scadenzaCell(m.fineNoleggio); return info ? <span className={`fm-scad-val ${info.cls}`}>{fmt(m.fineNoleggio)}</span> : <span className="fm-data">{fmt(m.fineNoleggio)}</span>; })()
-                          : <span className="fm-empty">—</span>}
-                      </td>
-                    )}
-
-                    {/* AZIONI */}
-                    <td className="fm-td" onClick={e => e.stopPropagation()}>
-                      <button className="fm-btn-primary fm-btn-sm" onClick={() => navigate(`/flotta/${m.id}`)}>Dettaglio</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="fm-table-footer">
-          <span>{filtered.length} di {mezzi.length} mezzi</span>
-          <span className="fm-footer-date">Aggiornato: oggi</span>
-        </div>
-      </div>
-
       <NuovoMezzoModal open={nuovoOpen} onClose={() => setNuovoOpen(false)} onSave={handleCreate} />
       <BulkContrattoModal open={bulkContrattoOpen} onClose={() => setBulkContrattoOpen(false)} mezzi={selectedMezzi} />
       <BulkAssignModal
@@ -886,6 +965,6 @@ export default function FlottaMezzi() {
         onAssegna={handleBulkAssegna}
         onRimuovi={handleBulkRimuovi}
       />
-    </div>
+    </Page>
   );
 }

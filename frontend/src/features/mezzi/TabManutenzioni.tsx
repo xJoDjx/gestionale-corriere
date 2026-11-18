@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { manutenzioniApi } from '../../lib/api';
 import type { Manutenzione } from '../../lib/api';
 import Modal from '../../components/ui/Modal';
+import DocumentPreview from '../../components/ui/DocumentPreview';
+import type { PreviewTarget } from '../../components/ui/DocumentPreview';
 
 const fmtDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -31,6 +33,7 @@ const emptyForm = (): FormState => ({
 interface Props { mezzoId: string }
 
 export default function TabManutenzioni({ mezzoId }: Props) {
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [items, setItems] = useState<Manutenzione[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,92 +118,70 @@ export default function TabManutenzioni({ mezzoId }: Props) {
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  return (
-    <div style={{ padding: '20px 24px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-            🔧 Manutenzioni ({items.length})
-          </h3>
-          {items.length > 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-              Costo totale: <strong style={{ color: 'var(--text-primary)' }}>{fmtEur(totalCosto)}</strong>
-            </div>
-          )}
-        </div>
-        <button className="btn-primary btn-sm" onClick={openNew}>+ Nuovo intervento</button>
-      </div>
+  const D_MAN = 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-.5-.5-2.5z';
+  const ico = (d: string, size = 12, sw = 2) => (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+  );
 
-      {/* Lista */}
+  return (
+    <>
+      <DocumentPreview target={preview} onClose={() => setPreview(null)} />
       {loading ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>Caricamento...</div>
+        <section className="dm2-card dm2-empty"><span className="dm2-muted">Caricamento manutenzioni…</span></section>
       ) : items.length === 0 ? (
-        <div style={{
-          textAlign: 'center', color: 'var(--text-muted)', padding: 48,
-          border: '1px dashed var(--border)', borderRadius: 10,
-        }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🔧</div>
-          <p style={{ margin: 0 }}>Nessun intervento registrato</p>
-        </div>
+        <section className="dm2-card dm2-empty">
+          <span aria-hidden="true" className="dm2-tile" style={{ width: 40, height: 40, borderRadius: 10, background: '#0E9494' }}>{ico(D_MAN, 18, 2.2)}</span>
+          <span className="dm2-empty-t">Nessuna manutenzione registrata</span>
+          <span className="dm2-muted" style={{ maxWidth: 440 }}>Interventi, fornitore, costo e fattura restano nello storico del mezzo.</span>
+          <button type="button" className="dm2-btn dm2-btn-primary" onClick={openNew}>Aggiungi manutenzione</button>
+        </section>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <section className="dm2-card dm2-list">
+          <div className="dm2-lhead">
+            <div className="dm2-col" style={{ gap: 2 }}>
+              <h2 className="dm2-h2">Manutenzioni</h2>
+              <span className="dm2-muted">{items.length} intervent{items.length === 1 ? 'o' : 'i'} · costo totale {fmtEur(totalCosto)}</span>
+            </div>
+            <button type="button" className="dm2-btn dm2-btn-sm" onClick={openNew}>{ico('M12 5v14M5 12h14')}Nuovo intervento</button>
+          </div>
           {items.map((m) => {
             const inCorso = !m.dataFine;
             return (
-              <div key={m.id} style={{
-                background: 'var(--bg-secondary)', border: '1px solid var(--border)',
-                borderRadius: 8, padding: '12px 16px',
-                borderLeft: `3px solid ${inCorso ? 'var(--warning)' : 'var(--success)'}`,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
-                        {m.descrizione}
-                      </span>
-                      {inCorso && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                          borderRadius: 3, background: 'var(--warning-bg)', color: 'var(--warning)',
-                        }}>IN CORSO</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                      <span>📅 {fmtDate(m.dataInizio)}{m.dataFine ? ` → ${fmtDate(m.dataFine)}` : ''}</span>
-                      {m.costo != null && <span>💶 {fmtEur(m.costo)}</span>}
-                      {m.fornitore && <span>🏢 {m.fornitore}</span>}
-                      {m.note && <span>📝 {m.note}</span>}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {m.fatturaPath && (
-                      <button
-                        className="btn-outline btn-sm"
-                        onClick={() => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura')}
-                        title="Scarica fattura"
-                      >📄</button>
-                    )}
-                    <button className="btn-outline btn-sm" onClick={() => openEdit(m)} title="Modifica">✏️</button>
-                    <button
-                      className="btn-sm"
-                      style={{ background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 8px' }}
-                      onClick={() => handleDelete(m.id, m.descrizione)}
-                      title="Elimina"
-                    >🗑️</button>
-                  </div>
-                </div>
+              <div key={m.id} className="dm2-ev dm2-ev-doc">
+                <span aria-hidden="true" className="dm2-tile" style={{ width: 26, height: 26, borderRadius: 7, background: inCorso ? '#EA6A2A' : '#0E9494' }}>{ico(D_MAN, 12, 2.4)}</span>
+                <span className="dm2-ev-data">{fmtDate(m.dataInizio)}</span>
+                <span className="dm2-tag" style={{ color: inCorso ? '#C2410C' : '#15803D' }}><span aria-hidden="true" className="dm2-dot" style={{ background: inCorso ? '#EA6A2A' : '#15A06A' }} />{inCorso ? 'In corso' : `Chiusa ${fmtDate(m.dataFine)}`}</span>
+                <span className="dm2-col" style={{ minWidth: 0 }}>
+                  <span className="dm2-ev-tit" title={m.descrizione}>{m.descrizione}</span>
+                  {(m.fornitore || m.note) && <span className="dm2-small dm2-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[m.fornitore, m.note].filter(Boolean).join(' · ')}</span>}
+                </span>
+                <span className="dm2-ev-dopo" style={{ fontVariantNumeric: 'tabular-nums' }}>{m.costo != null ? fmtEur(m.costo) : <span className="dm2-muted">Costo non inserito</span>}</span>
+                <span className="dm2-row" style={{ gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                  {m.fatturaPath && (
+                    <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" title="Anteprima fattura" aria-label="Anteprima fattura" onClick={() => setPreview({
+                      title: m.fatturaNome ?? 'Fattura',
+                      path: `/manutenzioni/${m.id}/fattura`,
+                      fileHint: m.fatturaNome ?? m.fatturaPath,
+                      onDownload: () => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura'),
+                    })}>{ico('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z')}</button>
+                  )}
+                  {m.fatturaPath && (
+                    <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => manutenzioniApi.downloadFattura(m.id, m.fatturaNome ?? 'fattura')} title="Scarica fattura" aria-label="Scarica fattura">{ico('M12 4v12M6 10l6 6 6-6M4 20h16')}</button>
+                  )}
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" onClick={() => openEdit(m)} title="Modifica" aria-label={`Modifica ${m.descrizione}`}>{ico('M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z')}</button>
+                  <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon dm2-btn-danger" onClick={() => handleDelete(m.id, m.descrizione)} title="Elimina" aria-label={`Elimina ${m.descrizione}`}>{ico('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')}</button>
+                </span>
               </div>
             );
           })}
-        </div>
+        </section>
       )}
 
       {/* Modal form */}
       <Modal
         open={showModal}
         onClose={closeModal}
-        title={editId ? '✏️ Modifica intervento' : '🔧 Nuovo intervento'}
+        title={editId ? 'Modifica intervento' : 'Nuovo intervento'}
         width={560}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -264,7 +245,7 @@ export default function TabManutenzioni({ mezzoId }: Props) {
               }}
               onClick={() => fileRef.current?.click()}
             >
-              {file ? `📄 ${file.name}` : editId ? '📂 Clicca per sostituire la fattura' : '📂 Clicca per allegare un file'}
+              {file ? file.name : editId ? 'Clicca per sostituire la fattura' : 'Clicca per allegare un file'}
             </div>
             <input
               ref={fileRef}
@@ -283,11 +264,11 @@ export default function TabManutenzioni({ mezzoId }: Props) {
               disabled={!form.descrizione.trim() || !form.dataInizio || saving}
               onClick={handleSave}
             >
-              {saving ? '⏳ Salvataggio...' : editId ? '💾 Salva modifiche' : '+ Aggiungi'}
+              {saving ? 'Salvataggio…' : editId ? 'Salva modifiche' : 'Aggiungi'}
             </button>
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }
