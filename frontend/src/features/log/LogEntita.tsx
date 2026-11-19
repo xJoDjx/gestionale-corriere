@@ -2,7 +2,9 @@
 // Componente riutilizzabile: mostra il log audit di una singola entità
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { api } from '../../lib/api';
-import './LogStorico.css';
+import { ENTITY_LABELS, AZIONE_LABELS, prettyField } from '../../lib/auditFormat';
+import { SearchBox, Empty, Th, Icon, useSort, C } from '../../components/ds';
+import './LogStorico2.css';
 
 interface AuditEntry {
   id: string;
@@ -14,36 +16,6 @@ interface AuditEntry {
   dataDopo: Record<string, any> | null;
   user: { nome: string; cognome: string } | null;
 }
-
-const AZIONE_COLORS: Record<string, string> = {
-  CREATE:               'log-action-create',
-  UPDATE:               'log-action-update',
-  DELETE:               'log-action-delete',
-  ASSEGNA:              'log-action-assegna',
-  CHIUDI_ASSEGNAZIONE:  'log-action-chiudi',
-  GENERA_CONTRATTO:     'log-action-contratto',
-};
-
-const AZIONE_LABELS: Record<string, string> = {
-  CREATE:               '+ Creazione',
-  UPDATE:               '✏️ Modifica',
-  DELETE:               '🗑 Eliminazione',
-  ASSEGNA:              '🔗 Assegnazione',
-  CHIUDI_ASSEGNAZIONE:  '🔓 Fine assegnazione',
-  GENERA_CONTRATTO:     '📄 Contratto generato',
-};
-
-const ENTITY_LABELS: Record<string, string> = {
-  mezzo:                       '🚛 Mezzo',
-  padroncino:                  '👤 Padroncino',
-  palmare:                     '📱 Palmare',
-  codice_autista:              '🏷️ Autista',
-  acconto:                     '💰 Acconto',
-  documento:                   '📄 Documento',
-  assegnazione_mezzo:          '🔗 Ass. Mezzo',
-  assegnazione_palmare:        '🔗 Ass. Palmare',
-  assegnazione_codice_autista: '🔗 Ass. Autista',
-};
 
 const SKIP_FIELDS = new Set(['createdAt', 'updatedAt', 'deletedAt', 'id', 'userId']);
 
@@ -214,34 +186,44 @@ function fmtDate(d: string) {
   });
 }
 
+function fmtVal(v: any) {
+  if (v == null) return <em>—</em>;
+  if (typeof v === 'object') return JSON.stringify(v);
+  const str = String(v);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return new Date(str).toLocaleDateString('it-IT');
+  return str;
+}
+
+function changedKeys(prima: any, dopo: any): string[] {
+  const keys = Array.from(new Set([...Object.keys(prima ?? {}), ...Object.keys(dopo ?? {})])).filter((k) => !SKIP_FIELDS.has(k));
+  return keys.filter((k) => JSON.stringify(prima?.[k]) !== JSON.stringify(dopo?.[k]));
+}
+
 function DiffViewer({ prima, dopo }: { prima: any; dopo: any }) {
   if (!prima && !dopo) return null;
-  const keys = Array.from(new Set([
-    ...Object.keys(prima ?? {}),
-    ...Object.keys(dopo ?? {}),
-  ])).filter((k) => !SKIP_FIELDS.has(k));
-
-  const changed = keys.filter((k) => JSON.stringify(prima?.[k]) !== JSON.stringify(dopo?.[k]));
-
-  if (changed.length === 0) return <span className="log-nodiff">Nessuna variazione registrata</span>;
-
+  const changed = changedKeys(prima, dopo);
+  if (changed.length === 0) return <span className="ds-cardsub">Nessuna variazione registrata</span>;
   return (
-    <table className="log-diff-table">
-      <thead>
-        <tr><th>Campo</th><th>Prima</th><th>Dopo</th></tr>
-      </thead>
-      <tbody>
-        {changed.map((k) => (
-          <tr key={k}>
-            <td className="log-diff-key">{k}</td>
-            <td className="log-diff-before">{prima?.[k] != null ? String(prima[k]) : <em>—</em>}</td>
-            <td className="log-diff-after">{dopo?.[k] != null ? String(dopo[k]) : <em>—</em>}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="lg2-diff">
+      {changed.map((k) => (
+        <div key={k} className="lg2-diffrow">
+          <span className="lg2-dk" title={k}>{prettyField(k)}</span>
+          <span className="lg2-db">{fmtVal(prima?.[k])}</span>
+          <Icon name="chevRight" size={12} />
+          <span className="lg2-da">{fmtVal(dopo?.[k])}</span>
+        </div>
+      ))}
+    </div>
   );
 }
+
+const pulisci = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+const ENT = (t: string) => pulisci(ENTITY_LABELS[t] ?? t);
+const AZ = (a: string) => pulisci(AZIONE_LABELS[a] ?? a.replace(/_/g, ' ').toLowerCase());
+const AZ_COLOR: Record<string, string> = {
+  UPDATE: C.blue, CREATE: C.green, DELETE: C.red, RESTORE: C.teal, ASSEGNA: C.purple, CHIUDI_ASSEGNAZIONE: C.yellow,
+  GENERA_CONTRATTO: C.teal, GENERA_CONTRATTO_PALMARE: C.teal, GENERA_CONTRATTO_CODICI: C.teal, GENERA_CONTRATTO_MEZZI: C.teal, LOGIN: '#A1A1AA',
+};
 
 interface Props {
   entityType: string;
@@ -265,6 +247,7 @@ export default function LogEntita({ entityType, entityId }: Props) {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [cerca, setCerca] = useState('');
 
   const showTypeCol = MULTI_TYPES.has(entityType);
 
@@ -279,75 +262,81 @@ export default function LogEntita({ entityType, entityId }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return (
-    <div className="log-loading"><div className="log-spinner" />Caricamento log...</div>
-  );
-  if (error) return <div className="log-empty">⚠️ {error}</div>;
-  if (entries.length === 0) return (
-    <div className="log-empty">📜 Nessun evento registrato per questa entità</div>
-  );
+  const utente = (e: AuditEntry) => (e.user ? `${e.user.nome} ${e.user.cognome}` : 'Sistema');
+  const q = cerca.trim().toLowerCase();
+  const filtrati = q
+    ? entries.filter((e) => [fmtDate(e.createdAt), utente(e), ENT(e.entityType), AZ(e.azione), getDescription(e)].join(' ').toLowerCase().includes(q))
+    : entries;
 
-  const colSpan = showTypeCol ? 5 : 4;
+  type K = 'd' | 'u' | 't' | 'a' | 'x' | 'n';
+  const { sorted, sort, toggle } = useSort<AuditEntry, K>(filtrati, (e, k) => {
+    switch (k) {
+      case 'd': return e.createdAt;
+      case 'u': return utente(e);
+      case 't': return ENT(e.entityType);
+      case 'a': return AZ(e.azione);
+      case 'x': return getDescription(e);
+      case 'n': return e.dataPrima && e.dataDopo ? changedKeys(e.dataPrima, e.dataDopo).length : 0;
+    }
+  }, { key: 'd', dir: 'desc' });
+
+  if (loading) return <Empty>Caricamento modifiche…</Empty>;
+  if (error) return <Empty>{error}</Empty>;
+  if (entries.length === 0) return <Empty>Nessuna modifica registrata</Empty>;
+
+  const colSpan = showTypeCol ? 7 : 6;
 
   return (
-    <div className="log-table-wrap">
-      <table className="log-table">
-        <thead>
-          <tr>
-            <th>DATA / ORA</th>
-            <th>UTENTE</th>
-            {showTypeCol && <th>TIPO</th>}
-            <th>AZIONE</th>
-            <th>DETTAGLIO</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => {
-            const desc = getDescription(e);
-            return (
-              <Fragment key={e.id}>
-                <tr
-                  className={`log-row ${expanded === e.id ? 'log-row-expanded' : ''}`}
-                  onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                >
-                  <td className="log-date">{fmtDate(e.createdAt)}</td>
-                  <td className="log-user">
-                    {e.user
-                      ? `${e.user.nome} ${e.user.cognome}`
-                      : <em className="log-system">Sistema</em>}
-                  </td>
-                  {showTypeCol && (
-                    <td>
-                      <span className="log-entity-badge">
-                        {ENTITY_LABELS[e.entityType] ?? e.entityType}
-                      </span>
-                    </td>
-                  )}
-                  <td>
-                    <span className={`log-action-badge ${AZIONE_COLORS[e.azione] ?? ''}`}>
-                      {AZIONE_LABELS[e.azione] ?? e.azione}
-                    </span>
-                  </td>
-                  <td className="log-entity-desc">
-                    {desc || <em style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</em>}
-                  </td>
-                  <td className="log-expand-btn">{expanded === e.id ? '▲' : '▼'}</td>
-                </tr>
-                {expanded === e.id && (
-                  <tr key={`${e.id}-d`} className="log-detail-row">
-                    <td colSpan={colSpan + 1}>
-                      <div className="log-detail-body">
-                        <DiffViewer prima={e.dataPrima} dopo={e.dataDopo} />
-                      </div>
-                    </td>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <SearchBox value={cerca} onChange={setCerca} placeholder="Cerca per data, utente, azione, dettaglio…" width={320} />
+        <span className="ds-cardsub">{q ? `${filtrati.length} di ${entries.length}` : `${entries.length} eventi`}</span>
+      </div>
+      <div className="ds-tablewrap">
+        <table className="ds-table lg2-table" style={{ minWidth: 860 }}>
+          <thead>
+            <tr>
+              <Th k="d" sort={sort} onSort={toggle} style={{ width: 150 }}>Data e ora</Th>
+              <Th k="u" sort={sort} onSort={toggle} style={{ width: 150 }}>Utente</Th>
+              {showTypeCol && <Th k="t" sort={sort} onSort={toggle} style={{ width: 130 }}>Tipo</Th>}
+              <Th k="a" sort={sort} onSort={toggle} style={{ width: 170 }}>Azione</Th>
+              <Th k="x" sort={sort} onSort={toggle}>Dettaglio</Th>
+              <Th k="n" sort={sort} onSort={toggle} style={{ width: 100 }}>Modifiche</Th>
+              <Th style={{ width: 40 }} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 && (
+              <tr><td colSpan={colSpan} className="ds-cardsub" style={{ textAlign: 'center', padding: 18 }}>Nessun evento corrisponde alla ricerca</td></tr>
+            )}
+            {sorted.map((e) => {
+              const desc = getDescription(e);
+              const open = expanded === e.id;
+              const n = e.dataPrima && e.dataDopo ? changedKeys(e.dataPrima, e.dataDopo).length : 0;
+              return (
+                <Fragment key={e.id}>
+                  <tr className={`is-clickable${open ? ' is-open' : ''}`} onClick={() => setExpanded(open ? null : e.id)}>
+                    <td style={{ color: '#3F3F46', whiteSpace: 'nowrap' }}>{fmtDate(e.createdAt)}</td>
+                    <td className="lg2-ell" style={{ color: e.user ? undefined : '#6B6B73' }}>{utente(e)}</td>
+                    {showTypeCol && <td className="lg2-ell">{ENT(e.entityType)}</td>}
+                    <td><span className="lg2-az"><i style={{ background: AZ_COLOR[e.azione] ?? '#A1A1AA' }} />{AZ(e.azione)}</span></td>
+                    <td className="lg2-ell" title={desc}>{desc || <span style={{ color: '#A1A1AA' }}>—</span>}</td>
+                    <td style={{ color: n ? C.blue : '#A1A1AA' }}>{n ? `${n} ${n === 1 ? 'campo' : 'campi'}` : '—'}</td>
+                    <td className="r"><Icon name={open ? 'chevUp' : 'chevDown'} size={14} /></td>
                   </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                  {open && (
+                    <tr className="lg2-detail">
+                      <td colSpan={colSpan}>
+                        <div className="lg2-detbody"><DiffViewer prima={e.dataPrima} dopo={e.dataDopo} /></div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
