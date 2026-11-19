@@ -1,5 +1,5 @@
 // Componenti condivisi del restyling. Solo presentazione: nessuna logica di calcolo.
-import { ReactNode, useMemo, useState, ButtonHTMLAttributes, CSSProperties } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState, ButtonHTMLAttributes, CSSProperties } from 'react';
 import { Icon, IconName } from './icons';
 import './ds.css';
 
@@ -338,3 +338,57 @@ export const fmtDate = (d: string | Date | null | undefined) => {
   const x = typeof d === 'string' ? new Date(d) : d;
   return isNaN(x.getTime()) ? '—' : x.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Rome' });
 };
+
+
+/** Opzione di un menu filtro: icona colorata e conteggio facoltativi. */
+export interface FilterOption { value: string; label: string; icon?: IconName; color?: string; count?: number }
+
+/**
+ * Filtro a tendina: mostra "Etichetta" quando non c'è selezione (= tutti) e
+ * "Etichetta · Scelta" quando c'è. Il menu elenca "Tutti" e le opzioni con icona e conteggio.
+ */
+export function FilterMenu({ label, value, allValue, allLabel = 'Tutti', options, onChange, align = 'left' }: {
+  label: string; value: string; allValue: string; allLabel?: string; options: FilterOption[];
+  onChange: (v: string) => void; align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const click = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', click); document.removeEventListener('keydown', key); };
+  }, [open]);
+  const sel = options.find(o => o.value === value);
+  const attivo = value !== allValue && !!sel;
+  const scegli = (v: string) => { onChange(v); setOpen(false); };
+  return (
+    <div className="ds-pop" ref={ref}>
+      <button type="button" className={cx('ds-btn ds-btn-sm ds-fmenu-btn', attivo && 'is-on')} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        {attivo && sel?.icon && <span className="ds-fmenu-ic" style={{ background: sel.color ?? '#71717A' }}><Icon name={sel.icon} size={10} stroke={2.6} /></span>}
+        <span>{label}{attivo && <>: <strong>{sel!.label}</strong></>}</span>
+        <Icon name="chevDown" size={12} />
+      </button>
+      {open && (
+        <div className={cx('ds-popmenu ds-fmenu', align === 'right' && 'is-right')} role="menu" aria-label={label}>
+          <button type="button" role="menuitemradio" aria-checked={!attivo} onClick={() => scegli(allValue)}>
+            <span className="ds-fmenu-ic is-all"><Icon name="oggi" size={10} stroke={2.6} /></span>
+            <span className="ds-fmenu-l">{allLabel}</span>
+            {!attivo && <Icon name="tick" size={14} />}
+          </button>
+          <span className="ds-fmenu-sep" />
+          {options.map(o => (
+            <button key={o.value} type="button" role="menuitemradio" aria-checked={value === o.value} onClick={() => scegli(o.value)}>
+              <span className="ds-fmenu-ic" style={{ background: o.color ?? '#71717A' }}>{o.icon && <Icon name={o.icon} size={10} stroke={2.6} />}</span>
+              <span className="ds-fmenu-l">{o.label}</span>
+              {o.count !== undefined && <span className="ds-fmenu-n">{o.count}</span>}
+              {value === o.value && <Icon name="tick" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

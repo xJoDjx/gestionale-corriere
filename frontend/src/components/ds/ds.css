@@ -185,3 +185,19 @@ th[aria-sort="ascending"] .ds-sortbtn, th[aria-sort="descending"] .ds-sortbtn { 
 .ds-popmenu label:hover, .ds-popmenu button:hover { background: #F4F4F5; }
 .ds-popmenu input[type="checkbox"] { accent-color: var(--primary); }
 .ds-check { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+
+/* FilterMenu */
+.ds-fmenu-btn { gap: 6px; }
+.ds-fmenu-btn strong { font-weight: 600; }
+.ds-fmenu-btn.is-on { border-color: #B9C8FB; background: #F3F6FF; color: #1E3A8A; }
+.ds-fmenu { left: 0; right: auto; min-width: 230px; }
+.ds-fmenu.is-right { left: auto; right: 0; }
+.ds-fmenu button { min-height: 34px; }
+.ds-fmenu button[aria-checked="true"] { background: #F3F6FF; }
+.ds-fmenu button > svg:last-child { color: var(--primary); margin-left: 2px; }
+.ds-fmenu-ic { flex: 0 0 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; color: #FFFFFF; }
+.ds-fmenu-ic.is-all { background: #A1A1AA; }
+.ds-fmenu-btn .ds-fmenu-ic { flex-basis: 18px; height: 18px; }
+.ds-fmenu-l { flex: 1 1 auto; }
+.ds-fmenu-n { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ds-fmenu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
