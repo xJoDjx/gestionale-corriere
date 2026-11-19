@@ -36,6 +36,7 @@ function Sez({ k, children }: { k: string; children: React.ReactNode }) {
 }
 import Dashboard from './features/dashboard/Dashboard';
 import FlottaMezzi from './features/mezzi/FlottaMezzi';
+import RegistroMezziPage from './features/mezzi/RegistroMezzi';
 import DettaglioMezzo from './features/mezzi/DettaglioMezzo';
 import ConteggiMensili from './features/conteggi/ConteggiMensili';
 import PadronciniPage from './features/padroncini/Padroncini';
@@ -82,6 +83,7 @@ export default function App() {
         <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route path="/" element={<Sez k="dashboard"><Dashboard /></Sez>} />
           <Route path="/flotta" element={<Sez k="flotta"><FlottaMezzi /></Sez>} />
+          <Route path="/flotta/verbali" element={<Sez k="flotta"><RegistroMezziPage /></Sez>} />
           <Route path="/flotta/:id" element={<Sez k="flotta"><DettaglioMezzo /></Sez>} />
           <Route path="/conteggi" element={<Sez k="conteggi"><ConteggiPage /></Sez>} />
           <Route path="/conteggi/:id" element={<Sez k="conteggi"><DettaglioConteggio /></Sez>} />

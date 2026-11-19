@@ -1202,3 +1202,48 @@ export const carteEniApi = {
     });
   },
 };
+
+// ─── Registro verbali / franchigie / rifatturazioni per mezzo ────────────────
+export type TipoRegistro = 'VERBALE' | 'FRANCHIGIA' | 'RIFATTURAZIONE' | 'ALTRO';
+export type StatoRegistro = 'APERTO' | 'PAGATO' | 'CONTESTATO' | 'ANNULLATO';
+export interface VoceRegistro {
+  id: string;
+  conteggioRigaId: string | null;
+  conteggioMensileId: string | null;
+  mese: string | null;
+  padroncinoId: string | null;
+  mezzoId: string | null;
+  targa: string;
+  tipo: TipoRegistro;
+  numero: string | null;
+  dataEvento: string | null;
+  descrizione: string;
+  importo: number | string;
+  percIva: number | string | null;
+  stato: StatoRegistro;
+  note: string | null;
+  manuale: boolean;
+  modificatoAMano: boolean;
+  rigaEliminata: boolean;
+  createdAt: string;
+  updatedAt: string;
+  mezzo: { id: string; targa: string; marca: string; modello: string } | null;
+  padroncino: { id: string; ragioneSociale: string } | null;
+}
+export interface VoceRegistroInput {
+  targa?: string; tipo?: TipoRegistro; numero?: string | null; dataEvento?: string | null;
+  stato?: StatoRegistro; note?: string | null;
+  descrizione?: string; importo?: number; percIva?: number | null; mese?: string | null; padroncinoId?: string | null;
+  ripristinaRiconoscimento?: boolean;
+}
+export const registroMezziApi = {
+  list: (params?: { mezzoId?: string; targa?: string; padroncinoId?: string; mese?: string; tipo?: string }) => {
+    const p = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v)) as Record<string, string>;
+    const qs = Object.keys(p).length ? '?' + new URLSearchParams(p).toString() : '';
+    return api.get<VoceRegistro[]>(`/registro-mezzi${qs}`);
+  },
+  create: (data: VoceRegistroInput) => api.post<VoceRegistro>('/registro-mezzi', data),
+  update: (id: string, data: VoceRegistroInput) => api.put<VoceRegistro>(`/registro-mezzi/${id}`, data),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/registro-mezzi/${id}`),
+  sincronizza: () => api.post<{ conteggi: number; voci: number }>('/registro-mezzi/sincronizza', {}),
+};

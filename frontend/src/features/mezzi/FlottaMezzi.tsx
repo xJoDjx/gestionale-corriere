@@ -582,6 +582,7 @@ export default function FlottaMezzi() {
         sub={`${inFlotta.length} mezzi · ${nNol} a noleggio, ${nProp} di proprietà, ${nEst} ${nEst === 1 ? 'esterno' : 'esterni'}`}
         actions={<>
           <input ref={importInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportaExcel} />
+          <Button icon="doc" onClick={() => navigate('/flotta/verbali')}>Verbali e addebiti</Button>
           <Button icon="check" onClick={() => setPannello('attivita')}>Promemoria{tasks.filter(t => !t.completata).length ? ` · ${tasks.filter(t => !t.completata).length}` : ''}</Button>
           <Button icon="upload" onClick={() => importInputRef.current?.click()} disabled={importando}>{importando ? 'Importazione…' : 'Importa Excel'}</Button>
           <Button icon="doc" onClick={apriContratti}>Contratto multiplo</Button>
