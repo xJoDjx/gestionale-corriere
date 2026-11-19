@@ -1,3 +1,4 @@
+import { correggiDateAssegnazione } from '../common/correggi-date-assegnazione.util';
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { resolveDataFineAssegnazione } from '../common/data-fine-assegnazione.util';
 import * as XLSX from 'xlsx';
@@ -383,5 +384,18 @@ export class CodiciAutistaService {
     await this.prisma.codiceAutista.update({ where: { id }, data: { deletedAt: new Date() } });
     await this.audit.log({ userId, entityType: 'codice_autista', entityId: id, azione: 'DELETE' });
     return { deleted: true };
+  }
+
+  /** Corregge le date di un'assegnazione (es. anno sbagliato) senza chiuderla. */
+  async correggiDateAssegnazione(assegnazioneId: string, userId: string, body: { dataInizio?: string; dataFine?: string | null }) {
+    const r = await correggiDateAssegnazione({
+      delegate: this.prisma.assegnazioneCodiceAutista, chiave: 'codiceAutistaId', id: assegnazioneId,
+      dataInizio: body?.dataInizio, dataFine: body?.dataFine,
+    });
+    await this.audit.log({
+      userId, entityType: 'assegnazione_codice_autista', entityId: assegnazioneId, azione: 'UPDATE',
+      dataPrima: r.prima as any, dataDopo: r.dopo as any,
+    });
+    return r.dopo;
   }
 }

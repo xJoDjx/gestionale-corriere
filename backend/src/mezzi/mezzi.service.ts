@@ -1,3 +1,4 @@
+import { correggiDateAssegnazione } from '../common/correggi-date-assegnazione.util';
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { resolveDataFineAssegnazione } from '../common/data-fine-assegnazione.util';
 import * as XLSX from 'xlsx';
@@ -659,5 +660,18 @@ async importaExcel(buffer: Buffer) {
     });
 
     return { deleted: true };
+  }
+
+  /** Corregge le date di un'assegnazione (es. anno sbagliato) senza chiuderla. */
+  async correggiDateAssegnazione(assegnazioneId: string, userId: string, body: { dataInizio?: string; dataFine?: string | null }) {
+    const r = await correggiDateAssegnazione({
+      delegate: this.prisma.assegnazioneMezzo, chiave: 'mezzoId', id: assegnazioneId,
+      dataInizio: body?.dataInizio, dataFine: body?.dataFine,
+    });
+    await this.audit.log({
+      userId, entityType: 'assegnazione_mezzo', entityId: assegnazioneId, azione: 'UPDATE',
+      dataPrima: r.prima as any, dataDopo: r.dopo as any,
+    });
+    return r.dopo;
   }
 }

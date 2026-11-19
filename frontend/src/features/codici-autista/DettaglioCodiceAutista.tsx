@@ -6,7 +6,8 @@ import type { CodiceAutista, Padroncino, Nota } from '../../lib/api';
 import LogEntita from '../log/LogEntita';
 import ChiudiAssegnazioneModal from '../../components/ui/ChiudiAssegnazioneModal';
 import type { ChiudiAssegnazioneTarget } from '../../components/ui/ChiudiAssegnazioneModal';
-import '../mezzi/FlottaMezzi.css';
+import { Page, PageHeader, Card, CardHead, Button, Tabs, Dot, Empty, Alert } from '../../components/ds';
+import { AssegnazioniCard, NoteCard, Campo, AvvisoDataFutura } from '../../components/ui/RisorsaDettaglio';
 
 const fmt = (d: string | null | undefined) =>
   d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -133,385 +134,139 @@ export default function DettaglioCodiceAutista() {
     await load();
   };
 
-  if (loading) return (
-    <div className="fm-page">
-      <div className="fm-loading"><div className="fm-spinner" /><span>Caricamento autista...</span></div>
-    </div>
-  );
+  const [correggiId, setCorreggiId] = useState<string | null>(null);
+  const assegnaA = async (padroncinoId: string, dataInizio: string) => {
+    if (!id) return;
+    await codiciAutistaApi.assegna(id, { padroncinoId, dataInizio });
+    setShowAssegna(false);
+    await load();
+  };
+  const correggiDate = async (a: { id: string }, dataInizio: string, dataFine: string | null) => {
+    await codiciAutistaApi.correggiDateAssegnazione(a.id, { dataInizio, dataFine });
+    await load();
+  };
+
+  if (loading) return <Page><Card pad><Empty>Caricamento codice autista…</Empty></Card></Page>;
   if (error || !autista) return (
-    <div className="fm-page">
-      <div className="fm-error">
-        <span>⚠️ {error || 'Autista non trovato'}</span>
-        <button className="btn-outline" onClick={() => navigate('/codici-autista')}>← Torna ai Cod. Autisti</button>
-      </div>
-    </div>
+    <Page>
+      <Alert tone="ko" title={error || 'Codice autista non trovato'} actions={<Button size="sm" onClick={() => navigate('/codici-autista')}>Torna ai codici</Button>} />
+    </Page>
   );
 
   const attiva = autista.assegnazioni?.find((a) => !a.dataFine);
   const nomeCompleto = [autista.nome, autista.cognome].filter(Boolean).join(' ');
 
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: 'info', label: 'Dati Autista' },
-    { key: 'assegnazioni', label: `Assegnazioni (${autista.assegnazioni?.length ?? 0})` },
-    { key: 'note', label: `📝 Note (${noteList.length})` },
-    { key: 'log', label: 'Log' },
-  ];
-
   return (
-    <div className="fm-page">
+    <Page>
       <ChiudiAssegnazioneModal
         target={chiudiTarget}
         oggetto={`Codice ${autista.codice}`}
         onClose={() => setChiudiTarget(null)}
         onConfirm={confermaChiusura}
       />
-      {/* ── TOPBAR ── */}
-      <div className="dm-topbar">
-        <button className="btn-ghost-sm" onClick={() => navigate('/codici-autista')}>← Cod. Autisti</button>
-        <div className="dm-topbar-title">
-          <h1 style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 800 }}>
-            🏷️ {autista.codice}
-          </h1>
-          {nomeCompleto && (
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              {nomeCompleto}
-            </span>
-          )}
-          <span className={`fm-badge ${autista.attivo ? 'fm-badge-green' : 'fm-badge-gray'}`}>
-            {autista.attivo ? 'ATTIVO' : 'DISATTIVO'}
-          </span>
-          {attiva && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              → {attiva.ragioneSociale}
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {dirty && (
-            <button className="btn-primary" disabled={saving} onClick={handleSave}>
-              {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
-            </button>
-          )}
-          {!dirty && <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>✓ Salvato</span>}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={`Codici autista${nomeCompleto ? ' · ' + nomeCompleto : ''}`}
+        title={<span className="rd-title"><span className="rd-mono">{autista.codice}</span><Dot tone={autista.attivo ? 'ok' : 'na'}>{autista.attivo ? 'Attivo' : 'Disattivo'}</Dot></span>}
+        sub={attiva ? `Assegnato a ${attiva.ragioneSociale} dal ${fmt(attiva.dataInizio)}` : 'Non assegnato'}
+        actions={<>
+          {attiva
+            ? <Button icon="lock" onClick={() => handleChiudiAssegnazione(attiva.id, attiva.ragioneSociale, attiva.dataInizio)}>Chiudi assegnazione</Button>
+            : <Button icon="link" onClick={() => { setShowAssegna(true); setActiveTab('assegnazioni'); }}>Assegna</Button>}
+          <Button variant="primary" icon="check" disabled={!dirty || saving} onClick={handleSave}>{saving ? 'Salvataggio…' : dirty ? 'Salva modifiche' : 'Salvato'}</Button>
+        </>}
+      />
 
-      {/* ── TABS ── */}
-      <div className="dm-tabs-bar">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`dm-tab ${activeTab === t.key ? 'dm-tab-active' : ''}`}
-            onClick={() => setActiveTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <AvvisoDataFutura attiva={attiva} onCorreggi={() => { setActiveTab('assegnazioni'); if (attiva) setCorreggiId(attiva.id); }} />
 
-      {/* ── TAB INFO ── */}
+      <Tabs label="Sezioni del codice autista" value={activeTab} onChange={(v) => setActiveTab(v as TabKey)} items={[
+        { value: 'info', label: 'Dati' },
+        { value: 'assegnazioni', label: 'Assegnazioni', count: autista.assegnazioni?.length ?? 0 },
+        { value: 'note', label: 'Note', count: noteList.length },
+        { value: 'log', label: 'Modifiche' },
+      ]} />
+
       {activeTab === 'info' && (
-        <div className="dm-layout">
-          <div className="dm-col-left">
-            <div className="dm-section-card">
-              <div className="dm-section-title"><span>👤</span> Dati Anagrafici</div>
-              <div className="dm-section-row">
-                <div className="dm-field">
-                  <label>Codice</label>
-                  <input
-                    className="dm-input"
-                    style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}
-                    value={autista.codice}
-                    readOnly
-                    disabled
-                  />
-                </div>
-              </div>
-              <div className="dm-section-row">
-                <div className="dm-field">
-                  <label>Nome</label>
-                  <input
-                    className="dm-input"
-                    value={form.nome ?? ''}
-                    onChange={(e) => set('nome', e.target.value || null)}
-                    placeholder="—"
-                  />
-                </div>
-                <div className="dm-field">
-                  <label>Cognome</label>
-                  <input
-                    className="dm-input"
-                    value={form.cognome ?? ''}
-                    onChange={(e) => set('cognome', e.target.value || null)}
-                    placeholder="—"
-                  />
-                </div>
-              </div>
-              <div className="dm-section-row">
-                <div className="dm-field dm-field-full">
-                  <label>Zone</label>
-                  <input
-                    className="dm-input"
-                    value={form.zone ?? ''}
-                    onChange={(e) => set('zone', e.target.value || null)}
-                    placeholder="es. Nord, Centro..."
-                  />
-                </div>
-              </div>
-
+        <div className="ds-g3">
+          <Card pad className="ds-s2">
+            <CardHead title="Dati anagrafici" />
+            <div className="rd-grid">
+              <Campo label="Codice">
+                <input className="ds-input mono" value={autista.codice} readOnly disabled />
+              </Campo>
+              <Campo label="Zone">
+                <input className="ds-input" value={form.zone ?? ''} onChange={(e) => set('zone', e.target.value || null)} placeholder="es. Nord, Centro…" />
+              </Campo>
+              <Campo label="Nome">
+                <input className="ds-input" value={form.nome ?? ''} onChange={(e) => set('nome', e.target.value || null)} placeholder="—" />
+              </Campo>
+              <Campo label="Cognome">
+                <input className="ds-input" value={form.cognome ?? ''} onChange={(e) => set('cognome', e.target.value || null)} placeholder="—" />
+              </Campo>
             </div>
-          </div>
-
-          <div className="dm-col-right">
-            {/* Tariffe */}
-            <div className="dm-section-card">
-              <div className="dm-section-title"><span>💶</span> Tariffe</div>
-              <div className="dm-field dm-field-full">
-                <label>Tariffa Fissa (€)</label>
-                <input
-                  className="dm-input"
-                  type="number"
-                  step="0.01"
-                  style={{ color: 'var(--primary)', fontWeight: 700 }}
-                  value={form.tariffaFissa ?? ''}
-                  onChange={(e) => set('tariffaFissa', e.target.value ? parseFloat(e.target.value) : null)}
-                />
-              </div>
-              <div className="dm-field dm-field-full">
-                <label>Tariffa Ritiro (€)</label>
-                <input
-                  className="dm-input"
-                  type="number"
-                  step="0.01"
-                  style={{ color: 'var(--primary)', fontWeight: 700 }}
-                  value={form.tariffaRitiro ?? ''}
-                  onChange={(e) => set('tariffaRitiro', e.target.value ? parseFloat(e.target.value) : null)}
-                />
-              </div>
-              <div className="dm-field dm-field-full">
-                <label>Target</label>
-                <input
-                  className="dm-input"
-                  type="number"
-                  step="1"
-                  value={form.target ?? ''}
-                  onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)}
-                />
-              </div>
-              <div className="dm-field dm-field-full">
-                <label>Accordo bonus/malus</label>
-                <input
-                  className="dm-input"
-                  placeholder="es. +1€ -1€ per target"
-                  value={form.bonusMalus ?? ''}
-                  onChange={(e) => set('bonusMalus', e.target.value || null)}
-                />
-              </div>
-              <div className="dm-field dm-field-full">
-                <label>Bonus (€, oltre target)</label>
-                <input
-                  className="dm-input"
-                  type="number"
-                  step="0.01"
-                  style={{ color: '#16a34a', fontWeight: 700 }}
-                  value={form.bonus ?? ''}
-                  onChange={(e) => set('bonus', e.target.value ? parseFloat(e.target.value) : null)}
-                />
-              </div>
-              <div className="dm-field dm-field-full">
-                <label>Malus (€, sotto target)</label>
-                <input
-                  className="dm-input"
-                  type="number"
-                  step="0.01"
-                  style={{ color: '#dc2626', fontWeight: 700 }}
-                  value={form.malus ?? ''}
-                  onChange={(e) => set('malus', e.target.value ? parseFloat(e.target.value) : null)}
-                />
-              </div>
-            </div>
-
-            {/* Assegnazione corrente */}
-            <div className="dm-section-card">
-              <div className="dm-section-title"><span>🤝</span> Assegnazione Corrente</div>
-              {attiva ? (
-                <div className="dm-assegn-row dm-assegn-attiva">
-                  <div>
-                    <span className="dm-assegn-nome">{attiva.ragioneSociale}</span>
-                    <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>
-                  </div>
-                  <div className="dm-assegn-date">dal {fmt(attiva.dataInizio)}</div>
-                  <button
-                    className="btn-outline btn-sm"
-                    style={{ color: '#dc2626', borderColor: '#dc2626', marginTop: 8 }}
-                    onClick={() => handleChiudiAssegnazione(attiva.id, attiva.ragioneSociale, attiva.dataInizio)}
-                  >
-                    🔓 Chiudi assegnazione
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nessun padroncino assegnato</span>
-                  <button className="btn-primary btn-sm" onClick={() => { setShowAssegna(true); setActiveTab('assegnazioni'); }}>
-                    🔗 Assegna Padroncino
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Info creazione */}
-            <div className="dm-section-card">
-              <div className="dm-section-title"><span>📋</span> Info Record</div>
-              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ padding: '4px 0', color: 'var(--text-secondary)' }}>Creato il</td>
-                    <td style={{ padding: '4px 0', textAlign: 'right' }}>{fmt(autista.createdAt)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="dm-actions-card">
-              <button className="btn-outline" onClick={() => navigate('/codici-autista')}>← Annulla</button>
-              <button className="btn-primary" disabled={!dirty || saving} onClick={handleSave}>
-                {saving ? '⏳ Salvataggio...' : '💾 Salva Modifiche'}
-              </button>
-            </div>
+          </Card>
+          <div className="rd-col">
+            <Card pad>
+              <CardHead title="Tariffe" />
+              <Campo label="Tariffa fissa (€)">
+                <input className="ds-input" type="number" step="0.01" value={form.tariffaFissa ?? ''}
+                  onChange={(e) => set('tariffaFissa', e.target.value ? parseFloat(e.target.value) : null)} />
+              </Campo>
+              <Campo label="Tariffa ritiro (€)">
+                <input className="ds-input" type="number" step="0.01" value={form.tariffaRitiro ?? ''}
+                  onChange={(e) => set('tariffaRitiro', e.target.value ? parseFloat(e.target.value) : null)} />
+              </Campo>
+              <Campo label="Target">
+                <input className="ds-input" type="number" step="1" value={form.target ?? ''}
+                  onChange={(e) => set('target', e.target.value ? parseInt(e.target.value) : null)} />
+              </Campo>
+              <Campo label="Accordo bonus/malus">
+                <input className="ds-input" placeholder="es. +1€ -1€ per target" value={form.bonusMalus ?? ''} onChange={(e) => set('bonusMalus', e.target.value || null)} />
+              </Campo>
+              <Campo label="Bonus (€, oltre target)">
+                <input className="ds-input" type="number" step="0.01" value={form.bonus ?? ''}
+                  onChange={(e) => set('bonus', e.target.value ? parseFloat(e.target.value) : null)} />
+              </Campo>
+              <Campo label="Malus (€, sotto target)">
+                <input className="ds-input" type="number" step="0.01" value={form.malus ?? ''}
+                  onChange={(e) => set('malus', e.target.value ? parseFloat(e.target.value) : null)} />
+              </Campo>
+            </Card>
+            <Card pad>
+              <CardHead title="Scheda" />
+              <div className="rd-kv"><span>Creato il</span><b>{fmt(autista.createdAt)}</b></div>
+              <div className="rd-kv"><span>Assegnazione</span><b>{attiva ? attiva.ragioneSociale : 'nessuna'}</b></div>
+              {attiva && <div className="rd-kv"><span>Dal</span><b>{fmt(attiva.dataInizio)}</b></div>}
+            </Card>
           </div>
         </div>
       )}
 
-      {/* ── TAB ASSEGNAZIONI ── */}
       {activeTab === 'assegnazioni' && (
-        <div style={{ padding: '20px 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              Storico Assegnazioni
-            </h3>
-            {!attiva && (
-              <button className="btn-primary btn-sm" onClick={() => setShowAssegna((v) => !v)}>
-                🔗 Nuova Assegnazione
-              </button>
-            )}
-          </div>
-
-          {/* Form nuova assegnazione */}
-          {showAssegna && !attiva && (
-            <div style={{ marginBottom: 20, padding: 16, background: 'var(--bg-secondary)', borderRadius: 10, border: '1px solid var(--border)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Padroncino</label>
-                  <select
-                    className="dm-select"
-                    value={assegnaForm.padroncinoId}
-                    onChange={(e) => setAssegnaForm((f) => ({ ...f, padroncinoId: e.target.value }))}
-                  >
-                    <option value="">Seleziona padroncino...</option>
-                    {padroncini.filter((p) => p.attivo).map((p) => (
-                      <option key={p.id} value={p.id}>{p.ragioneSociale}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Data inizio</label>
-                  <input
-                    type="date"
-                    className="dm-input"
-                    value={assegnaForm.dataInizio}
-                    onChange={(e) => setAssegnaForm((f) => ({ ...f, dataInizio: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn-primary btn-sm" onClick={handleAssegna} disabled={saving}>
-                  {saving ? '⏳...' : '🔗 Conferma'}
-                </button>
-                <button className="btn-outline btn-sm" onClick={() => setShowAssegna(false)}>Annulla</button>
-              </div>
-            </div>
-          )}
-
-          {!autista.assegnazioni || autista.assegnazioni.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-              Nessuna assegnazione registrata
-            </div>
-          ) : (
-            <div className="dm-assegnazioni-list">
-              {autista.assegnazioni.map((a) => (
-                <div key={a.id} className={`dm-assegn-row ${!a.dataFine ? 'dm-assegn-attiva' : ''}`}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-                    <div>
-                      <span className="dm-assegn-nome">{a.ragioneSociale}</span>
-                      {!a.dataFine && <span className="dm-badge-attiva" style={{ marginLeft: 8 }}>ATTIVA</span>}
-                    </div>
-                    {!a.dataFine && (
-                      <button
-                        className="btn-outline btn-sm"
-                        style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                        onClick={() => handleChiudiAssegnazione(a.id, a.ragioneSociale, a.dataInizio)}
-                      >
-                        🔓 Chiudi
-                      </button>
-                    )}
-                  </div>
-                  <div className="dm-assegn-date">
-                    {fmt(a.dataInizio)} → {a.dataFine ? fmt(a.dataFine) : 'in corso'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <AssegnazioniCard
+          assegnazioni={autista.assegnazioni ?? []}
+          padroncini={padroncini}
+          oggetto={`codice ${autista.codice}`}
+          mostraNuova={showAssegna}
+          setMostraNuova={setShowAssegna}
+          onAssegna={assegnaA}
+          onChiudi={(a) => handleChiudiAssegnazione(a.id, a.ragioneSociale, a.dataInizio)}
+          onCorreggi={correggiDate}
+          correggiId={correggiId}
+          setCorreggiId={setCorreggiId}
+        />
       )}
 
-
-      {/* ── TAB NOTE ── */}
       {activeTab === 'note' && (
-        <div className="dm-tab-body">
-          <div className="dm-note-add-form">
-            <textarea
-              className="dm-note-textarea"
-              rows={3}
-              placeholder="Aggiungi una nota su questo autista…"
-              value={notaTesto}
-              onChange={e => setNotaTesto(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddNota(); }}
-            />
-            <div className="dm-note-form-footer">
-              <span className="dm-note-hint">Ctrl+Invio per salvare</span>
-              <button className="dm-note-submit" onClick={handleAddNota} disabled={notaSaving || !notaTesto.trim()}>
-                {notaSaving ? 'Salvo…' : '+ Aggiungi nota'}
-              </button>
-            </div>
-          </div>
-          {noteList.length === 0
-            ? <div className="dm-note-empty">Nessuna nota registrata.</div>
-            : noteList.map(n => (
-              <div key={n.id} className={`dm-note-card${n.contenuto.startsWith('[Nota originale]') ? ' dm-note-card-legacy' : ''}`}>
-                <div className="dm-note-card-header">
-                  <span className="dm-note-avatar">{n.user ? (n.user.nome?.[0] ?? '') + (n.user.cognome?.[0] ?? '') : '?'}</span>
-                  <div className="dm-note-card-meta">
-                    <span className="dm-note-author">{n.user ? `${n.user.nome} ${n.user.cognome}` : 'Sistema'}</span>
-                    <span className="dm-note-ts">{new Date(n.createdAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                  </div>
-                  <button className="dm-note-del" onClick={() => handleDeleteNota(n.id)} title="Elimina nota">✕</button>
-                </div>
-                <p className="dm-note-body">{n.contenuto}</p>
-              </div>
-            ))}
-        </div>
+        <NoteCard note={noteList} testo={notaTesto} setTesto={setNotaTesto} salvando={notaSaving}
+          onAggiungi={handleAddNota} onElimina={handleDeleteNota} placeholder="Aggiungi una nota su questo codice…" />
       )}
 
-      {/* ── TAB LOG ── */}
       {activeTab === 'log' && id && (
-        <div style={{ padding: '20px 24px' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>
-            Log modifiche autista
-          </h3>
+        <Card pad>
+          <CardHead title="Modifiche al codice autista" />
           <LogEntita entityType="codice_autista" entityId={id} />
-        </div>
+        </Card>
       )}
-    </div>
+    </Page>
   );
 }

@@ -200,6 +200,9 @@ export const mezziApi = {
     api.post(`/mezzi/${mezzoId}/assegnazioni`, data),
   chiudiAssegnazione: (assegnazioneId: string, dataFine?: string) =>
     api.put(`/mezzi/assegnazioni/${assegnazioneId}/chiudi`, dataFine ? { dataFine } : {}),
+  /** Corregge le date di un'assegnazione senza chiuderla (dataFine null = in corso) */
+  correggiDateAssegnazione: (assegnazioneId: string, date: { dataInizio?: string; dataFine?: string | null }) =>
+    api.put(`/mezzi/assegnazioni/${assegnazioneId}/date`, date),
   deleteAssegnazione: (assegnazioneId: string) =>
     api.delete(`/mezzi/assegnazioni/${assegnazioneId}`),
   importaExcel: (file: File): Promise<{ creati: number; saltati: number; errori: string[] }> => {
@@ -329,6 +332,9 @@ export const palmariApi = {
     api.post(`/palmari/${id}/assegnazioni`, payload),
   chiudiAssegnazione: (assegnazioneId: string, dataFine?: string) =>
     api.put(`/palmari/assegnazioni/${assegnazioneId}/chiudi`, dataFine ? { dataFine } : {}),
+  /** Corregge le date di un'assegnazione senza chiuderla (dataFine null = in corso) */
+  correggiDateAssegnazione: (assegnazioneId: string, date: { dataInizio?: string; dataFine?: string | null }) =>
+    api.put(`/palmari/assegnazioni/${assegnazioneId}/date`, date),
   importaExcel: (file: File): Promise<{ creati: number; saltati: number; errori: string[] }> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -748,6 +754,9 @@ export const codiciAutistaApi = {
     api.post(`/codici-autista/${id}/assegnazioni`, payload),
   chiudiAssegnazione: (assegnazioneId: string, dataFine?: string) =>
     api.put(`/codici-autista/assegnazioni/${assegnazioneId}/chiudi`, dataFine ? { dataFine } : {}),
+  /** Corregge le date di un'assegnazione senza chiuderla (dataFine null = in corso) */
+  correggiDateAssegnazione: (assegnazioneId: string, date: { dataInizio?: string; dataFine?: string | null }) =>
+    api.put(`/codici-autista/assegnazioni/${assegnazioneId}/date`, date),
   importaExcel: (file: File): Promise<{ creati: number; saltati: number; errori: string[] }> => {
     const formData = new FormData();
     formData.append('file', file);
