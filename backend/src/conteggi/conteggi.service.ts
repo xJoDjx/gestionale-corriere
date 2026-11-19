@@ -469,7 +469,7 @@ export class ConteggiService {
 
     const updated = await this.prisma.conteggiRiga.update({
       where: { id: rigaId },
-      data: { ...dto, modificaManuale: true },
+      data: { ...dto, modificaManuale: true, copiataDaMese: null },
     });
 
     await this.prisma.conteggioMensile.update({
@@ -636,11 +636,14 @@ export class ConteggiService {
 
         if (changed) {
           const { conteggioMensileId: _omit, ...updateFields } = rowData;
-          toUpdate.push({ id: ex.id, data: updateFields, prima: ex });
+          // Prima modifica reale: la riga non è più "copiata dal mese precedente"
+          toUpdate.push({ id: ex.id, data: { ...updateFields, copiataDaMese: null }, prima: ex });
         } else if (techChanged) {
+          // Solo posizione/flag interni: NON deve cambiare la data di ultima modifica
+          // (altrimenti aggiungere o togliere una riga "toccava" tutte le successive).
           toSilentUpdate.push({
             id: ex.id,
-            data: { ordine: rowData.ordine, modificaManuale: rowData.modificaManuale },
+            data: { ordine: rowData.ordine, modificaManuale: rowData.modificaManuale, updatedAt: ex.updatedAt },
           });
         }
         // else: dati identici → skip, updatedAt rimane invariato
@@ -1098,6 +1101,10 @@ export class ConteggiService {
           contoVoce: r.contoVoce,
           percIva: r.percIva,
           note: r.note,
+          // La riga copiata conserva la data della sua ultima modifica reale
+          // e ricorda da quale mese arriva (si azzera alla prima modifica).
+          updatedAt: r.updatedAt,
+          copiataDaMese: r.copiataDaMese ?? meseSorgente,
         },
       });
     }

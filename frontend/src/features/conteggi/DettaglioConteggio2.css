@@ -148,7 +148,8 @@
 .dc2-page .dc-codice-badge { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; background: transparent; color: #0B0B0C; border: 0; padding: 0 6px; font-size: 13px; }
 .dc2-page .dc-del-btn { width: 28px; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #B91C1C; cursor: pointer; font-size: 17px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .dc2-page .dc-del-btn:hover { background: #FEF2F2; color: #B91C1C; }
-.dc2-page .dc-ts-cell { font-size: 11.5px; color: #A1A1AA; font-family: inherit; white-space: nowrap; }
+.dc2-page .dc-ts-cell { font-size: 11.5px; color: #71717A; font-family: inherit; white-space: nowrap; }
+.dc-ts-copia { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #F4F4F5; border: 1px solid #E4E4E7; color: #71717A; font-size: 11px; font-weight: 500; cursor: help; }
 .dc2-page .dc2-row-auto td { background: #FBFBFB !important; padding: 10px 8px; }
 
 /* Righe di totale */

@@ -134,6 +134,23 @@ const fmtTs = (d: string | null | undefined): string => {
   } catch { return ''; }
 };
 
+/** Data di ultima modifica di una riga + mese da cui è stata duplicata (se non ancora modificata). */
+type RigaTs = { ts: string; da?: string };
+const MESI_BREVI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+function TsCell({ info }: { info?: RigaTs }) {
+  if (!info) return <td className="dc-ts-cell" />;
+  if (info.da) {
+    const [y, m] = info.da.split('-');
+    const lbl = `${MESI_BREVI[Number(m) - 1] ?? m} ${y?.slice(2) ?? ''}`;
+    return (
+      <td className="dc-ts-cell">
+        <span className="dc-ts-copia" title={`Copiata da ${lbl} e non ancora modificata in questo conteggio · ultima modifica ${info.ts}`}>da {lbl}</span>
+      </td>
+    );
+  }
+  return <td className="dc-ts-cell" title="Ultima modifica di questa riga">{info.ts}</td>;
+}
+
 const SOGLIA_BOLLO = 77.47;
 const COSTO_BOLLO = 2.00;
 const CHECKLIST_KEY = (padId: string, mese: string) => `checklist_${padId}_${mese}`;
@@ -517,7 +534,7 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
   voci: VoceConteggio[];
   padroncino: Padroncino | null;
   mese: string;
-  rigaTimestamps: Map<string, string>;
+  rigaTimestamps: Map<string, RigaTs>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -617,7 +634,7 @@ function TabFatturato({ righe, onChange, onAdd, onAddAcconto, onDelete, onImport
             <td><input className="dc-excel-input" value={r.nota}
               onChange={(e) => onChange(r.id, 'nota', e.target.value)}
               placeholder="Note..." /></td>
-            <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+            <TsCell info={rigaTimestamps.get(r.id)} />
             <td>
               <button className="dc-del-btn" onClick={() => onDelete(r.id)}>×</button>
             </td>
@@ -734,7 +751,7 @@ function TabAddebiti({
   onAddebitiVariChange: (id: string, f: keyof RigaAddebito, v: any) => void;
   onAddebitiVariAdd: () => void; onAddebitiVariDelete: (id: string) => void;
   voci: VoceConteggio[];
-  rigaTimestamps: Map<string, string>;
+  rigaTimestamps: Map<string, RigaTs>;
 }) {
   // Palmari: somma da tutte le righe
   const costoPalmariNoIva = palmari.reduce(
@@ -808,7 +825,7 @@ function TabAddebiti({
                   <input className="dc-excel-input" value={rp.note}
                     onChange={(e) => onPalmariChange(rp.id, 'note', e.target.value)} placeholder="Note..." />
                 </td>
-                <td className="dc-ts-cell">{rigaTimestamps.get(rp.id) ?? ''}</td>
+                <TsCell info={rigaTimestamps.get(rp.id)} />
                 <td>
                   <button className="dc-del-btn" onClick={() => onPalmariDelete(rp.id)}>×</button>
                 </td>
@@ -853,7 +870,7 @@ function TabAddebiti({
                 </td>
                 <td><input className="dc-excel-input" value={r.note}
                   onChange={(e) => onMezziChange(r.id, 'note', e.target.value)} placeholder="Note..." /></td>
-                <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+                <TsCell info={rigaTimestamps.get(r.id)} />
                 <td>
                   <button
                     className="dc-del-btn"
@@ -889,7 +906,7 @@ function TabAddebiti({
               </td>
               <td><input className="dc-excel-input" value={r.note}
                 onChange={(e) => onRicaricheChange(r.id, 'note', e.target.value)} placeholder="Note..." /></td>
-              <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+              <TsCell info={rigaTimestamps.get(r.id)} />
               <td>
                 <button
                   className="dc-del-btn"
@@ -938,7 +955,7 @@ function TabAddebiti({
                 <td className="dc-excel-computed dc-computed-highlight">{eur(ivaCalc || null)}</td>
                 <td><input className="dc-excel-input" value={r.note}
                   onChange={(e) => onAddebitiVariChange(r.id, 'note', e.target.value)} placeholder="Note..." /></td>
-                <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+                <TsCell info={rigaTimestamps.get(r.id)} />
                 <td><button className="dc-del-btn" onClick={() => onAddebitiVariDelete(r.id)}>×</button></td>
               </tr>
             );
@@ -1009,7 +1026,7 @@ function TabCompensazioni({
   onCassaAdd: () => void; onCassaDelete: (id: string) => void;
   totAddebitiConIva: number;
   voci: VoceConteggio[];
-  rigaTimestamps: Map<string, string>;
+  rigaTimestamps: Map<string, RigaTs>;
 }) {
   const totAccrediti = accrediti.reduce((s, r) => s + (r.valore ?? 0), 0);
   const totFineMese = fineMese.reduce((s, r) => s + (r.valore ?? 0), 0);
@@ -1051,7 +1068,7 @@ function TabCompensazioni({
                 placeholder="0,00" /></NumBox><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onAccreditiChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
-              <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+              <TsCell info={rigaTimestamps.get(r.id)} />
               <td><button className="dc-del-btn" onClick={() => onAccreditiDelete(r.id)}>×</button></td>
             </tr>
           ))}
@@ -1087,7 +1104,7 @@ function TabCompensazioni({
                 placeholder="0,00" /></NumBox><EffettoNetto valore={r.valore} /></td>
               <td><input className="dc-excel-input" value={r.nota}
                 onChange={(e) => onFineMeseChange(r.id, 'nota', e.target.value)} placeholder="Note..." /></td>
-              <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+              <TsCell info={rigaTimestamps.get(r.id)} />
               <td><button className="dc-del-btn" onClick={() => onFineMeseDelete(r.id)}>×</button></td>
             </tr>
           ))}
@@ -1131,7 +1148,7 @@ function TabCompensazioni({
                     placeholder="0,00" /></NumBox>
                 )}
               </td>
-              <td className="dc-ts-cell">{rigaTimestamps.get(r.id) ?? ''}</td>
+              <TsCell info={rigaTimestamps.get(r.id)} />
               <td>
                 <button
                   className="dc-del-btn"
@@ -1423,7 +1440,7 @@ export default function DettaglioConteggio() {
   const [isDirty, setIsDirty] = useState(false);
 
   // Mappa id-riga DB → timestamp ultima modifica (per colonna "Mod." nelle tabelle)
-  const [rigaTimestamps, setRigaTimestamps] = useState<Map<string, string>>(new Map());
+  const [rigaTimestamps, setRigaTimestamps] = useState<Map<string, RigaTs>>(new Map());
 
   // Caricamento dati reali
   // ─── STATO CONTEGGIO (per blocco su CHIUSO/CONFERMATO) ────────────────────
@@ -1490,9 +1507,9 @@ export default function DettaglioConteggio() {
 
         // Mappa id-riga → timestamp ultima modifica (colonna "Mod.")
         {
-          const tsMap = new Map<string, string>();
+          const tsMap = new Map<string, RigaTs>();
           for (const r of righe) {
-            tsMap.set(r.id, fmtTs((r as any).updatedAt ?? (r as any).createdAt));
+            tsMap.set(r.id, { ts: fmtTs((r as any).updatedAt ?? (r as any).createdAt), da: (r as any).copiataDaMese ?? undefined });
           }
           setRigaTimestamps(tsMap);
         }
