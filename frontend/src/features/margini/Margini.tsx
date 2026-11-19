@@ -534,9 +534,9 @@ function MarginiDetail({ mese, selectMese }: { mese: string; selectMese: ReactNo
           <div className="ds-tablewrap">
             <table className="ds-table mg2-table">
               <colgroup>
-                <col style={{ width: 72 }} /><col /><col style={{ width: 150 }} />
-                <col style={{ width: 90 }} /><col style={{ width: 132 }} /><col style={{ width: 72 }} /><col style={{ width: 100 }} />
-                <col style={{ width: 92 }} /><col style={{ width: 132 }} /><col style={{ width: 110 }} /><col style={{ width: 40 }} />
+                <col style={{ width: 72 }} /><col style={{ width: 160 }} /><col />
+                <col style={{ width: 90 }} /><col style={{ width: 122 }} /><col style={{ width: 72 }} /><col style={{ width: 100 }} />
+                <col style={{ width: 92 }} /><col style={{ width: 124 }} /><col style={{ width: 110 }} /><col style={{ width: 40 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -615,9 +615,9 @@ function RigaMarginiRow({ r, i, onSaveManuale, onEsclude }: {
           {r.codice}
         </span>
       </td>
-      <td className="mg2-ell" title={r.autista}>{r.autista}</td>
+      <td className="mg2-ell" title={r.autista}>{String(r.autista ?? '').replace(new RegExp(`\\s*\\(${r.codice}\\)\\s*$`), '') || r.autista}</td>
       <td onClick={stop}>
-        <input type="text" className="mg2-in" value={padroncinoStr} placeholder="—"
+        <input type="text" className="mg2-in" value={padroncinoStr} placeholder="—" title={padroncinoStr}
           onChange={(e) => { setPadroncinoStr(e.target.value); schedule({ padroncinoStr: e.target.value }); }} />
       </td>
       <td className="r" onClick={stop}>
