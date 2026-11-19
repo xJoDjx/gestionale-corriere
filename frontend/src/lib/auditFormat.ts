@@ -30,6 +30,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   assegnazione_palmare: '🔗 Ass. Palmare',
   assegnazione_codice_autista: '🔗 Ass. Autista',
   utente: '🔑 Utente',
+  registro_mezzo: '🧾 Verbale/addebito',
 };
 
 export const AZIONE_COLORS: Record<string, string> = {

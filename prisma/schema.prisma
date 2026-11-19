@@ -76,21 +76,21 @@ enum TipoAddebitoSospeso {
 }
 
 model User {
-  id             String     @id @default(cuid())
-  email          String     @unique
-  password       String
-  passwordPlain  String?    @map("password_plain")
-  nome           String
-  cognome        String
-  ruolo          Ruolo      @default(OPERATORE)
-  attivo         Boolean    @default(true)
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  deletedAt      DateTime?  @map("deleted_at")
-  auditLogs      AuditLog[]
-  permessi       Permesso[]
-  note           Nota[]
-  task           Task[]
+  id            String     @id @default(cuid())
+  email         String     @unique
+  password      String
+  passwordPlain String?    @map("password_plain")
+  nome          String
+  cognome       String
+  ruolo         Ruolo      @default(OPERATORE)
+  attivo        Boolean    @default(true)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  deletedAt     DateTime?  @map("deleted_at")
+  auditLogs     AuditLog[]
+  permessi      Permesso[]
+  note          Nota[]
+  task          Task[]
 
   @@map("users")
 }
@@ -123,51 +123,52 @@ model AuditLog {
 }
 
 model Mezzo {
-  id                     String              @id @default(cuid())
-  targa                  String              @unique
-  marca                  String
-  modello                String
-  tipo                   TipoMezzo           @default(FURGONE)
-  alimentazione          Alimentazione       @default(GASOLIO)
-  categoria              CategoriaMezzo      @default(DISTRIBUZIONE)
-  stato                  StatoMezzo          @default(DISPONIBILE)
-  annoImmatricolazione   Int?                @map("anno_immatricolazione")
-  telaio                 String?
-  colore                 String?
-  portata                Int?
-  volume                 Decimal?            @db.Decimal(10, 2)
-  tipoCassone            String?             @map("tipo_cassone")
-  targaRimorchio         String?             @map("targa_rimorchio")
-  maggiorazioneRicarica  Decimal?            @default(0) @map("maggiorazione_ricarica") @db.Decimal(5, 2)
-  tipo_possesso          String              @default("NOLEGGIO")
-  societaNoleggio        String?             @map("societa_noleggio")
-  p_iva_locatore         String?
-  telefono_locatore      String?
-  email_locatore         String?
-  riferimento_contratto  String?
-  rataNoleggio           Decimal?            @map("rata_noleggio") @db.Decimal(10, 2)
-  canoneNoleggio         Decimal?            @map("canone_noleggio") @db.Decimal(10, 2)
-  inizioNoleggio         DateTime?           @map("inizio_noleggio")
-  fineNoleggio           DateTime?           @map("fine_noleggio")
-  kmAttuali              Int?                @map("km_attuali")
-  km_attuali_al          DateTime?
-  kmLimite               Int?                @map("km_limite")
-  scadenzaAssicurazione  DateTime?           @map("scadenza_assicurazione")
-  costoAssicurazione     Decimal?            @map("costo_assicurazione") @db.Decimal(10, 2)
-  scadenzaRevisione      DateTime?           @map("scadenza_revisione")
-  costoRevisione         Decimal?            @map("costo_revisione") @db.Decimal(10, 2)
-  scadenzaBollo          DateTime?           @map("scadenza_bollo")
-  costoBollo             Decimal?            @map("costo_bollo") @db.Decimal(10, 2)
-  scadenzaTagliando      DateTime?           @map("scadenza_tagliando")
-  scadenzaTachigrafo     DateTime?           @map("scadenza_tachigrafo")
-  utilizzatore           String?
-  note                   String?
-  createdAt              DateTime            @default(now()) @map("created_at")
-  updatedAt              DateTime            @updatedAt @map("updated_at")
-  deletedAt              DateTime?           @map("deleted_at")
-  assegnazioni           AssegnazioneMezzo[]
-  manutenzioni           Manutenzione[]
-  ricariche              RicaricaElettrica[]
+  id                    String              @id @default(cuid())
+  targa                 String              @unique
+  marca                 String
+  modello               String
+  tipo                  TipoMezzo           @default(FURGONE)
+  alimentazione         Alimentazione       @default(GASOLIO)
+  categoria             CategoriaMezzo      @default(DISTRIBUZIONE)
+  stato                 StatoMezzo          @default(DISPONIBILE)
+  annoImmatricolazione  Int?                @map("anno_immatricolazione")
+  telaio                String?
+  colore                String?
+  portata               Int?
+  volume                Decimal?            @db.Decimal(10, 2)
+  tipoCassone           String?             @map("tipo_cassone")
+  targaRimorchio        String?             @map("targa_rimorchio")
+  maggiorazioneRicarica Decimal?            @default(0) @map("maggiorazione_ricarica") @db.Decimal(5, 2)
+  tipo_possesso         String              @default("NOLEGGIO")
+  societaNoleggio       String?             @map("societa_noleggio")
+  p_iva_locatore        String?
+  telefono_locatore     String?
+  email_locatore        String?
+  riferimento_contratto String?
+  rataNoleggio          Decimal?            @map("rata_noleggio") @db.Decimal(10, 2)
+  canoneNoleggio        Decimal?            @map("canone_noleggio") @db.Decimal(10, 2)
+  inizioNoleggio        DateTime?           @map("inizio_noleggio")
+  fineNoleggio          DateTime?           @map("fine_noleggio")
+  kmAttuali             Int?                @map("km_attuali")
+  km_attuali_al         DateTime?
+  kmLimite              Int?                @map("km_limite")
+  scadenzaAssicurazione DateTime?           @map("scadenza_assicurazione")
+  costoAssicurazione    Decimal?            @map("costo_assicurazione") @db.Decimal(10, 2)
+  scadenzaRevisione     DateTime?           @map("scadenza_revisione")
+  costoRevisione        Decimal?            @map("costo_revisione") @db.Decimal(10, 2)
+  scadenzaBollo         DateTime?           @map("scadenza_bollo")
+  costoBollo            Decimal?            @map("costo_bollo") @db.Decimal(10, 2)
+  scadenzaTagliando     DateTime?           @map("scadenza_tagliando")
+  scadenzaTachigrafo    DateTime?           @map("scadenza_tachigrafo")
+  utilizzatore          String?
+  note                  String?
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  deletedAt             DateTime?           @map("deleted_at")
+  assegnazioni          AssegnazioneMezzo[]
+  manutenzioni          Manutenzione[]
+  ricariche             RicaricaElettrica[]
+  registro              RegistroMezzo[]
 
   @@index([stato])
   @@index([categoria])
@@ -223,6 +224,7 @@ model Padroncino {
   conteggiMensili         ConteggioMensile[]
   ricariche               RicaricaElettrica[]
   carteEni                CartaEni[]
+  registro                RegistroMezzo[]
 
   @@index([deletedAt])
   @@map("padroncini")
@@ -443,19 +445,19 @@ model Nota {
 }
 
 model Task {
-  id             String    @id @default(cuid())
-  entityType     String    @map("entity_type")
-  entityId       String    @map("entity_id")
-  testo          String
-  targa          String?
-  codiceAutista  String?   @map("codice_autista")
-  palmare        String?
-  padroncino     String?
-  completata     Boolean   @default(false)
-  userId         String?   @map("user_id")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  completedAt    DateTime? @map("completed_at")
-  user           User?     @relation(fields: [userId], references: [id])
+  id            String    @id @default(cuid())
+  entityType    String    @map("entity_type")
+  entityId      String    @map("entity_id")
+  testo         String
+  targa         String?
+  codiceAutista String?   @map("codice_autista")
+  palmare       String?
+  padroncino    String?
+  completata    Boolean   @default(false)
+  userId        String?   @map("user_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+  user          User?     @relation(fields: [userId], references: [id])
 
   @@index([entityType, entityId])
   @@map("tasks")
@@ -527,17 +529,17 @@ model RicaricaElettrica {
 // Anagrafica: 1 carta Eni → 1 utilizzatore (testo libero, con eventuale
 // collegamento opzionale a un Padroncino per riferimento/fatturazione futura).
 model CartaEni {
-  id            String                 @id @default(cuid())
-  numeroCarta   String                 @unique @map("numero_carta")
+  id            String                @id @default(cuid())
+  numeroCarta   String                @unique @map("numero_carta")
   utilizzatore  String?
-  padroncinoId  String?                @map("padroncino_id")
-  targaAbituale String?                @map("targa_abituale")
-  attiva        Boolean                @default(true)
+  padroncinoId  String?               @map("padroncino_id")
+  targaAbituale String?               @map("targa_abituale")
+  attiva        Boolean               @default(true)
   note          String?
-  createdAt     DateTime               @default(now()) @map("created_at")
-  updatedAt     DateTime               @updatedAt @map("updated_at")
-  deletedAt     DateTime?              @map("deleted_at")
-  padroncino    Padroncino?            @relation(fields: [padroncinoId], references: [id])
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  deletedAt     DateTime?             @map("deleted_at")
+  padroncino    Padroncino?           @relation(fields: [padroncinoId], references: [id])
   transazioni   TransazioneCartaEni[]
 
   @@index([padroncinoId])
@@ -567,34 +569,34 @@ model StazioneEni {
 // Il prezzo unitario NON è definitivo all'import: viene ricalcolato in base al
 // listino giornaliero (PrezzoGiornoEni) caricato/modificato separatamente.
 model TransazioneCartaEni {
-  id                   String     @id @default(cuid())
-  cartaId              String?    @map("carta_id")
-  numeroCarta          String     @map("numero_carta")
+  id                   String    @id @default(cuid())
+  cartaId              String?   @map("carta_id")
+  numeroCarta          String    @map("numero_carta")
   data                 DateTime
   mese                 String
-  tipoTransazione      String?    @map("tipo_transazione")
-  statoAutorizzativo   String     @map("stato_autorizzativo")
-  canaleAutorizzativo  String?    @map("canale_autorizzativo")
+  tipoTransazione      String?   @map("tipo_transazione")
+  statoAutorizzativo   String    @map("stato_autorizzativo")
+  canaleAutorizzativo  String?   @map("canale_autorizzativo")
   paese                String?
-  reteVendita          String?    @map("rete_vendita")
-  codiceImpianto       String?    @map("codice_impianto")
+  reteVendita          String?   @map("rete_vendita")
+  codiceImpianto       String?   @map("codice_impianto")
   localita             String?
   targa                String?
-  codiceSap            String?    @map("codice_sap")
-  numeroScontrino      String?    @map("numero_scontrino")
-  numeroAutorizzazione String?    @map("numero_autorizzazione")
+  codiceSap            String?   @map("codice_sap")
+  numeroScontrino      String?   @map("numero_scontrino")
+  numeroAutorizzazione String?   @map("numero_autorizzazione")
   chilometraggio       String?
-  codiceAutista        String?    @map("codice_autista")
+  codiceAutista        String?   @map("codice_autista")
   prodotto             String?
-  quantita             Decimal?   @db.Decimal(10, 3)
-  prezzoImportato      Decimal?   @map("prezzo_importato") @db.Decimal(10, 4)
-  prezzoUnitario       Decimal?   @map("prezzo_unitario") @db.Decimal(10, 4)
-  importoImportato     Decimal?   @map("importo_importato") @db.Decimal(10, 2)
-  importo              Decimal?   @db.Decimal(10, 2)
-  createdAt            DateTime   @default(now()) @map("created_at")
-  updatedAt            DateTime   @updatedAt @map("updated_at")
-  deletedAt            DateTime?  @map("deleted_at")
-  carta                CartaEni?  @relation(fields: [cartaId], references: [id])
+  quantita             Decimal?  @db.Decimal(10, 3)
+  prezzoImportato      Decimal?  @map("prezzo_importato") @db.Decimal(10, 4)
+  prezzoUnitario       Decimal?  @map("prezzo_unitario") @db.Decimal(10, 4)
+  importoImportato     Decimal?  @map("importo_importato") @db.Decimal(10, 2)
+  importo              Decimal?  @db.Decimal(10, 2)
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+  carta                CartaEni? @relation(fields: [cartaId], references: [id])
 
   @@index([mese])
   @@index([numeroCarta])
@@ -702,4 +704,39 @@ model VoceConteggio {
   deletedAt     DateTime?              @map("deleted_at")
 
   @@map("voci_conteggio")
+}
+
+/// Registro verbali, franchigie, rifatturazioni per mezzo.
+/// Le voci "automatiche" nascono dagli addebiti dei conteggi che contengono una targa:
+/// l'importo resta sempre quello del conteggio (non modificabile qui).
+model RegistroMezzo {
+  id                 String      @id @default(cuid())
+  conteggioRigaId    String?     @unique @map("conteggio_riga_id")
+  conteggioMensileId String?     @map("conteggio_mensile_id")
+  mese               String?
+  padroncinoId       String?     @map("padroncino_id")
+  mezzoId            String?     @map("mezzo_id")
+  targa              String
+  tipo               String      @default("ALTRO")
+  numero             String?
+  dataEvento         DateTime?   @map("data_evento") @db.Date
+  descrizione        String
+  importo            Decimal     @db.Decimal(10, 2)
+  percIva            Decimal?    @map("perc_iva") @db.Decimal(5, 2)
+  stato              String      @default("APERTO")
+  note               String?
+  manuale            Boolean     @default(false)
+  modificatoAMano    Boolean     @default(false) @map("modificato_a_mano")
+  rigaEliminata      Boolean     @default(false) @map("riga_eliminata")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  deletedAt          DateTime?   @map("deleted_at")
+  mezzo              Mezzo?      @relation(fields: [mezzoId], references: [id])
+  padroncino         Padroncino? @relation(fields: [padroncinoId], references: [id])
+
+  @@index([mezzoId])
+  @@index([targa])
+  @@index([padroncinoId])
+  @@index([mese])
+  @@map("registro_mezzi")
 }

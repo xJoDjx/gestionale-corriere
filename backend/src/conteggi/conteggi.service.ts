@@ -1,3 +1,4 @@
+import { RegistroMezziService } from '../registro-mezzi/registro-mezzi.service';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -11,6 +12,7 @@ export class ConteggiService {
   constructor(
     private prisma: PrismaService,
     private audit: AuditService,
+    private registro: RegistroMezziService,
   ) {}
 
   // ─── LIST ───────────────────────────────────────────
@@ -450,6 +452,7 @@ export class ConteggiService {
       } as any,
     });
 
+    await this.registro.sincronizzaConteggioSafe(conteggioId);
     return riga;
   }
 
@@ -492,6 +495,7 @@ export class ConteggiService {
       dataDopo: { ...updated, ...ctx } as any,
     });
 
+    await this.registro.sincronizzaConteggioSafe(riga.conteggioMensileId);
     return updated;
   }
 
@@ -530,6 +534,7 @@ export class ConteggiService {
       } as any,
     });
 
+    await this.registro.sincronizzaConteggioSafe(riga.conteggioMensileId);
     return { deleted: true };
   }
 
@@ -713,6 +718,9 @@ export class ConteggiService {
         dataDopo: { azione: 'salva_netto', nettoSalvato: dto.netto, ...ctx } as any,
       });
     }
+
+    // Registro verbali/addebiti per mezzo: legge gli addebiti con targa (non tocca il conteggio)
+    await this.registro.sincronizzaConteggioSafe(conteggioId);
 
     return this.findOneWithTotals(conteggioId);
   }
@@ -995,6 +1003,7 @@ export class ConteggiService {
         stato: conteggio.stato,
       } as any,
     });
+    await this.registro.sincronizzaConteggioSafe(id);
     return { deleted: true };
   }
 
@@ -1123,6 +1132,8 @@ export class ConteggiService {
         padroncino: padroncino.ragioneSociale,
       } as any,
     });
+
+    await this.registro.sincronizzaConteggioSafe(destinazione.id);
 
     return this.findOneWithTotals(destinazione.id);
   }

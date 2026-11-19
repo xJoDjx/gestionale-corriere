@@ -19,6 +19,7 @@ type Regola = { rw: string[]; r?: string[] };
 const REGOLE: Record<string, Regola> = {
   mezzi:              { rw: ['flotta'], r: ['dashboard', 'ricariche', 'padroncini', 'esportazione'] },
   manutenzioni:       { rw: ['flotta'] },
+  'registro-mezzi':   { rw: ['flotta'], r: ['padroncini', 'conteggi'] },
   documenti:          { rw: ['flotta', 'padroncini'] },
   palmari:            { rw: ['palmari'], r: ['dashboard', 'padroncini', 'esportazione'] },
   'codici-autista':   { rw: ['codici-autista'], r: ['dashboard', 'padroncini', 'esportazione'] },

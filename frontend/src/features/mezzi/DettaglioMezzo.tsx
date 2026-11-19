@@ -11,6 +11,9 @@ import ChiudiAssegnazioneModal from '../../components/ui/ChiudiAssegnazioneModal
 import type { ChiudiAssegnazioneTarget } from '../../components/ui/ChiudiAssegnazioneModal';
 import TabDocumenti from './TabDocumenti';
 import TabManutenzioni from './TabManutenzioni';
+import { RegistroVoci } from './RegistroMezzi';
+import type { VoceRegistro } from '../../lib/api';
+import { registroMezziApi } from '../../lib/api';
 import './FlottaMezzi.css';
 import './DettaglioMezzo.css';
 
@@ -356,7 +359,7 @@ function EvRow({ e, full }: { e: Evento; full?: boolean }) {
   );
 }
 
-type TabKey = 'info' | 'assegnazioni' | 'documenti' | 'manutenzioni' | 'note' | 'log';
+type TabKey = 'info' | 'assegnazioni' | 'documenti' | 'manutenzioni' | 'registro' | 'note' | 'log';
 type SezKey = 'id' | 'nol' | 'sca' | 'km';
 
 export default function DettaglioMezzo() {
@@ -371,6 +374,13 @@ export default function DettaglioMezzo() {
   const [form,     setForm]     = useState<Partial<Mezzo>>({});
   const [dirty,    setDirty]    = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('info');
+  // Numero di verbali/addebiti del mezzo (contatore sulla tab)
+  const [nRegistro, setNRegistro] = useState<number | null>(null);
+  const onRegistro = useCallback((v: VoceRegistro[]) => setNRegistro(v.length), []);
+  useEffect(() => {
+    if (!id) return;
+    registroMezziApi.list({ mezzoId: id }).then((v) => setNRegistro(v.length)).catch(() => setNRegistro(null));
+  }, [id]);
   const [sez,      setSez]      = useState<SezKey>('id');
   const [showAssegnaModal,  setShowAssegnaModal]  = useState(false);
   const [correggiAss, setCorreggiAss] = useState<{ id: string; dataInizio: string; dataFine: string; inCorso: boolean } | null>(null);
@@ -714,6 +724,7 @@ export default function DettaglioMezzo() {
     { key: 'assegnazioni', label: 'Assegnazioni', n: assegnazioni.length },
     { key: 'documenti', label: 'Documenti', n: docCount, warn: documentoContrattoMancante },
     { key: 'manutenzioni', label: 'Manutenzioni' },
+    { key: 'registro', label: 'Verbali e addebiti', n: nRegistro ?? undefined },
     { key: 'note', label: 'Note', n: noteList.length },
     { key: 'log', label: 'Storico', n: eventi.length },
   ];
@@ -971,6 +982,19 @@ export default function DettaglioMezzo() {
 
       {/* ── MANUTENZIONI ── */}
       {activeTab === 'manutenzioni' && id && <TabManutenzioni mezzoId={id} />}
+
+      {/* ── VERBALI E ADDEBITI ── */}
+      {activeTab === 'registro' && id && (
+        <section className="dm2-card dm2-list">
+          <div className="dm2-lhead">
+            <div className="dm2-col" style={{ gap: 2 }}>
+              <h2 className="dm2-h2">Verbali e addebiti</h2>
+              <span className="dm2-muted">Presi dagli addebiti dei conteggi che contengono questa targa · l'importo resta quello del conteggio</span>
+            </div>
+          </div>
+          <div style={{ padding: '0 18px 16px' }}><RegistroVoci mezzoId={id} targa={mezzo.targa} conTarga={false} onCaricate={onRegistro} /></div>
+        </section>
+      )}
 
       {/* ── NOTE ── */}
       {activeTab === 'note' && (

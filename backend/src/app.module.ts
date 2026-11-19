@@ -1,3 +1,4 @@
+import { RegistroMezziModule } from './registro-mezzi/registro-mezzi.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { SezioniGuard } from './auth/sezioni.guard';
@@ -47,6 +48,7 @@ import { TaskModule } from './task/task.module';
     NoteModule,
     CarteEniModule,
     TaskModule,
+    RegistroMezziModule,
   ],
   providers: [
     // Guard JWT applicato globalmente a tutti gli endpoint.
