@@ -8,7 +8,7 @@ import type { PadroncinoMezzo, PadroncinoPalmare, PadroncinoCodiceAutista } from
 import LogEntita from '../log/LogEntita';
 import DocumentPreview from '../../components/ui/DocumentPreview';
 import type { PreviewTarget } from '../../components/ui/DocumentPreview';
-import { Page, PageHeader, Card, Kpis, Button, SegTabs, Tabs, SearchBox, Select, Th, Dot, Empty, Alert, Tile, Icon, C, useSort, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
+import { Page, PageHeader, Card, Kpis, Button, SegTabs, Tabs, SearchBox, Select, Th, Dot, Empty, Alert, Tile, Icon, BarStrip, C, useSort, fmtEur as fmtEur2, fmtNum as fmtNum2 } from '../../components/ds';
 import type { Tone, IconName } from '../../components/ds';
 import './Padroncini2.css';
 import {
@@ -1355,6 +1355,7 @@ function CustomTooltip({ active, payload, label }: any) {
 function TabStoricoConteggi({ p }: { p: Padroncino }) {
   const [storico, setStorico] = useState<StoricoMese[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartSel, setChartSel] = useState<number | null>(null);
   const navigate = useNavigate();
   const prevMeseRef = useRef(new Map<string, StoricoMese>());
 
@@ -1408,7 +1409,6 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
     }));
 
   prevMeseRef.current = prevMese;
-  const maxV = Math.max(1, ...chartData.map((d) => Math.max(d.fatturato, d.netto)));
   const STATO_TONE: Record<string, Tone> = { BOZZA: 'warn', CHIUSO: 'na', CONFERMATO: 'ok' };
   const deltaTxt = (pct: number | null) => pct == null ? <span className="pdx-muted">—</span>
     : <span style={{ color: pct >= 0 ? '#15803D' : '#B91C1C', fontWeight: 600 }}>{pct >= 0 ? '+' : '−'}{fmtNum2(Math.abs(pct), 1)}%</span>;
@@ -1417,18 +1417,23 @@ function TabStoricoConteggi({ p }: { p: Padroncino }) {
     <TabCard
       title="Storico conteggi"
       sub={`${storico.length} mes${storico.length === 1 ? 'e' : 'i'} · fatturato ${fmtEur2(totFatt)} · addebiti e compensazioni ${fmtEur2(totAdd)} · netto ${fmtEur2(totNetto)}`}
-      foot="Fatturato con IVA (blu) e netto bonificato (verde) per mese · clic su una riga per aprire il conteggio"
+      foot="Clic su una riga per aprire il conteggio"
     >
-      <div role="img" aria-label="Fatturato con IVA e netto bonificato per mese" className="pdx-chart">
-        {chartData.map((m) => (
-          <div key={m.mese} className="pdx-chart-col" title={`${m.mese} · fatturato ${fmtEur2(m.fatturato)} · addebiti ${fmtEur2(m.addebiti)} · netto ${fmtEur2(m.netto)}`}>
-            <div className="pdx-chart-bars">
-              <span style={{ height: `${Math.max(0, (m.fatturato / maxV) * 100)}%`, background: C.blue }} />
-              <span style={{ height: `${Math.max(0, (m.netto / maxV) * 100)}%`, background: C.green }} />
-            </div>
-            <span className="pdx-chart-l">{m.mese.split(' ')[0].toLowerCase()}</span>
-          </div>
-        ))}
+      <div style={{ padding: '4px 18px 14px' }}>
+        <BarStrip
+          data={chartData.map((m) => ({
+            label: m.mese.split(' ')[0].toLowerCase().slice(0, 3),
+            total: Math.max(0, m.fatturato),
+            part: Math.max(0, Math.min(m.netto, m.fatturato)),
+            valueLabel: m.fatturato ? `${Math.round(m.fatturato / 1000)}k` : '—',
+            tip: `${m.mese} · fatturato ${fmtEur2(m.fatturato)} · addebiti ${fmtEur2(m.addebiti)} · netto ${fmtEur2(m.netto)}`,
+          }))}
+          palette="blue"
+          legend={['Fatturato con IVA', 'Netto bonificato']}
+          selected={chartSel ?? chartData.length - 1}
+          onSelect={setChartSel}
+          ariaLabel="Fatturato con IVA e netto bonificato per mese"
+        />
       </div>
       <div className="ds-tablewrap">
         <table className="ds-table pdx-table" style={{ minWidth: 980 }}>
