@@ -119,9 +119,11 @@
 .dm2-ev-doc { grid-template-columns: 26px 90px 120px minmax(0, 1.4fr) minmax(0, 1fr) auto; }
 /* ricerca e anteprima documenti */
 .dm2-docsearch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 18px 12px; }
-.dm2-docq { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; border: 1px solid #E4E4E7; border-radius: 8px; background: #fff; color: #6B6B73; }
+.dm2-docq { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border: 1.5px solid #6E8FF5; border-radius: 8px; background: #fff; color: #3D63F0; }
+.dm2-docq:hover { border-color: #3D63F0; }
+.dm2-docq input::placeholder { color: #71717A; }
 .dm2-docq:focus-within { border-color: #3D63F0; box-shadow: 0 0 0 3px #E8EDFD; }
-.dm2-docq input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; color: #0B0B0C; }
+.dm2-docq input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: #0B0B0C; }
 .dm2-docq button { border: 0; background: none; padding: 2px; cursor: pointer; color: #6B6B73; display: flex; }
 .dm2-docsel { min-height: 34px; padding: 0 10px; border: 1px solid #E4E4E7; border-radius: 8px; background: #fff; font: inherit; font-size: 13px; color: #0B0B0C; }
 button.dm2-doclink { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; text-align: left; cursor: pointer; color: inherit; max-width: 100%; }

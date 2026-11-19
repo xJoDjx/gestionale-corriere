@@ -82,9 +82,13 @@ tr:hover .fl-targa-link { color: var(--primary); }
 .fl-kmbar .fl-avviso-btn { flex: 0 0 auto; white-space: nowrap; }
 @media (max-width: 900px) { .fl-kmbar { flex-wrap: wrap; } }
 /* riepilogo richiudibile */
-.fl-riep-toggle { display: flex; justify-content: space-between; gap: 10px; margin: -4px 0; }
-.fl-riep-toggle button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 2px; font: inherit; font-size: 12.5px; color: #52525B; cursor: pointer; }
-.fl-riep-toggle button:hover { color: var(--ink); }
+.fl-riep-toggle { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fl-riep-pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #AFA9EC; background: #EEEDFE; color: #3C3489; border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.fl-riep-pill:hover { background: #E2E0FC; border-color: #7F77DD; }
+.fl-riep-pill[aria-expanded="true"] { background: #FFFFFF; }
+.fl-riep-badge { background: #A32D2D; color: #FFFFFF; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 600; }
+.fl-riep-link { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 4px 2px; font: inherit; font-size: 12.5px; color: #52525B; cursor: pointer; }
+.fl-riep-link:hover { color: var(--ink); }
 .fl-scroll { max-height: 260px; }
 .fl-drawer-all { display: inline-flex; align-items: center; gap: 4px; margin: 8px 18px 0; border: 0; background: none; padding: 2px 0; font: inherit; font-size: 12.5px; color: #3D63F0; cursor: pointer; align-self: flex-start; }
 .fl-drawer-all:hover { text-decoration: underline; }

@@ -57,8 +57,11 @@
 .ds-iconbtn-danger { color: var(--st-ko); }
 
 /* ─── Campi ────────────────────────────────── */
-.ds-search { display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); color: var(--text-muted); min-width: 220px; background: #FFFFFF; }
-.ds-search input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; color: var(--ink); }
+.ds-search { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #6E8FF5; color: #3D63F0; min-width: 260px; background: #FFFFFF; font-size: 14px; }
+.ds-search:hover { border-color: #3D63F0; }
+.ds-search svg { width: 16px; height: 16px; flex: none; }
+.ds-search input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); }
+.ds-search input::placeholder { color: #71717A; }
 .ds-select { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: #FFFFFF; }
 .ds-select-sm { min-height: 34px; padding: 0 10px; }
 .ds-select > span { color: var(--text-muted); white-space: nowrap; }
