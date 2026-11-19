@@ -47,6 +47,8 @@ export const navItems: NavEntry[] = [
 ];
 
 const COLLAPSED_KEY = 'gc.sidebar.collapsed';
+const THEME_KEY = 'gc.sidebar.tema';
+type TemaSidebar = 'scuro' | 'chiaro';
 
 export function useCanSee() {
   const { user } = useAuthStore();
@@ -60,6 +62,14 @@ export default function Sidebar() {
   const location = useLocation();
   const canSee = useCanSee();
   const [collapsed, setCollapsed] = useState<boolean>(() => typeof window !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === '1');
+  const [tema, setTema] = useState<TemaSidebar>(() => {
+    try { return localStorage.getItem(THEME_KEY) === 'chiaro' ? 'chiaro' : 'scuro'; } catch { return 'scuro'; }
+  });
+  const cambiaTema = () => setTema(t => {
+    const nuovo: TemaSidebar = t === 'scuro' ? 'chiaro' : 'scuro';
+    try { localStorage.setItem(THEME_KEY, nuovo); } catch { /* ignora */ }
+    return nuovo;
+  });
   const [sospesiCount, setSospesiCount] = useState(0);
   const [scadenze, setScadenze] = useState<number | null>(null);
 
@@ -85,7 +95,7 @@ export default function Sidebar() {
   const ruolo = user?.ruolo === 'ADMIN' ? 'Amministratore' : user?.ruolo === 'OPERATORE' ? 'Operatore' : user?.ruolo === 'VIEWER' ? 'Solo lettura' : '';
 
   return (
-    <nav aria-label="Navigazione principale" className={`sb ${collapsed ? 'is-collapsed' : ''}`}>
+    <nav aria-label="Navigazione principale" className={`sb ${collapsed ? 'is-collapsed' : ''} ${tema === 'scuro' ? 'is-dark' : ''}`}>
       <div className="sb-inner">
         <div className="sb-brand">
           {!collapsed && (
@@ -142,7 +152,11 @@ export default function Sidebar() {
                 <span className="sb-user-role">{ruolo}</span>
               </span>
             )}
-            <button type="button" className="ds-iconbtn" onClick={handleLogout} aria-label="Esci" title="Esci">
+            <button type="button" className="ds-iconbtn sb-footbtn" onClick={cambiaTema}
+              aria-label={tema === 'scuro' ? 'Menu chiaro' : 'Menu scuro'} title={tema === 'scuro' ? 'Passa al menu chiaro' : 'Passa al menu scuro'}>
+              <Icon name={tema === 'scuro' ? 'sun' : 'moon'} size={15} />
+            </button>
+            <button type="button" className="ds-iconbtn sb-footbtn" onClick={handleLogout} aria-label="Esci" title="Esci">
               <Icon name="logout" size={15} />
             </button>
           </div>
