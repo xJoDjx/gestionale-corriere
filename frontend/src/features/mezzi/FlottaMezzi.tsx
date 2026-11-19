@@ -12,7 +12,7 @@ import TaskModal from '../../components/ui/TaskModal';
 import type { TaskModalSubmitData } from '../../components/ui/TaskModal';
 import { type AuditEntry, getHumanReadableDescription, fmtDate as fmtDateOra } from '../../lib/auditFormat';
 import {
-  Page, PageHeader, Button, IconButton, Tabs, SegTabs, Empty, Alert, Th, Icon, C,
+  Page, PageHeader, Button, IconButton, Tabs, SegTabs, Empty, Alert, Th, Icon, FilterMenu, C,
   fmtNum, type Tone, type IconName,
 } from '../../components/ds';
 import TaskList from '../../components/ds/TaskList';
@@ -101,6 +101,12 @@ const ALIMENTAZIONE_BADGE: Record<string, { label: string; icon: string; cls: st
   ELETTRICO:    { label: 'Elettrico',      icon: '⚡', cls: 'fm-alim-elettrico'},
   IBRIDO:       { label: 'Ibrido',         icon: '🔋', cls: 'fm-alim-ibrido'   },
   METANO:       { label: 'Metano',         icon: '💧', cls: 'fm-alim-metano'   },
+};
+
+// Icona e colore per il filtro alimentazione
+const ALIM_ICON: Record<string, [IconName, string]> = {
+  GASOLIO: ['goccia', '#52525B'], DIESEL: ['goccia', '#52525B'], GASOLIO_MHEV: ['goccia', '#0E7490'],
+  BENZINA: ['eni', '#EA580C'], ELETTRICO: ['ric', '#0D9488'], IBRIDO: ['refresh', '#16A34A'], METANO: ['goccia', '#CA8A04'],
 };
 
 const AUDIT_BADGE: Record<string, { label: string; cls: string }> = {
@@ -558,6 +564,12 @@ export default function FlottaMezzi() {
   }).length;
   const sortState = { key: sortField, dir: sortOrder };
   const alimentazioni = Array.from(new Set(mezzi.map(m => m.alimentazione).filter(Boolean))).sort();
+  // Conteggi nei menu filtro: mezzi della scheda di stato selezionata (Attivi, Assegnati…)
+  const mezziScheda = mezzi.filter(m => {
+    const st = m.stato.toUpperCase();
+    return filtroStato === 'TUTTI' ? true : filtroStato === 'ATTIVI' ? st !== 'DISMESSO' && st !== 'VENDUTO' : st === filtroStato;
+  });
+  const contaFiltro = (f: (m: Mezzo) => boolean) => mezziScheda.filter(f).length;
   const nColVisibili = COL_DEFS.filter(c => cols[c.key]).length;
   const SORT_LABEL: Record<string, string> = { targa: 'targa', tipo: 'possesso', tipoMezzo: 'tipo', marca: 'marca', alimentazione: 'alimentazione', stato: 'stato', padroncino: 'assegnatario', assicurazione: 'assicurazione', revisione: 'revisione', canone: 'canone', rata: 'rata', kmPct: 'km', kmAggiornatiAl: 'data km', fineNoleggio: 'fine noleggio', inseritoIl: 'data di inserimento' };
   const AVC = [C.blue, C.green, C.orange, C.purple, '#18181B', C.red, C.teal];
@@ -720,28 +732,27 @@ export default function FlottaMezzi() {
               <span className="sr-only">Cerca targa, marca, padroncino</span>
               <input placeholder="Cerca targa, marca, padroncino…" value={search} onChange={e => setSearch(e.target.value)} />
             </label>
-            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Possesso</span>
-              <select value={filtroPossesso} onChange={e => setFiltroPossesso(e.target.value as any)}>
-                <option value="TUTTI">Possesso</option>
-                <option value="PROPRIETA">Proprietà</option>
-                <option value="NOLEGGIO">Noleggio</option>
-                <option value="ESTERNO">Esterno</option>
-              </select><Icon name="chevDown" size={12} />
-            </label>
-            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Categoria</span>
-              <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value as any)}>
-                <option value="TUTTI">Categoria</option>
-                <option value="DISTRIBUZIONE">Distribuzione</option>
-                <option value="AUTO_AZIENDALE">Auto aziendale</option>
-                <option value="FLOTTA">Flotta</option>
-              </select><Icon name="chevDown" size={12} />
-            </label>
-            <label className="ds-btn ds-btn-sm fl-dd"><span className="sr-only">Alimentazione</span>
-              <select value={filtroAlim} onChange={e => setFiltroAlim(e.target.value)}>
-                <option value="TUTTE">Alimentazione</option>
-                {alimentazioni.map(a => <option key={a} value={a}>{ALIMENTAZIONE_BADGE[a]?.label ?? a}</option>)}
-              </select><Icon name="chevDown" size={12} />
-            </label>
+            <FilterMenu label="Possesso" value={filtroPossesso} allValue="TUTTI" allLabel="Tutti i mezzi"
+              onChange={v => setFiltroPossesso(v as any)}
+              options={[
+                { value: 'NOLEGGIO', label: 'Noleggio', icon: 'cal', color: C.blue, count: contaFiltro(m => (m.tipoPossesso ?? 'NOLEGGIO') === 'NOLEGGIO') },
+                { value: 'PROPRIETA', label: 'Proprietà', icon: 'scudo', color: C.green, count: contaFiltro(m => m.tipoPossesso === 'PROPRIETA') },
+                { value: 'ESTERNO', label: 'Esterno', icon: 'link', color: C.purple, count: contaFiltro(m => m.tipoPossesso === 'ESTERNO') },
+              ]} />
+            <FilterMenu label="Categoria" value={filtroCategoria} allValue="TUTTI" allLabel="Tutte le categorie"
+              onChange={v => setFiltroCategoria(v as any)}
+              options={[
+                { value: 'DISTRIBUZIONE', label: 'Distribuzione', icon: 'sped', color: C.teal, count: contaFiltro(m => (m.categoria ?? 'DISTRIBUZIONE') === 'DISTRIBUZIONE') },
+                { value: 'AUTO_AZIENDALE', label: 'Auto aziendale', icon: 'user', color: C.yellow, count: contaFiltro(m => m.categoria === 'AUTO_AZIENDALE') },
+                { value: 'FLOTTA', label: 'Flotta', icon: 'mezzi', color: '#52525B', count: contaFiltro(m => m.categoria === 'FLOTTA') },
+              ]} />
+            <FilterMenu label="Alimentazione" value={filtroAlim} allValue="TUTTE" allLabel="Tutte"
+              onChange={setFiltroAlim}
+              options={alimentazioni.map(a => ({
+                value: a, label: ALIMENTAZIONE_BADGE[a]?.label ?? a,
+                icon: ALIM_ICON[a]?.[0] ?? 'goccia', color: ALIM_ICON[a]?.[1] ?? '#71717A',
+                count: contaFiltro(m => m.alimentazione === a),
+              }))} />
             <div className="ds-pop" ref={colPickerRef}>
               <Button size="sm" icon="columns" aria-expanded={colPickerOpen} onClick={() => setColPickerOpen(o => !o)}>Colonne {nColVisibili + 1}/{COL_DEFS.length + 1}</Button>
               {colPickerOpen && (
@@ -838,7 +849,9 @@ export default function FlottaMezzi() {
                       <td className="fl-ellipsis" title={nomePad ?? undefined}>
                         {padroncino ? (
                           <span className="fl-pad"><span aria-hidden="true" className="fl-padav" style={{ background: padIdx(padroncino.ragioneSociale) }}>{iniziali(padroncino.ragioneSociale)}</span>{padroncino.ragioneSociale}</span>
-                        ) : m.utilizzatore ? <span>{m.utilizzatore}</span> : <span className="fl-empty">—</span>}
+                        ) : m.utilizzatore ? (
+                          <span className="fl-pad" title={`Utilizzatore: ${m.utilizzatore}`}><span aria-hidden="true" className="fl-padav is-util"><Icon name="user" size={11} stroke={2.4} /></span>{m.utilizzatore}</span>
+                        ) : <span className="fl-empty">—</span>}
                       </td>
                     )}
                     {cols.assicurazione && <td>{dotData(m.scadenzaAssicurazione)}</td>}

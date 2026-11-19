@@ -63,6 +63,7 @@ tr:hover .fl-targa-link { color: var(--primary); }
 .fl-dot i { width: 6px; height: 6px; border-radius: 999px; flex: 0 0 6px; }
 .fl-pad { display: inline-flex; align-items: center; gap: 8px; }
 .fl-padav { flex: 0 0 20px; height: 20px; border-radius: 5px; color: #FFFFFF; font-size: 9.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.fl-padav.is-util { background: #E4E4E7; color: #52525B; }
 .fl-km { display: flex; flex-direction: column; gap: 3px; font-size: 12px; min-width: 110px; }
 .fl-drawer-wrap { position: fixed; inset: 0; z-index: 900; background: rgba(11, 11, 12, 0.24); display: flex; justify-content: flex-end; }
 .fl-drawer { width: min(460px, 100vw); height: 100%; background: #FFFFFF; border-left: 1px solid var(--border); box-shadow: -16px 0 40px rgba(11, 11, 12, 0.12); display: flex; flex-direction: column; }
