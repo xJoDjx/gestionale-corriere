@@ -366,6 +366,8 @@ model ConteggiRiga {
   updatedAt          DateTime         @updatedAt @map("updated_at")
   contoVoce          String?          @map("conto_voce")
   percIva            Decimal?         @map("perc_iva") @db.Decimal(5, 2)
+  /// Mese da cui la riga è stata duplicata (es. "2026-09"); si azzera alla prima modifica reale
+  copiataDaMese      String?          @map("copiata_da_mese")
   conteggioMensile   ConteggioMensile @relation(fields: [conteggioMensileId], references: [id], onDelete: Cascade)
 
   @@index([conteggioMensileId])
