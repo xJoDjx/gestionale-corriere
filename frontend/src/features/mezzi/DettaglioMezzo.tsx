@@ -373,6 +373,7 @@ export default function DettaglioMezzo() {
   const [activeTab, setActiveTab] = useState<TabKey>('info');
   const [sez,      setSez]      = useState<SezKey>('id');
   const [showAssegnaModal,  setShowAssegnaModal]  = useState(false);
+  const [correggiAss, setCorreggiAss] = useState<{ id: string; dataInizio: string; dataFine: string; inCorso: boolean } | null>(null);
   const [chiudiTarget, setChiudiTarget] = useState<ChiudiAssegnazioneTarget | null>(null);
   const [showContrattoModal,setShowContrattoModal]= useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -546,6 +547,14 @@ export default function DettaglioMezzo() {
 
   // ── Dati derivati (solo visualizzazione) ──
   const assegnazioni = mezzo.assegnazioni ?? [];
+  const salvaCorrezioneAss = async () => {
+    if (!correggiAss) return;
+    try {
+      await mezziApi.correggiDateAssegnazione(correggiAss.id, { dataInizio: correggiAss.dataInizio, dataFine: correggiAss.inCorso ? null : (correggiAss.dataFine || null) });
+      setCorreggiAss(null);
+      await load();
+    } catch (e: any) { alert('Date non salvate: ' + e.message); }
+  };
   const assegnazionAttiva = assegnazioni.find(a => !a.dataFine);
   const precedente = assegnazioni.filter(a => a.dataFine).sort((a, b) => (b.dataFine ?? '').localeCompare(a.dataFine ?? ''))[0];
   const documentoContrattoMancante = !!assegnazionAttiva && !haContrattoNoleggio;
@@ -928,9 +937,28 @@ export default function DettaglioMezzo() {
                 <span className="dm2-ev-data">{fmtDate(a.dataInizio)}</span>
                 <StatusTag tone={a.dataFine ? 'na' : 'ok'}>{a.dataFine ? 'Chiusa' : 'In corso'}</StatusTag>
                 <button type="button" className="dm2-ev-tit dm2-link" onClick={() => navigate(`/padroncini/${a.padroncino.id}`)}>{a.padroncino.ragioneSociale}</button>
-                <span className="dm2-ev-val">{a.dataFine ? `Dal ${fmtDate(a.dataInizio)} al ${fmtDate(a.dataFine)}` : `Dal ${fmtDate(a.dataInizio)}${rata != null ? ` · rata ${fmtEur(rata)}` : ''}`}</span>
+                {correggiAss?.id === a.id ? (
+                  <span className="dm2-ev-val dm2-row" style={{ gap: 6 }}>
+                    <input type="date" className="dm2-input" aria-label="Data di inizio" value={correggiAss.dataInizio} onChange={e => setCorreggiAss(c => c && ({ ...c, dataInizio: e.target.value }))} />
+                    <span className="dm2-muted">→</span>
+                    {a.dataFine
+                      ? <input type="date" className="dm2-input" aria-label="Data di fine" value={correggiAss.dataFine} onChange={e => setCorreggiAss(c => c && ({ ...c, dataFine: e.target.value }))} />
+                      : <span className="dm2-muted">in corso</span>}
+                  </span>
+                ) : (
+                  <span className="dm2-ev-val">
+                    {a.dataFine ? `Dal ${fmtDate(a.dataInizio)} al ${fmtDate(a.dataFine)}` : `Dal ${fmtDate(a.dataInizio)}${rata != null ? ` · rata ${fmtEur(rata)}` : ''}`}
+                    {!a.dataFine && a.dataInizio.slice(0, 10) > new Date().toISOString().slice(0, 10) && <span style={{ color: '#C2410C', fontWeight: 600 }}> · data nel futuro</span>}
+                  </span>
+                )}
                 <span className="dm2-row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                  {!a.dataFine && <button type="button" className="dm2-btn dm2-btn-xs" onClick={() => handleChiudiAssegnazione(a.id, a.padroncino.ragioneSociale, a.dataInizio)}>Chiudi</button>}
+                  {correggiAss?.id === a.id ? (<>
+                    <button type="button" className="dm2-btn dm2-btn-xs" onClick={() => setCorreggiAss(null)}>Annulla</button>
+                    <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-primary" disabled={!correggiAss.dataInizio} onClick={salvaCorrezioneAss}>Salva date</button>
+                  </>) : (
+                    <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon" aria-label="Correggi le date" title="Correggi le date (senza chiudere)" onClick={() => setCorreggiAss({ id: a.id, dataInizio: a.dataInizio.slice(0, 10), dataFine: a.dataFine ? a.dataFine.slice(0, 10) : '', inCorso: !a.dataFine })}><Svg d={PATH.edit} size={12} /></button>
+                  )}
+                  {!a.dataFine && correggiAss?.id !== a.id && <button type="button" className="dm2-btn dm2-btn-xs" onClick={() => handleChiudiAssegnazione(a.id, a.padroncino.ragioneSociale, a.dataInizio)}>Chiudi</button>}
                   <button type="button" className="dm2-btn dm2-btn-xs dm2-btn-icon dm2-btn-danger" aria-label={`Elimina assegnazione a ${a.padroncino.ragioneSociale}`} title="Elimina dall'archivio" onClick={() => handleEliminaAssegnazione(a.id, a.padroncino.ragioneSociale)}><Svg d={PATH.trash} size={12} /></button>
                 </span>
               </div>

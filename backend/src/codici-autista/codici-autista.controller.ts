@@ -88,4 +88,13 @@ export class CodiciAutistaController {
     const userId: string = req.user?.id ?? 'system';
     return this.service.remove(id, userId);
   }
+
+  @Put('assegnazioni/:assegnazioneId/date')
+  correggiDateAssegnazione(
+    @Param('assegnazioneId') id: string,
+    @Body() body: { dataInizio?: string; dataFine?: string | null },
+    @Req() req: any,
+  ) {
+    return this.service.correggiDateAssegnazione(id, req.user.id, body);
+  }
 }

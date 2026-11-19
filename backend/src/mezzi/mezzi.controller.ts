@@ -117,4 +117,13 @@ export class MezziController {
     const userId: string = req.user?.id ?? 'system';
     return this.service.deleteAssegnazione(id, userId);
   }
+
+  @Put('assegnazioni/:assegnazioneId/date')
+  correggiDateAssegnazione(
+    @Param('assegnazioneId') id: string,
+    @Body() body: { dataInizio?: string; dataFine?: string | null },
+    @Request() req: any,
+  ) {
+    return this.service.correggiDateAssegnazione(id, req.user.id, body);
+  }
 }

@@ -79,4 +79,13 @@ export class PalmariController {
   ) {
     return this.service.chiudiAssegnazione(id, req.user.id, body?.dataFine);
   }
+
+  @Put('assegnazioni/:assegnazioneId/date')
+  correggiDateAssegnazione(
+    @Param('assegnazioneId') id: string,
+    @Body() body: { dataInizio?: string; dataFine?: string | null },
+    @Req() req: any,
+  ) {
+    return this.service.correggiDateAssegnazione(id, req.user.id, body);
+  }
 }
