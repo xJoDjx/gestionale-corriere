@@ -168,7 +168,7 @@ export default function FlottaMezzi() {
   const [pannello, setPannello] = useState<null | 'attivita' | 'note' | 'modifiche'>(null);
   const [scadTab90, setScadTab90] = useState<string>('Tutte');
   // Riepilogo (scadenze e composizione) richiudibile; la scelta resta salvata nel browser
-  const [riepChiuso, setRiepChiuso] = useState<boolean>(() => { try { return localStorage.getItem('flotta_riepilogo_chiuso') === '1'; } catch { return false; } });
+  const [riepChiuso, setRiepChiuso] = useState<boolean>(() => { try { return localStorage.getItem('flotta_riepilogo_chiuso') !== '0'; } catch { return true; } });
   const toggleRiep = () => setRiepChiuso((v) => { try { localStorage.setItem('flotta_riepilogo_chiuso', v ? '0' : '1'); } catch { /* ignora */ } return !v; });
 
   type SortField = 'targa' | 'tipo' | 'tipoMezzo' | 'marca' | 'alimentazione' | 'stato' | 'padroncino' | 'assicurazione' | 'revisione' | 'canone' | 'rata' | 'kmPct' | 'kmAggiornatiAl' | 'fineNoleggio' | 'inseritoIl';
@@ -635,11 +635,13 @@ export default function FlottaMezzi() {
       )}
 
       <div className="fl-riep-toggle">
-        <button type="button" aria-expanded={!riepChiuso} onClick={() => toggleRiep()}>
-          <Icon name={riepChiuso ? 'chevRight' : 'chevDown'} size={13} />
-          {riepChiuso ? `Mostra scadenze e composizione${scad90Tot ? ` · ${scad90Tot} già scadute` : ''}` : 'Nascondi scadenze e composizione'}
+        <button type="button" className="fl-riep-pill" aria-expanded={!riepChiuso} onClick={() => toggleRiep()}>
+          <Icon name="cal" size={15} />
+          {riepChiuso ? 'Scadenze e composizione' : 'Nascondi scadenze e composizione'}
+          {scad90Tot > 0 && <span className="fl-riep-badge">{scad90Tot} {scad90Tot === 1 ? 'scaduta' : 'scadute'}</span>}
+          <Icon name={riepChiuso ? 'chevDown' : 'chevUp'} size={14} />
         </button>
-        <button type="button" onClick={() => document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' })}>
+        <button type="button" className="fl-riep-link" onClick={() => document.getElementById('fl-tabella')?.scrollIntoView({ behavior: 'smooth' })}>
           Vai all'elenco mezzi <Icon name="chevDown" size={13} />
         </button>
       </div>
@@ -712,7 +714,7 @@ export default function FlottaMezzi() {
             <span className="ds-cardsub">Clic su un'intestazione per ordinare · clic di nuovo per invertire</span>
           </div>
           <div className="ds-actions">
-            <label className="ds-search" style={{ minWidth: 220 }}>
+            <label className="ds-search" style={{ minWidth: 300 }}>
               <Icon name="search" size={13} />
               <span className="sr-only">Cerca targa, marca, padroncino</span>
               <input placeholder="Cerca targa, marca, padroncino…" value={search} onChange={e => setSearch(e.target.value)} />
