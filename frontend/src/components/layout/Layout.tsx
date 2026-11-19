@@ -45,33 +45,17 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', onKey);
   }, [navigate]);
 
-  const initials = `${user?.nome?.[0] || ''}${user?.cognome?.[0] || ''}`.toUpperCase() || 'U';
 
   return (
     <div className="app-layout">
       <Sidebar />
       <div className="app-main">
-        <header className="topbar">
-          <nav aria-label="Percorso" className="topbar-crumbs">
-            <Link to="/">Gestionale</Link>
-            {crumbs.map((c, i) => (
-              <span key={i} className="topbar-crumb">
-                <span aria-hidden="true">/</span>
-                {c.to ? <Link to={c.to}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}
-              </span>
-            ))}
-          </nav>
-          <div className="topbar-right">
-            {canSee('ricerca') && (
-              <Link to="/ricerca" className="topbar-search">
-                <Icon name="search" size={14} />
-                <span>Cerca ovunque…</span>
-                <kbd>Ctrl K</kbd>
-              </Link>
-            )}
-            <span aria-hidden="true" className="topbar-avatar" title={[user?.nome, user?.cognome].filter(Boolean).join(' ')}>{initials}</span>
-          </div>
-        </header>
+        {/* Nelle schede di dettaglio: piccolo link per tornare all'elenco (al posto della vecchia barra in alto) */}
+        {crumbs.length > 1 && crumbs[0].to && (
+          <Link to={crumbs[0].to} className="app-back">
+            <Icon name="chevLeft" size={13} />{crumbs[0].label}
+          </Link>
+        )}
         <main className="app-content">
           <Outlet />
         </main>

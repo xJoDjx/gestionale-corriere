@@ -110,6 +110,13 @@ export default function Sidebar() {
           </button>
         </div>
 
+        {canSee('ricerca') && (
+          <Link to="/ricerca" className="sb-search" title="Cerca ovunque (Ctrl K)" aria-label="Cerca ovunque">
+            <Icon name="search" size={14} />
+            {!collapsed && <><span>Cerca ovunque…</span><kbd>Ctrl K</kbd></>}
+          </Link>
+        )}
+
         <div className="sb-scroll">
           {navGroups.map(g => {
             const items = g.items.filter(i => canSee(i.key));
