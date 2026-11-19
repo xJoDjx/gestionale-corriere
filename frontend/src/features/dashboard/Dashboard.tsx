@@ -123,7 +123,18 @@ export default function Dashboard() {
   ];
 
   // ─── Grafico ────────────────────────────────────────
-  const chartData = fino(periodo).map(a => ({
+  // Grafico: la finestra resta ancorata all'ultimo mese disponibile, così cliccando un mese
+  // precedente le barre successive non spariscono (prima la finestra finiva al mese selezionato).
+  const finestra = (n: number) => {
+    if (andamento.length === 0) return [];
+    // ultimo mese con dati (o quello selezionato, se più avanti)
+    let end = andamento.length - 1;
+    while (end > 0 && end > iA && !Number(andamento[end].fatturato) && !nettoA(andamento[end])) end--;
+    let start = Math.max(0, end - n + 1);
+    if (iA >= 0 && iA < start) { start = iA; end = Math.min(andamento.length - 1, iA + n - 1); }
+    return andamento.slice(start, end + 1);
+  };
+  const chartData = finestra(periodo).map(a => ({
     label: MESI[Number(a.mese.split('-')[1]) - 1].slice(0, 3),
     total: Number(a.fatturato || 0),
     part: nettoA(a),
