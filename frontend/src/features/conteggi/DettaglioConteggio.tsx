@@ -1349,7 +1349,6 @@ export default function DettaglioConteggio() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingConteggio, setDeletingConteggio] = useState(false);
-  const [aggiornaRicariche, setAggiornaRicariche] = useState(false);
   // Modal "Duplica da altro mese"
   const [duplicaOpen, setDuplicaOpen] = useState(false);
   const [duplicaMesiDisponibili, setDuplicaMesiDisponibili] = useState<string[]>([]);
@@ -2261,50 +2260,6 @@ export default function DettaglioConteggio() {
     }
   };
 
-  // ─── Aggiorna ricariche dal modulo ricariche ──────────────────────────────
-  const handleAggiornaRicariche = async () => {
-    if (!id) return;
-    setAggiornaRicariche(true);
-    const normTarga = (t: string) => t.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    try {
-      // Endpoint dedicato: cerca ricariche per assegnazioni mezzo, non dipende da padroncinoId su ricariche
-      const url = `/ricariche/by-padroncino?padroncinoId=${id}&mese=${mese}`;
-      console.log('[AggiornaRicariche] GET', url);
-      const entryPad = await api.get<any>(url);
-      console.log('[AggiornaRicariche] response:', entryPad);
-      if (!entryPad?.mezzi?.length) {
-        alert(`Nessuna ricarica trovata per questo padroncino (${id}) nel mese ${mese}.\n\nControlla la console del backend per i dettagli.`);
-        return;
-      }
-      const nuoviCosti: Record<string, number> = {};
-      for (const d of entryPad.mezzi) {
-        nuoviCosti[normTarga(d.targa)] = Number(Number(d.costo ?? 0).toFixed(2));
-      }
-      setRigheR((prev) => prev.map((r) => ({
-        ...r,
-        costoRicarica: nuoviCosti[normTarga(r.targa)] ?? r.costoRicarica,
-      })));
-      const targheEsistenti = new Set(righeR.map((r) => normTarga(r.targa)));
-      const nuove: RigaRicarica[] = entryPad.mezzi
-        .filter((d: any) => !targheEsistenti.has(normTarga(d.targa)))
-        .map((d: any) => ({
-          id: newId(),
-          mezzoId: null,
-          targa: d.targa,
-          costoRicarica: Number(Number(d.costo ?? 0).toFixed(2)),
-          percIva: 0,
-          note: 'Aggiunto da ricariche',
-          isManuale: true,
-        }));
-      if (nuove.length) setRigheR((prev) => [...prev, ...nuove]);
-      setIsDirty(true); // ricariche aggiornate — conteggio modificato
-    } catch (e: any) {
-      console.error('[AggiornaRicariche] ERROR:', e);
-      alert('Errore aggiornamento ricariche:\n' + (e?.message ?? 'Errore sconosciuto') + '\n\n(vedi console per dettagli)');
-    } finally {
-      setAggiornaRicariche(false);
-    }
-  };
   // ─── Helper setter generici ───────────────────────────────────────────────
   // Ogni modifica di campo inline marca il conteggio come modificato.
   // Se il campo modificato è un valore economico (non solo una nota),
@@ -2456,10 +2411,6 @@ export default function DettaglioConteggio() {
           </div>
         </div>
         <div className="dc2-row" style={{ gap: 8 }}>
-          <button type="button" className="dc2-btn" onClick={handleAggiornaRicariche} disabled={aggiornaRicariche}
-            title="Ricarica i costi delle ricariche elettriche dal modulo ricariche">
-            <Svg2 d={P2.bolt} color="#15A06A" />{aggiornaRicariche ? 'Aggiorno…' : 'Aggiorna ricariche'}
-          </button>
           {!isReadonly && (
             <button type="button" className="dc2-btn" onClick={handleApriDuplica} title="Duplica le righe di un altro mese come base per questo">
               <Svg2 d={P2.copy} />Duplica
